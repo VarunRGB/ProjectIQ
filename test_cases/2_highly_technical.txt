@@ -1,0 +1,11 @@
+4. Retrieval Latency Optimisation
+
+Our first retrieval layer used a flat (exact) inner-product index over 1.2 million MiniLM-L6-v2 embeddings (384 dimensions, float32). That put the index at roughly 1.8 GB and p95 query latency at 212 ms on the lab workstation (Ryzen 7 5800X, 32 GB RAM). Acceptable for one user; not for the target of 40 concurrent evaluators, so we moved to an HNSW index built with hnswlib.
+
+HNSW has three parameters that matter here: M (graph out-degree), ef_construction (candidate list size while building) and ef_search (candidate list size at query time). We swept M over {8, 16, 32} and ef_construction over {100, 200, 400}, measuring recall@10 against the flat index on a held-out set of 5,000 queries. M=16 with ef_construction=200 gave recall@10 of 0.962 and cut build time from 41 minutes (M=32, ef_construction=400) to 17 minutes. Raising ef_search from 64 to 128 lifted recall@10 to 0.981 for an extra 3.1 ms per query, which we kept.
+
+The larger win came from quantisation. Converting embeddings to INT8 with per-dimension scale factors reduced memory by 3.9x (1.8 GB to 462 MB) and dropped p95 latency to 38 ms, while recall@10 fell by only 0.7 points. We also tried product quantisation (PQ, 48 sub-vectors at 8 bits each). Recall dropped to 0.91, which caused visible misses in the rubric-evidence retrieval step, so we abandoned it.
+
+One failure is worth recording. Our first INT8 build computed scale factors over the whole corpus, including about 3% of chunks that were near-duplicate boilerplate (licence headers, table-of-contents pages). Those outliers stretched the range of several dimensions and cost 2.4 points of recall. Filtering out chunks with a MinHash Jaccard similarity above 0.85 before calibration recovered almost all of it.
+
+Under a Locust load test (40 users, 10-minute runs, three repetitions) the final configuration held p95 at 44 ms and p99 at 71 ms with zero timeouts. Most of the remaining latency is the cross-encoder re-ranker (ms-marco-MiniLM-L-6-v2), which takes 22 ms for the top 50 candidates. Batching re-rank requests is the next thing we plan to test.

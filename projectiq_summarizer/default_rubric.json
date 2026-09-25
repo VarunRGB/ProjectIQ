@@ -1,0 +1,37 @@
+{
+  "name": "ProjectIQ report writing rubric",
+  "mode": "academic",
+  "scale_max": 10,
+  "criteria": [
+    {
+      "id": "clarity",
+      "name": "Clarity and language quality",
+      "weight": 1.0,
+      "descriptor": "Grammar, spelling, punctuation and sentence construction. Can a reader follow every sentence without re-reading it?"
+    },
+    {
+      "id": "organisation",
+      "name": "Organisation and coherence",
+      "weight": 1.0,
+      "descriptor": "Logical structure, sensible paragraphing, and a clear flow from problem to method to result."
+    },
+    {
+      "id": "technical_depth",
+      "name": "Technical depth and accuracy",
+      "weight": 1.5,
+      "descriptor": "How well the work explains its design choices, methods and trade-offs, and whether the technical claims are correct and precise."
+    },
+    {
+      "id": "specificity",
+      "name": "Evidence and specificity",
+      "weight": 1.5,
+      "descriptor": "Concrete details that can be checked: numbers, measurements, parameter values, named tools, results, failures and what was learned from them."
+    },
+    {
+      "id": "authenticity",
+      "name": "Authentic voice and original reasoning",
+      "weight": 1.0,
+      "descriptor": "Does the text read as the authors' own account of work they did, with their own decisions and reasoning, rather than generic statements that could describe any project?"
+    }
+  ]
+}

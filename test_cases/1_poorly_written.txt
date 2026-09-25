@@ -1,0 +1,9 @@
+project report - library managment system
+
+this project is about library managment system which we have make for our college library. the main aim of project is to make the work of librarian easy and also student can see the books online. in old system everything was done by hand in register so it take lot of time and many time book get lost and nobody know who take it and when it will come back so it is very big problem for the college.
+
+our system have many module like login module,book module,student module and issue return module. first admin will login then he can add book,delete book and update book. student also can login and see which book is availble or not. when student take book the librarian will issue it and the date is store in databse and when he return the the fine is calculate automaticaly if he is late.
+
+we use php and mysql for making this project because it is easy and free. the database have table like books,students,issue. we have also use html css for the design of the page so it look good. the project is working properly and we have test it many time and there is no error in it.
+
+in future we will add more feature like barcode scaning and sms to student when there book is due. this project was very helpfull for us to learn many thing about web devlopment and database. i think this project is very usefull for all college and it can be use in any library easily. thank you

@@ -1,0 +1,28 @@
+# Environment variables (keeps private keys safe)
+.env
+.env.local
+*.env
+
+# Python Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Local output logs and test run files
+outputs/
+*.log
+
+# IDE & Editor settings
+.vscode/
+.idea/
+*.swp
+
+# OS generated files
+.DS_Store
+Thumbs.db
