@@ -1,0 +1,61 @@
+Project Report: Full-Stack Car Rental System
+
+1. Introduction
+
+The Car Rental System is a full-stack web application developed to make the process of renting cars easier for customers and rental service providers. In a traditional car rental business, customers may need to visit the office or call the staff to check vehicle availability, rental charges, and booking details. This process takes time and can sometimes result in booking conflicts or incorrect records.
+
+The main aim of this project is to develop an online platform where users can view available cars, compare prices, book vehicles, and manage their reservations. The system also provides an administrative interface through which the rental company can manage its vehicles, customers, and bookings.
+
+2. Objectives
+
+The primary objective is to create a user-friendly and reliable platform for managing car rentals. The application should allow customers to register, log in, search for cars, and make reservations for specific dates. It should also calculate the rental cost based on the selected vehicle and rental duration.
+
+Another objective is to reduce manual work for administrators. Instead of maintaining booking information in spreadsheets or registers, the company can store and manage records through a centralized database. The system should also prevent two customers from booking the same car for overlapping periods.
+
+3. Technologies Used
+
+The frontend of the application is developed using React.js, which helps create reusable components and interactive user interfaces. HTML and CSS are used for structuring and styling pages, while JavaScript handles client-side interactions and validation.
+
+The backend is developed using Node.js and Express.js. It provides REST APIs for user authentication, vehicle management, booking operations, and administrative functions. MySQL is used as the relational database because the application contains structured information about users, vehicles, and reservations.
+
+The frontend communicates with the backend through HTTP requests. JSON is used to exchange data between the client and server. Passwords are stored as secure hashes instead of plain text, and protected API routes require authenticated access.
+
+4. System Modules
+
+4.1 User Authentication
+
+Users can create an account and log in using their credentials. The system validates the submitted information before allowing access to protected features. Role-based access control distinguishes ordinary customers from administrators.
+
+4.2 Vehicle Management
+
+The application displays available cars with information such as model, registration details, seating capacity, fuel type, daily rental price, and images. Administrators can add new vehicles, update existing information, change availability status, and remove vehicles from the listing when necessary.
+
+4.3 Search and Booking
+
+Customers can search for vehicles according to their requirements and select pickup and return dates. Before confirming a booking, the backend checks whether the selected vehicle is available for the requested period. This validation is performed on the server because frontend checks alone cannot prevent simultaneous booking requests.
+
+The rental amount is calculated by multiplying the applicable daily rate by the number of rental days. Additional charges, such as insurance or late-return fees, can be incorporated into the calculation when supported by the business rules.
+
+4.4 Booking Management
+
+Customers can view their current and previous reservations. Depending on the booking status and cancellation policy, they may also cancel an upcoming reservation. Administrators can review all bookings and update their status when a vehicle is collected or returned.
+
+5. Database Design
+
+The database contains three main entities: Users, Cars, and Bookings. The Users table stores customer and administrator information. The Cars table contains vehicle details and pricing information. The Bookings table stores the customer ID, car ID, pickup date, return date, calculated amount, and booking status.
+
+Primary keys uniquely identify records, while foreign keys establish relationships between bookings, customers, and vehicles. Appropriate constraints and database transactions help maintain data consistency. Availability queries must consider date-range overlaps rather than relying only on a car's general availability flag.
+
+6. Testing
+
+The application should be tested using both normal and exceptional scenarios. Functional testing includes registration, login, vehicle searches, booking creation, cancellation, and administrative updates. Boundary testing checks invalid dates, missing fields, and attempts to book a vehicle that is already reserved.
+
+Security testing should cover unauthorized API access, input validation, and password handling. Database testing should verify that failed booking operations do not leave incomplete records. Performance testing can measure API response times when multiple users search for vehicles or attempt to reserve the same car simultaneously.
+
+7. Limitations and Future Scope
+
+The initial version focuses on the core rental workflow. Online payment integration, identity verification, GPS-based vehicle tracking, automated invoice generation, and email or SMS notifications may be added in future versions. The application can also be deployed using cloud infrastructure to improve accessibility and scalability.
+
+8. Conclusion
+
+The Full-Stack Car Rental System demonstrates how frontend development, backend APIs, database management, and authentication can be combined to build a practical web application. It provides a centralized method for handling vehicle listings and reservations while reducing manual effort. With additional security checks, comprehensive testing, and payment integration, the system can be extended into a more complete car rental platform.

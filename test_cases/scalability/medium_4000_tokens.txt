@@ -1,0 +1,218 @@
+Project Report: Full-Stack Car Rental System
+
+1. Introduction
+
+The Full-Stack Car Rental System is a web-based application designed to simplify the process of renting vehicles for customers and managing rental operations for administrators. Traditional car rental businesses often depend on phone calls, manual registers, spreadsheets, and in-person visits to handle reservations. These methods can create problems such as outdated availability information, duplicate bookings, inconsistent pricing, delayed communication, and difficulty tracking vehicle usage.
+
+The proposed system provides a centralized platform where customers can register, browse vehicles, compare rental prices, select rental dates, and manage their reservations. Administrators can manage vehicle listings, monitor bookings, update vehicle status, and maintain customer records through a dedicated dashboard.
+
+The application follows a client-server architecture. The frontend provides the user interface, the backend processes business logic and exposes APIs, and a relational database stores persistent information. This separation improves maintainability because changes to the user interface, business rules, and database operations can be implemented independently when appropriate.
+
+The initial version focuses on essential rental operations rather than attempting to implement every feature of a commercial rental platform. Payment gateways, GPS tracking, advanced analytics, and automated identity verification are considered future enhancements.
+
+2. Problem Statement
+
+Customers need a convenient way to identify suitable vehicles without contacting rental staff individually. They also need clear information about daily rates, vehicle specifications, pickup dates, return dates, and reservation status.
+
+Rental administrators face a different set of challenges. They must ensure that vehicle information remains accurate, prevent conflicting reservations, calculate rental charges correctly, and maintain reliable booking histories. Manual processes become increasingly difficult as the number of vehicles and customers grows.
+
+The system addresses these challenges by providing online vehicle discovery, centralized reservation management, automated price calculation, and role-based access control. It also uses server-side validation to ensure that critical business rules are enforced even when requests are submitted outside the normal frontend interface.
+
+3. Project Objectives
+
+The primary objective is to develop a responsive, secure, and maintainable full-stack web application for vehicle rental operations.
+
+The specific objectives are:
+
+1. Allow customers to create accounts, authenticate themselves, and manage their profiles.
+2. Display vehicle information, including model, registration number, seating capacity, fuel type, transmission type, daily price, and photographs.
+3. Provide search and filtering options based on rental dates, vehicle category, price range, and seating capacity.
+4. Allow customers to create reservations and calculate the total rental amount automatically.
+5. Prevent overlapping bookings for the same vehicle.
+6. Provide customers with access to current and historical reservations.
+7. Allow customers to cancel eligible reservations according to defined business rules.
+8. Provide administrators with tools for managing vehicles, customers, and reservations.
+9. Maintain data consistency through database constraints, transactions, and appropriate validation.
+10. Support functional, security, and performance testing before deployment.
+
+4. Technology Stack
+
+4.1 Frontend
+
+React.js is used to build the frontend because it supports reusable components and state-driven rendering. Components can represent the navigation bar, vehicle cards, search filters, booking forms, login forms, and administrative tables.
+
+HTML defines the structure of the interface, CSS controls presentation and responsive layouts, and JavaScript implements client-side interactions. React Router can be used to navigate between pages such as Home, Login, Register, Vehicle Details, My Bookings, and Admin Dashboard.
+
+The frontend should display loading indicators during API requests, provide useful validation messages, and handle server errors without leaving the interface in an inconsistent state. It should also adapt to desktop, tablet, and mobile screen sizes.
+
+Client-side validation improves usability but is not a security boundary. The backend must independently validate every important input.
+
+4.2 Backend
+
+Node.js provides the JavaScript runtime for server-side execution, while Express.js simplifies the creation of HTTP routes and middleware.
+
+The backend exposes REST APIs for authentication, vehicle management, availability searches, reservations, and administrative operations. Middleware can handle authentication, authorization, request parsing, logging, and centralized error responses.
+
+Business logic should be separated from route handlers where practical. For example, a booking service can calculate rental charges and verify availability, while a database layer performs queries and updates. This structure makes the application easier to test and maintain.
+
+4.3 Database
+
+MySQL is used to store structured application data. The relational model is suitable because users, vehicles, and reservations have clear relationships.
+
+Primary keys identify records uniquely, foreign keys maintain relationships between tables, and constraints protect against invalid data. Indexes can improve queries involving vehicle identifiers, customer identifiers, booking status, and rental dates.
+
+4.4 Communication
+
+The frontend communicates with the backend through HTTP requests. JSON is used to represent request and response data. Successful responses should use suitable HTTP status codes, while errors should return understandable messages without exposing internal implementation details.
+
+5. System Architecture
+
+The system contains three principal layers.
+
+The presentation layer consists of the React frontend. It collects user input, displays vehicle information, and presents booking results.
+
+The application layer consists of the Express backend. It authenticates users, validates requests, enforces permissions, applies rental rules, and coordinates database operations.
+
+The data layer consists of MySQL. It stores accounts, vehicles, reservations, and related information.
+
+A typical booking request begins when a customer selects a vehicle and enters pickup and return dates. The frontend sends the request to the backend. The backend validates the dates, verifies the user's permissions, checks availability, calculates the rental amount, and attempts to create the reservation. The database records the booking only if the operation satisfies the relevant constraints.
+
+The backend then returns the reservation result to the frontend. The interface displays a confirmation or an appropriate error message.
+
+This architecture prevents the frontend from being responsible for enforcing critical business rules. It also allows different frontend components to reuse the same backend services.
+
+6. Functional Modules
+
+6.1 User Registration and Authentication
+
+Customers can register by providing their name, email address, phone number, and password. The backend validates required fields, checks whether the email address is already registered, and stores the account information.
+
+Passwords must never be stored as plain text. A password-hashing algorithm such as Argon2id or bcrypt should be used. During login, the supplied password is verified against the stored hash.
+
+After successful authentication, the system establishes a secure session or issues an appropriately managed token. Protected operations require valid authentication. Administrator-only endpoints additionally verify that the authenticated account has administrative privileges.
+
+Authentication and authorization are different responsibilities: authentication establishes who the user is, while authorization determines which operations the user may perform.
+
+6.2 Vehicle Catalogue
+
+The vehicle catalogue presents all vehicles available for browsing. Each listing contains a vehicle name, manufacturer, category, seating capacity, fuel type, transmission type, daily rental rate, and image.
+
+Customers can open a detailed vehicle page before making a reservation. Search filters allow users to narrow the results by category, budget, fuel type, or seating capacity.
+
+Administrators can add new vehicles, update specifications, change pricing, upload images, and mark vehicles as unavailable for maintenance. Deleting a vehicle with an existing booking history should be handled carefully; retaining the record or marking it inactive may be more appropriate.
+
+6.3 Availability Search
+
+A vehicle's general status does not completely determine whether it can be rented on a particular date. A vehicle may be active but already reserved for part of the requested period.
+
+The system therefore checks reservation date ranges. If an existing reservation has a pickup date before the requested return date and a return date after the requested pickup date, the periods overlap under a half-open date-range convention.
+
+For example, a reservation from 10 June to 13 June should not conflict with a new reservation beginning on 13 June if the business treats the return date as the end of the rental period. The application must define this convention consistently across searching, pricing, and booking creation.
+
+The availability query should exclude cancelled reservations and other statuses that no longer block the vehicle. Confirmed and temporarily held reservations may block availability depending on the booking policy.
+
+6.4 Reservation Creation
+
+After selecting a vehicle, the customer chooses pickup and return dates. The backend checks that both dates are valid, that the return date is later than the pickup date, and that the rental duration satisfies the business rules.
+
+The rental amount is calculated using the applicable daily price and billable rental duration. If the daily rate is ₹2,500 and the rental lasts four billable days, the base amount is ₹10,000. Taxes, insurance, deposits, discounts, or additional fees can be incorporated through explicitly defined pricing rules.
+
+The amount must be calculated on the backend. Accepting a total price supplied by the frontend would allow a user to manipulate the request and submit an incorrect charge.
+
+A critical requirement is preventing concurrent requests from creating conflicting bookings. Two customers might check availability at almost the same time. If both receive a positive result before either reservation is stored, both could attempt to reserve the same car.
+
+The backend should therefore perform availability validation and reservation creation within an appropriate concurrency-control strategy. Database transactions, suitable locking, and carefully designed queries can help preserve correctness. A simple availability check performed before an unrelated insert is not sufficient by itself.
+
+6.5 Booking Management
+
+Customers can view their reservations with details such as vehicle name, pickup date, return date, total amount, and current status.
+
+Possible booking states include Pending, Confirmed, Cancelled, Active, and Completed. The application should define which state transitions are permitted. For example, a completed reservation should not normally return to the pending state through an ordinary customer action.
+
+Customers may cancel eligible reservations according to the cancellation policy. The backend verifies ownership before allowing cancellation. Administrators can review bookings and update their status when a vehicle is collected or returned.
+
+6.6 Administration Dashboard
+
+The administration dashboard provides an overview of vehicle inventory, active reservations, upcoming pickups, and completed rentals.
+
+Administrators can create and update vehicle listings, review customer records, investigate booking conflicts, and manage reservation statuses. Administrative operations should be protected by backend authorization rather than relying only on hiding interface elements.
+
+Important actions can be logged to support troubleshooting and accountability. Logs should avoid exposing passwords, authentication tokens, or unnecessary personal information.
+
+7. Database Design
+
+The database contains three main tables: Users, Cars, and Bookings.
+
+7.1 Users Table
+
+The Users table stores account information. Typical columns include user_id, full_name, email, phone, password_hash, role, and created_at.
+
+The user_id column acts as the primary key. Email addresses should be unique if email is the account identifier. The role column distinguishes customers from administrators.
+
+7.2 Cars Table
+
+The Cars table stores vehicle information. Its columns may include car_id, manufacturer, model, registration_number, category, seating_capacity, fuel_type, transmission, daily_rate, image_url, and status.
+
+The car_id column uniquely identifies each vehicle. Registration numbers should be unique where appropriate. The daily_rate must be a valid non-negative monetary amount, and seating capacity must be a positive integer.
+
+7.3 Bookings Table
+
+The Bookings table stores reservation information. Its columns may include booking_id, user_id, car_id, pickup_date, return_date, total_amount, status, and created_at.
+
+The user_id and car_id columns reference the Users and Cars tables. Foreign keys preserve referential integrity, while indexes support common lookup operations.
+
+A database constraint or application validation should ensure that the return date follows the pickup date. More complex overlapping-date rules may require transactional application logic or database-specific mechanisms.
+
+8. API Design
+
+The backend can expose endpoints such as:
+
+- POST /api/auth/register — register a customer.
+- POST /api/auth/login — authenticate a user.
+- GET /api/cars — retrieve vehicle listings and search results.
+- GET /api/cars/:id — retrieve a vehicle's details.
+- POST /api/bookings — create a reservation.
+- GET /api/bookings/my — retrieve the authenticated customer's reservations.
+- PATCH /api/bookings/:id/cancel — cancel an eligible reservation.
+- POST /api/admin/cars — add a vehicle as an administrator.
+- PATCH /api/admin/cars/:id — update vehicle information.
+
+Every endpoint must validate its inputs and return suitable HTTP status codes. For example, invalid input may produce a 400 response, unauthenticated access may produce 401, unauthorized access may produce 403, and a missing vehicle may produce 404.
+
+9. Testing Strategy
+
+Functional testing verifies registration, login, vehicle search, reservation creation, cancellation, and administration features.
+
+Boundary testing checks missing fields, invalid date ranges, zero or negative rental durations, unavailable vehicles, and attempts to cancel completed bookings.
+
+Concurrency testing submits overlapping booking requests for the same vehicle. The expected result is that the system prevents conflicting reservations rather than confirming both.
+
+Security testing examines unauthorized administrative requests, attempts to access another customer's bookings, malformed input, and password-handling practices.
+
+Database testing verifies that transactions preserve consistency when an operation fails midway. API performance testing measures response time and throughput for vehicle searches and reservation requests under different levels of concurrent activity.
+
+Automated tests should be repeated after changes to ensure that improvements do not introduce regressions.
+
+10. Security and Reliability
+
+The application should validate and normalize user input, use parameterized database queries, and apply appropriate authentication and authorization checks.
+
+Sensitive credentials should be stored outside source control, such as in environment variables or a managed secret store. Production deployments should use HTTPS and appropriately configured session cookies or tokens.
+
+Rate limiting can reduce automated login attempts and abusive requests. Error responses should not expose database credentials, stack traces, or sensitive implementation details.
+
+Backups and recovery procedures should be considered before the application is used for real rental operations. Monitoring and structured logging can help identify failures, slow endpoints, and unusual activity.
+
+11. Limitations and Future Enhancements
+
+The initial implementation focuses on vehicle browsing, reservation management, and administrative functionality. It may not include online payments, identity verification, automated refunds, GPS tracking, or real-time notifications.
+
+Future versions can integrate a payment gateway, generate invoices, send booking confirmations through email or SMS, and provide vehicle-location information where supported. A review system could allow customers to rate vehicles and rental experiences.
+
+Analytics could help administrators understand vehicle utilization, popular categories, seasonal demand, and revenue trends. Cloud deployment, caching, database optimization, and background jobs could improve scalability as the number of users increases.
+
+12. Conclusion
+
+The Full-Stack Car Rental System demonstrates how a modern frontend, server-side application logic, and relational database can work together to automate vehicle rental operations. It provides a structured workflow for searching vehicles, managing reservations, calculating charges, and administering inventory.
+
+The project also highlights important engineering considerations beyond interface development, including secure authentication, access control, database integrity, concurrency handling, and systematic testing. With careful implementation and additional integrations, the application can evolve into a scalable platform suitable for more demanding rental-business requirements.
