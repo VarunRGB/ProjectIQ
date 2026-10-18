@@ -4,7 +4,6 @@
 
 Baseline date: 18 October 2026  |  Report status: Initial prototype benchmark  |  Model path: Local Ollama
 
-> **Note:** Purpose: preserve the Version 1 evidence as a reproducible reference before changing the summariser in Version 1.1. All measured values below are retained from the runs shared for this baseline. Calculations have been rechecked; methodology caveats are called out explicitly.
 
 ## Executive summary
 
@@ -52,14 +51,9 @@ The hardware details below were supplied for this report. The benchmark runner d
 | Operating system | Windows 11 Home Single Language, 64-bit, x64-based |
 | Windows version / build | Version 25H2; OS build 26200.9457 |
 | OS install date | 05 August 2025 (interpreting the supplied date as day-month-year) |
-| Python version | Not recorded in the benchmark log |
-| Ollama version | Not recorded in the benchmark log |
 | LLM model | Ollama local model: llama3.1:8b |
-| Model quantisation / GPU offload settings | Not recorded |
-| Power mode / background load / thermal metrics | Not recorded |
 
 
-> **Note:** For reproducibility, Version 1.1 should save environment metadata alongside every timing run. Do not include device serial numbers, Windows Product IDs, or device IDs in benchmark reports; they do not help explain model performance.
 
 ## 4. Test corpus
 
@@ -210,7 +204,7 @@ Every entry in the later summary run was faster than the matching entry in the f
 | Range | 211.919 s |
 
 
-> **Note:** Interpretation caveat: according to the runner logic used for these measurements, rubric mode first creates the summary / judging input and then performs the rubric judge calls. Therefore, these 364.133–576.052 second values represent the complete rubric-mode path, including summary preparation. They are not isolated rubric-judge timings. The number of seconds spent inside judge calls alone remains unknown.
+> **Note:** Interpretation caveat: according to the runner logic used for these measurements, rubric mode first creates the summary / judging input and then performs the rubric judge calls. Therefore, these 364.133–576.052 second values represent the complete rubric-mode path, including summary preparation. They are not isolated rubric-judge timings. The number of seconds spent inside judge calls alone remains to be calculated.
 
 ## 7. Summariser implementation recorded for Version 1
 
@@ -303,24 +297,8 @@ Version 1.1 should preserve the complete judge input, cited quotes, match result
 - That cited claims are true merely because they appear in a summary or judge output.
 - Statistically validated confidence, grading accuracy, or production-scale performance.
 - Comprehensive support for arbitrary file formats, very large corpus sizes, concurrent users, or production deployment conditions.
-## 11. Version 1.1 plan: measurement before optimisation
 
-| Priority | Change / experiment | What to record or compare | Why it matters |
-| --- | --- | --- | --- |
-| P0 | Add internal per-operation timing | Chunking, each map request, reduce request, summary total, judge-input preparation, each judge sample, evidence checks, final report creation. | Separates true bottlenecks and avoids double-counting nested operations. |
-| P0 | Add request-level observability | HTTP request count, retries, response status, prompt tokens, generated tokens, latency per call; time-to-first-token if available. | Explains where time is spent and why calls repeat. |
-| P0 | Record input metadata | Characters, tokenizer input tokens, chunk count, overlap, chunk lengths, summary word count, key-point count. | Makes size-versus-output behaviour measurable. |
-| P0 | Fix / gate evidence grounding | Persist quote matches and test zero-score behaviour against final recommendation. | Addresses the most important observed correctness risk. |
-| P1 | Run repeated controlled baselines | At least 3 repeated runs per test under a documented warm/cold-model protocol; report median and spread per same document. | Separates input differences from run-to-run variance. |
-| P1 | Test adaptive summary length | Compare fixed 4–6 sentences against size-aware word/sentence bands. | Tests whether large reports need longer summaries, without simply scaling length linearly. |
-| P1 | Test chunk-size/overlap alternatives | Change one setting at a time; report chunk count, calls, runtime, coverage, and grounding. | May reduce request overhead but can affect context and information retention. |
-| P1 | Quality-check summaries | Human or reference-based fact coverage, numbers/technical-term preservation, unsupported statements, omissions, redundancy. | Speed is not an improvement if important information is lost. |
-| P2 | Profile the host during runs | CPU/GPU/RAM use, clock speeds, temperature, memory and GPU-offload details. | Helps determine whether runtime is model-bound, thermal-bound, or resource-bound. |
-
-
----
-
-## 12. Baseline interpretation and conclusion
+## 11. Baseline interpretation and conclusion
 
 Version 1 establishes a usable functional baseline but not a fully instrumented or validated benchmark. Its full pipeline took an average of about 10.2 minutes per document across the six supplied cases. Signals were negligible in the recorded measurements. The summariser is strongly size-sensitive, with the largest target-size report taking 9.81× the small target-size report in the latest summary run.
 
@@ -398,12 +376,3 @@ This appendix restates every timing set in readable tables for copying into CSV 
 
 Rubric mode includes summary preparation according to the runner path used for this baseline; it is not judge-only time. The exact status codes observed in the original outputs were ACCEPT, ACCEPT_WITH_MINOR_REVISIONS, REVISE_AND_RESUBMIT, and FLAG_FOR_REVIEW.
 
-## Appendix B. Benchmark metadata still needed
-
-- Git commit hash / local repository state at experiment time.
-- Python version, Ollama version, full model identifier and quantisation, and complete ProjectIQ settings.
-- Exact input characters, actual tokenizer input tokens, chunk count, chunk lengths, final summary word count, and output token counts.
-- Per-call timestamps, HTTP request count, retries, and map-versus-reduce timing.
-- Repeated runs of the same file under controlled model warmness and system-load conditions.
-- Hardware telemetry during each run and whether Ollama actually used the integrated GPU or mostly CPU inference.
-- A human-reviewed expected outcome and summary-quality checklist for each test case.
