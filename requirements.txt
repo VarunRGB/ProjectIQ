@@ -4,3 +4,5 @@ pyspellchecker>=0.8
 pypdf>=4.0
 python-docx>=1.1
 pytest>=7.0
+numpy==2.5.4
+sentence-transformers==6.1.0
