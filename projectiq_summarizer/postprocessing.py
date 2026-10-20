@@ -20,7 +20,7 @@ import numpy as np
 from .schemas import FinalSummary
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-MMR_LAMBDA = 0.72
+MMR_LAMBDA = 0.66
 
 
 @lru_cache(maxsize=1)
@@ -93,7 +93,7 @@ def _lexically_duplicate(left: str, right: str) -> bool:
         return _normalise_spacing(left).casefold() == _normalise_spacing(right).casefold()
     overlap = shared / min(len(left_tokens), len(right_tokens))
     jaccard = shared / len(left_tokens | right_tokens)
-    return (overlap >= 0.80 and jaccard >= 0.45) or jaccard >= 0.62
+    return (overlap >= 0.90 and jaccard >= 0.55) or jaccard >= 0.78
 
 
 def _clean_key_point(point: str) -> str:
@@ -193,7 +193,7 @@ def _select_mmr_sentences(
                     if np.isfinite(point_cutoffs[j]) and int(j) not in covered_points
                 ]
                 # Coverage can beat a sentence that only repeats the dominant topic.
-                score += min(len(new_points), 3) * 0.14
+                score += min(len(new_points), 3) * 0.20
 
             # Tiny tie-breaker: when scores are close, prefer concise sentences.
             score += 0.015 / (max(1, words) ** 0.5)
@@ -219,10 +219,10 @@ def _select_mmr_sentences(
 def shorten_summary(
     text: str,
     *,
-    min_words: int = 100,
-    max_words: int = 140,
-    min_sentences: int = 5,
-    max_sentences: int = 7,
+    min_words: int = 200,
+    max_words: int = 300,
+    min_sentences: int = 8,
+    max_sentences: int = 15,
     mmr_lambda: float = MMR_LAMBDA,
     key_points: Sequence[str] = (),
 ) -> str:
@@ -282,75 +282,42 @@ def shorten_summary(
     )
     return result or normalised
 
+
 def _deduplicate_key_points(
     key_points: Sequence[str],
     summary_text: str,
     *,
     semantic: bool,
 ) -> List[str]:
-    """Remove key points that repeat the summary or an earlier key point.
+    """Remove exact duplicate key points without deleting facts repeated
+    in the main summary.
 
-    Semantic comparisons are only run when compression was needed, so short
-    summaries retain the existing low-overhead path. The similarity thresholds
-    are intentionally conservative to avoid discarding related but distinct facts.
+    The summary and key points serve different presentation purposes.
+    A key point is retained even if its information also appears in the
+    summary. Only duplicate key points are removed.
     """
     points: List[str] = []
+    seen: Set[str] = set()
+
     for raw_point in key_points:
         point = _clean_key_point(raw_point)
+
         if not point or _word_count(point) < 3:
             continue
-        if any(_lexically_duplicate(point, earlier) for earlier in points):
+
+        # Normalise for exact-text deduplication only.
+        # Do not remove a point merely because it resembles a summary sentence.
+        normalised = re.sub(
+            r"\W+", " ", point.casefold()
+        ).strip()
+
+        if normalised in seen:
             continue
+
+        seen.add(normalised)
         points.append(point)
 
-    summary_sentences = _split_sentences(summary_text)
-    if not semantic or not points:
-        return [
-            point for point in points
-            if not any(_lexically_duplicate(point, sentence) for sentence in summary_sentences)
-        ]
-
-    model = _get_embedding_model()
-    all_texts = summary_sentences + points
-    embeddings = _normalise_rows(model.encode(
-        all_texts,
-        batch_size=32,
-        show_progress_bar=False,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-    ))
-    sentence_embeddings = embeddings[:len(summary_sentences)]
-    point_embeddings = embeddings[len(summary_sentences):]
-
-    kept_points: List[str] = []
-    kept_vectors: List[np.ndarray] = []
-    for index, point in enumerate(points):
-        vector = point_embeddings[index]
-
-        duplicate = any(_lexically_duplicate(point, sentence) for sentence in summary_sentences)
-        if not duplicate and len(sentence_embeddings):
-            sims = sentence_embeddings @ vector
-            for sentence_index, similarity in enumerate(sims):
-                if similarity >= 0.89 or (
-                    similarity >= 0.81 and _lexically_duplicate(point, summary_sentences[sentence_index])
-                ):
-                    duplicate = True
-                    break
-
-        if not duplicate:
-            for kept_point, kept_vector in zip(kept_points, kept_vectors):
-                similarity = float(vector @ kept_vector)
-                if _lexically_duplicate(point, kept_point) or similarity >= 0.89 or (
-                    similarity >= 0.81 and _lexically_duplicate(point, kept_point)
-                ):
-                    duplicate = True
-                    break
-
-        if not duplicate:
-            kept_points.append(point)
-            kept_vectors.append(vector)
-
-    return kept_points
+    return points
 
 
 def postprocess_summary(summary: FinalSummary) -> FinalSummary:
@@ -358,7 +325,7 @@ def postprocess_summary(summary: FinalSummary) -> FinalSummary:
     original_text = _normalise_spacing(summary.summary)
     original_sentences = _split_sentences(original_text)
     needs_compression = (
-        _word_count(original_text) > 140 or len(original_sentences) > 7
+        _word_count(original_text) > 300 or len(original_sentences) > 9
     )
 
     shortened = shorten_summary(
