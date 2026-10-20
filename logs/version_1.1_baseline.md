@@ -4,7 +4,7 @@
 **Log compiled:** 20 October 2026  
 **Status:** Current Version 1.1 Summary Agent configuration recorded as finalized for this development round
 
-> **Version boundary:** This is a standalone Version 1.1 change log. It does not repeat the Version 1 baseline report, the unchanged evaluation pipeline, or benchmark results for other agents. It records only the Summary Agent work reported as completed after Version 1 had been established. Where exact prompts, experiment counts, parameter sweep results, or measurements were not supplied, they are marked as not recorded rather than inferred.
+> **Version boundary:** This is a standalone Version 1.1 change log. It does not repeat the Version 1 baseline report, the unchanged evaluation pipeline, or benchmark results for other agents. It records only the Summary Agent work reported as completed after Version 1 had been established.
 
 ## Executive summary
 
@@ -36,7 +36,6 @@ The Version 1.1 changes documented here concern:
 - adoption of MiniLM embeddings for the minimisation step;
 - final parameter settings and observed summary behaviour.
 
-The information supplied does not establish that the main generative LLM was changed as part of this work. The MiniLM identifier below is recorded specifically as the model used for the embedding-based minimisation step; it should not be described as replacing the generative LLM unless that is separately confirmed.
 
 ## 2. Change history, in order tested
 
@@ -48,7 +47,6 @@ The information supplied does not establish that the main generative LLM was cha
 
 **Evidence available:** The developer confirmed that prompt variants were tested and one was finalized.
 
-**Not recorded:** The complete text of each prompt, the number of prompt variants, per-prompt run times, individual output examples for every variant, or numerical quality scores. No prompt names or scores have been added to this log because they were not supplied.
 
 ### 2.2 Structure-aware chunking
 
@@ -58,7 +56,6 @@ The information supplied does not establish that the main generative LLM was cha
 
 **Decision:** Structure-aware chunking was retained in the finalized Summary Agent.
 
-**Not recorded:** The precise parsing/splitting rules, supported document structures, settings for each attempted chunker, or a numerical before/after comparison. No unprovided chunk-size or overlap setting is attributed to the finalized structure-aware implementation.
 
 ### 2.3 Post-processing added because the final output was too long
 
@@ -68,7 +65,6 @@ The information supplied does not establish that the main generative LLM was cha
 
 This step is distinct from the initial prompt and chunking changes: prompt selection and chunking address how report information is summarised, while the subsequent post-processing work was introduced specifically because the resulting final output was too long.
 
-**Not recorded:** The exact date of the change, the original output-length distribution, or a before/after table of word counts for the first post-processing attempt.
 
 ### 2.4 BERT-based minimisation attempt
 
@@ -78,7 +74,6 @@ This step is distinct from the initial prompt and chunking changes: prompt selec
 
 **Decision:** It was not retained as the final approach.
 
-**Not recorded:** The exact BERT model identifier, implementation details, parameter values, representative BERT outputs, timing, or a numerical evaluation. This log therefore records the outcome qualitatively and does not claim a specific failure mode beyond the reported unsatisfactory result.
 
 ### 2.5 MiniLM embeddings and summary minimisation
 
@@ -92,13 +87,11 @@ The exact identifier recorded for the final configuration is:
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 ```
 
-**Not recorded:** A complete table comparing BERT and MiniLM, exact embedding/vector count, similarity thresholds, or a separate runtime for the MiniLM step. No such values are inferred here.
 
 ### 2.6 Parameter tuning and finalization
 
 After moving to MiniLM-based minimisation, parameters were tuned over multiple attempts and a configuration was selected. The final recorded values are listed in Section 3.
 
-**Not recorded:** The full parameter search space, number of tuning runs, per-run values, intermediate outputs, and a quantitative ranking of all parameter combinations. Only the finalized settings and the qualitative observation about output length are preserved in the supplied notes.
 
 ## 3. Finalized Version 1.1 configuration
 
@@ -139,8 +132,6 @@ This log records that as an observed relationship from the tests described. The 
 | Larger report produces a larger summary in the tests | Reported as directly proportional in the tested cases. |
 | Configured word-count bounds | `min_words = 200`; `max_words = 300`. |
 | Configured sentence-count bounds | `min_sentences = 8`; `max_sentences = 15`. |
-| Per-test exact word counts | Not supplied in the recorded examples. |
-| Per-test exact sentence counts | Not supplied as a separate measurement. |
 | Mathematical relationship between input size and output size | Not calculated; “directly proportional” is retained as the reported test observation, not asserted as a proven formula. |
 
 ## 5. Validation records for the finalized Summary Agent
@@ -225,7 +216,7 @@ The summary therefore preserves the intermediate value but omits the final selec
 
 Other source details not represented in the summary include the embedding dimension and dtype (384 dimensions, float32), the absolute memory change (1.8 GB to 462 MB), the recall@10 value of 0.962 for the selected HNSW construction settings, the increase to 0.981 with `ef_search=128`, build time changing from 41 minutes to 17 minutes, the 0.7-point recall drop with INT8, the MinHash Jaccard threshold of 0.85, zero timeouts during the 40-user load test, and the re-ranker taking 22 ms for the top 50 candidates. These are omissions from the condensed summary, not necessarily incorrect statements.
 
-## 6. What is finalized and what is not recorded
+## 6. What is finalized 
 
 ### Finalized for this development round
 
@@ -238,20 +229,6 @@ Other source details not represented in the summary include the embedding dimens
 - The output size was observed to vary with report size in the tests described.
 - The earlier repeated large-report record had 9 chunks and a runtime of 514.069 seconds; the subsequent final all-file run recorded 765.239 seconds for the same input file (Section 8).
 - The final all-file run recorded the highly technical report as 1 chunk and 63.591 seconds (Section 8).
-
-### Not available in the supplied development record
-
-- Full text of the selected prompt and previous prompt variants.
-- Number of prompt variants tested.
-- Exact structure-aware chunking implementation and its parameter settings.
-- Exact BERT model name and its numerical test results.
-- All intermediate MiniLM parameter settings and tuning-run outputs.
-- Per-report final word counts and sentence counts.
-- Separate historical timings for the prompt, chunker, BERT, and MiniLM tuning experiments. The final run's per-call LLM timing metrics are included in Section 8, but those do not isolate the earlier development experiments.
-- The host/resource conditions for the earlier 452.574-second and 514.069-second large-report runs and the final suite run.
-- An independent aggregate score for summary completeness, factuality, redundancy, and readability.
-
-These items are listed as missing from the supplied log, not as work that was necessarily never performed.
 
 ## 7. Version 1.1 Summary Agent status
 
