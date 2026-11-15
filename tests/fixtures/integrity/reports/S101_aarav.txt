@@ -1,0 +1,13 @@
+Inventory Management System
+
+This is to certify that the project work submitted by the student is a bonafide record of work carried out under the guidance of the faculty of the Department of Computer Engineering and Technology. The work has not been submitted elsewhere for the award of any degree or diploma.
+
+We would like to thank our guide and the head of the department for their constant support and encouragement throughout this project.
+
+Our system keeps track of items in a small shop using a Python dictionary keyed by item name. Each record stores the quantity and the latest unit price, and adding an existing item increases its quantity instead of creating a duplicate.
+
+We compute the total stock value by multiplying quantity and price for every item and rounding the result to two decimals. The low stock report lists every item whose quantity falls below a threshold of five units, sorted alphabetically.
+
+Data can be loaded from a CSV file through the starter function provided in the course. We validated quantities so that zero or negative values raise an error before they reach the dictionary.
+
+In testing with 40 sample items the total value matched a spreadsheet calculation exactly, and the low stock list caught all 6 items we had set below the threshold.
