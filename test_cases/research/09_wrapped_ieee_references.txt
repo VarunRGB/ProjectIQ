@@ -1,0 +1,17 @@
+1. INTRODUCTION
+This report examines anomaly detection in network traffic.
+
+2. RELATED WORK
+Network anomaly detection was evaluated by Li et al. (2022) [1].
+Transformer-based approaches are discussed in [2].
+
+3. REFERENCES
+[1] H. Li, P. Chen, and R. Das, "Network Traffic Anomaly Detection Using Hybrid Features,"
+    International Journal of Network Security, vol. 12, no. 3, pp. 100-112, 2022.
+    DOI: 10.2468/netsec.2022.17
+[2] N. Ahmed and K. Bose, "Transformer Models for Network Intrusion Detection,"
+    Proceedings of Secure Systems 2024, 2024.
+    https://example.org/transformer-ids
+
+4. ACKNOWLEDGEMENTS
+Thanks to the project guide.

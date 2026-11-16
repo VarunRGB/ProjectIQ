@@ -1,0 +1,13 @@
+PROJECT REPORT: Library Seat Availability
+
+ABSTRACT
+This report proposes a sensor-based system for displaying available library seats.
+
+INTRODUCTION
+The system is intended to reduce time spent searching for a seat.
+
+METHODOLOGY
+Ultrasonic sensors are connected to a microcontroller.
+
+RESULTS
+A small prototype was evaluated in a laboratory environment.

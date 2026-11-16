@@ -1,0 +1,13 @@
+PROJECT: Low-Cost Flood Warning
+
+1. INTRODUCTION
+Flood warning systems use river and rainfall observations.
+
+2. PREVIOUS STUDIES
+Some relevant work is cited using a local institutional style [1].
+
+3. REFERENCES
+A local institutional archive entry with no obvious year or author token
+and a wrapped continuation line that should remain attached to this item.
+
+Another unfamiliar entry, with punctuation that does not match APA or IEEE.

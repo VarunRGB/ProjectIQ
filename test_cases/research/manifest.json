@@ -1,0 +1,254 @@
+{
+  "purpose": "Synthetic offline fixtures for ProjectIQ Research Agent Phase 1. Most authors, titles and venues are fictional; example.org links and 10.1234/10.9999 DOI identifiers are placeholders and are not expected to resolve. The Dijkstra citation in 04_markdown_heading_aliases.md is a real historical foundational reference.",
+  "fixtures": [
+    {
+      "file": "01_standard_numeric.txt",
+      "format": "txt",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "numbered sections",
+        "numeric citations",
+        "author-year citations",
+        "DOI",
+        "plain URLs",
+        "section boundaries"
+      ]
+    },
+    {
+      "file": "02_author_year_apa.md",
+      "format": "md",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "Markdown headings",
+        "Related Work alias",
+        "Works Cited alias",
+        "APA-like references",
+        "Markdown links",
+        "DOI URL"
+      ]
+    },
+    {
+      "file": "03_chapter_uppercase.txt",
+      "format": "txt",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "chapter-style headings",
+        "uppercase headings",
+        "chapter numbering",
+        "reference metadata"
+      ]
+    },
+    {
+      "file": "04_markdown_heading_aliases.md",
+      "format": "md",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "Review of Literature alias",
+        "Works Cited alias",
+        "Markdown hyperlinks",
+        "older foundational source"
+      ]
+    },
+    {
+      "file": "05_missing_literature_review.txt",
+      "format": "txt",
+      "literature_review": false,
+      "references": true,
+      "expected_papers": 1,
+      "coverage": [
+        "missing Literature Review",
+        "References present"
+      ]
+    },
+    {
+      "file": "06_missing_references.md",
+      "format": "md",
+      "literature_review": true,
+      "references": false,
+      "expected_papers": 0,
+      "coverage": [
+        "Literature Review present",
+        "missing References"
+      ]
+    },
+    {
+      "file": "07_both_sections_missing.txt",
+      "format": "txt",
+      "literature_review": false,
+      "references": false,
+      "expected_papers": 0,
+      "coverage": [
+        "both sections missing",
+        "other standard headings"
+      ]
+    },
+    {
+      "file": "08_empty_references_section.txt",
+      "format": "txt",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 0,
+      "coverage": [
+        "empty References section",
+        "section after References"
+      ]
+    },
+    {
+      "file": "09_wrapped_ieee_references.txt",
+      "format": "txt",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "wrapped multiline references",
+        "IEEE-like numbering",
+        "DOI",
+        "URL",
+        "ACKNOWLEDGEMENTS boundary"
+      ]
+    },
+    {
+      "file": "10_apa_style_references.txt",
+      "format": "txt",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "Literature Survey alias",
+        "Bibliography alias",
+        "APA-style author/year references"
+      ]
+    },
+    {
+      "file": "11_multiple_literature_sections.txt",
+      "format": "txt",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "duplicate literature headings",
+        "first occurrence extracted",
+        "multiple-section note"
+      ]
+    },
+    {
+      "file": "12_dense_citations_and_link_variants.md",
+      "format": "md",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 3,
+      "coverage": [
+        "citation ranges",
+        "multi-citations",
+        "author-year citations",
+        "plain URLs",
+        "Markdown link",
+        "www URL"
+      ]
+    },
+    {
+      "file": "13_noisy_and_unrecognised_references.txt",
+      "format": "txt",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "Previous Studies alias",
+        "unrecognised reference paragraphs preserved",
+        "unknown year/title"
+      ]
+    },
+    {
+      "file": "14_no_citations_but_references_present.md",
+      "format": "md",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 1,
+      "coverage": [
+        "no in-text citations",
+        "bibliography exists"
+      ]
+    },
+    {
+      "file": "15_reference_links_and_dois.txt",
+      "format": "txt",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "DOI field without DOI URL",
+        "doi.org URL",
+        "publisher URL"
+      ]
+    },
+    {
+      "file": "16_docx_heading_styles_and_clickable_links.docx",
+      "format": "docx",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "Word Heading styles",
+        "real clickable DOCX hyperlinks",
+        "references with URL and DOI"
+      ]
+    },
+    {
+      "file": "17_docx_chapter_headings_numbered_refs.docx",
+      "format": "docx",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "DOCX chapter headings",
+        "numbered bibliography",
+        "multiline-capable document parser"
+      ]
+    },
+    {
+      "file": "18_pdf_selectable_text_and_links.pdf",
+      "format": "pdf",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 2,
+      "coverage": [
+        "selectable PDF text",
+        "two-page PDF",
+        "text URLs",
+        "PDF link annotations"
+      ]
+    },
+    {
+      "file": "19_scanned_style_image_only.pdf",
+      "format": "pdf",
+      "literature_review": false,
+      "references": false,
+      "expected_papers": 0,
+      "coverage": [
+        "image-only PDF",
+        "no text layer",
+        "OCR limitation surfaced"
+      ]
+    },
+    {
+      "file": "20_sources_alias.md",
+      "format": "md",
+      "literature_review": true,
+      "references": true,
+      "expected_papers": 1,
+      "coverage": [
+        "Background and Related Work alias",
+        "Sources references alias",
+        "Markdown report"
+      ]
+    }
+  ]
+}
