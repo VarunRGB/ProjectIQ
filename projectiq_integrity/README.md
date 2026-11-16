@@ -4,6 +4,39 @@ Collects integrity evidence for each submission and returns it to the Rubric Age
 It never assigns or deducts marks. Every finding carries quoted evidence, a
 confidence value and its limitations, and a faculty member makes the decision.
 
+## Main use: a research document against its references
+
+How much of a student's research or project document was taken from the papers it
+uses, from which paper, and whether whole chunks were copied.
+
+```bash
+python -m projectiq_integrity --document paper.pdf --references refs/ --out outputs/doc
+```
+
+Then open `outputs/doc/paper_similarity.html` in a browser.
+
+| Type | How it is decided | Counted as copying |
+|---|---|---|
+| verbatim | word 3-gram overlap 0.80 or more | yes |
+| near-verbatim | word overlap 0.45 or more (a few words changed) | yes |
+| paraphrase | MiniLM finds a sentence with the same meaning (similarity 0.60 or more), then DeBERTa confirms that each sentence implies the other | yes |
+| similar meaning (not confirmed) | MiniLM finds it, DeBERTa does not confirm both ways | no, shown for review |
+
+- **Copied chunk:** 3 or more consecutive sentences copied from the same part of one reference (one unmatched sentence allowed inside).
+- **Percentages** are shares of the document's words: overall, per type, per reference, and inside chunks.
+- Text in quotation marks and the reference list are never counted. Copied text that carries a citation but no quotation marks is labelled "cited, not quoted".
+- A reference's own abstract and title page count as source text; only its reference list is skipped.
+
+Many students at once, each folder holding one document and a `references/` subfolder:
+
+```bash
+python -m projectiq_integrity --submissions cohort/ --out outputs/docs
+```
+
+`summary.csv` then lists every student's percentages, with a link to each HTML report.
+
+## Also available: comparing a whole class
+
 | Check | How | Flags when |
 |---|---|---|
 | Code similarity | JPlag 6.1.0 on every pair of submissions, starter code excluded | similarity is 50% or more (provisional) |
@@ -104,7 +137,8 @@ planted controls, detection rate, precision and false flags per check.
 |---|---|
 | `contracts.py` | `Evidence`, `Finding`, `AgentResult`: the shared result object |
 | `jplag_runner.py` | Prepare submissions, run JPlag, parse the `.jplag` result |
-| `report_similarity.py` | Cohort and reference overlap, template removal |
+| `document_check.py` | Document vs its references: types, chunks, percentages, HTML report |
+| `report_similarity.py` | Report loading, cohort and reference overlap, template removal |
 | `ai_indicators.py` | Style plus perplexity, agreement rule |
 | `evidence.py` | Evidence builder and confidence estimator |
 | `agent.py`, `__main__.py` | The agent and its command line |

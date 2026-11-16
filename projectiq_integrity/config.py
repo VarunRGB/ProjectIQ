@@ -35,6 +35,18 @@ class IntegritySettings:
     min_flagged_sentences: int = 2         # PROVISIONAL: per matched source document
     max_pairs_quoted: int = 5
 
+    # ---- Document vs its references (document_check.py) -----------------------
+    verbatim_lexical: float = 0.80             # word overlap for "verbatim"; near-verbatim uses the
+                                               # analyzer's near_verbatim_jaccard (0.45). Hyphens,
+                                               # dashes, quotes and case are ignored first.
+    verbatim_chars: float = 0.95               # character similarity that also counts as verbatim
+    paraphrase_candidate_cosine: float = 0.60  # PROVISIONAL: MiniLM similarity worth sending to DeBERTa
+    paraphrase_entailment: float = 0.50        # PROVISIONAL: DeBERTa entailment needed in BOTH directions
+    chunk_min_sentences: int = 3               # a copied chunk is at least this many sentences
+    chunk_max_gap: int = 1                     # unmatched sentences allowed inside a chunk
+    chunk_ref_window: int = 6                  # how far apart, in the reference, consecutive matches may be
+    reference_report_percent: float = 5.0      # PROVISIONAL: report a reference from this share of words
+
     # ---- AI-style text --------------------------------------------------------
     min_words_for_ai_check: int = 150
     style_support: float = 0.35            # same value as the judge's AI_SIGNAL_SUPPORT

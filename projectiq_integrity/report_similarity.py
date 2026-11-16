@@ -28,6 +28,8 @@ from .ria.preprocessing import split_sentences
 logger = logging.getLogger(__name__)
 
 REPORT_SUFFIXES = {".pdf", ".docx", ".txt", ".md"}
+_REF_HEADING = re.compile(r"^\s*(?:\d+\.?\s*)?(references|bibliography|works cited|reference list)\s*:?\s*$",
+                          re.IGNORECASE)
 REPORT_LIMITATION = ("Overlapping wording can come from shared sources, a common brief or "
                      "properly attributed material the parser did not recognise. A human must "
                      "read both passages before drawing any conclusion.")
@@ -41,9 +43,13 @@ def _text_document(text: str, name: str) -> Document:
     for page numbers so every quote still has a location."""
     paragraphs = [p.strip() for p in re.split(r"\n\s*\n|\r\n\s*\r\n", text) if p.strip()]
     sentences: List[Sentence] = []
+    section = "Body"
     for para_no, para in enumerate(paragraphs, start=1):
+        if _REF_HEADING.match(para):
+            section = "References"   # the reference list is never compared
+            continue
         for sent in split_sentences(" ".join(para.split())):
-            sentences.append(Sentence(len(sentences), sent, "Body", para_no, "Body"))
+            sentences.append(Sentence(len(sentences), sent, section, para_no, section))
     return Document(source=name, title=paragraphs[0][:120] if paragraphs else name,
                     pages=[Page(1, text)], sections=[Section("Body", "", 1, text)],
                     sentences=sentences)
@@ -111,10 +117,17 @@ def _without(doc: Document, skip: Set[str]) -> Document:
     return replace(doc, sentences=[replace(s, index=i) for i, s in enumerate(kept)])
 
 
+def source_sentences(doc: Document) -> List[Sentence]:
+    """Sentences of a source document that can be copied from. Unlike the student's
+    document, a source's title page and abstract count too; only its own reference
+    list is left out."""
+    return [s for s in doc.sentences if s.section != "References"]
+
+
 def _corpus(sources: Dict[str, Document], skip: Set[str]) -> ReferenceCorpus:
     sentences = []
     for name, doc in sources.items():
-        for s in doc.body_sentences():
+        for s in source_sentences(doc):
             if _norm(s.text) not in skip:
                 sentences.append(Passage(f"{name}#s{s.index}", name, None, s.section, s.page, s.text))
     # overlap_analyzer only needs sentence-level passages; reuse them as passages too.

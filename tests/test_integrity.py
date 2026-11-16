@@ -234,3 +234,24 @@ def test_validation_controls(tmp_path):
     assert rep["similar_report_text"]["detection_rate"] == 1.0
     assert rep["similar_report_text"]["false_flag_rate"] == 0.0
     assert rep["ai_style_text"]["tp"] == 1 and rep["ai_style_text"]["fp"] == 0
+
+
+def test_windows_backslash_paths_still_quote_code(tmp_path):
+    """On Windows, JPlag writes match file names with backslashes while its zip stores
+    forward slashes. The code fragments must still be found and quoted."""
+    src = FIX / "sample_results.jplag"
+    win = tmp_path / "windows_results.jplag"
+    with zipfile.ZipFile(src) as zin, zipfile.ZipFile(win, "w") as zout:
+        for item in zin.infolist():
+            data = zin.read(item.filename)
+            if item.filename.endswith(".json") and not item.filename.startswith("files/"):
+                obj = json.loads(data)
+                for m in obj.get("matches", []) if isinstance(obj, dict) else []:
+                    m["firstFile"] = m["firstFile"].replace("/", "\\")
+                    m["secondFile"] = m["secondFile"].replace("/", "\\")
+                data = json.dumps(obj).encode()
+            zout.writestr(item, data)
+    rep = jr.parse_result(win)
+    findings = build_findings(jr.code_signals(rep, "S101_aarav"))
+    assert len(findings) == 1 and "class Inventory" in findings[0].evidence[0].quote
+    assert "\\" not in findings[0].evidence[0].location

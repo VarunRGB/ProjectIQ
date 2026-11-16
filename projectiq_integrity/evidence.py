@@ -15,7 +15,7 @@ MAX_EVIDENCE = 8
 
 @dataclass
 class Signal:
-    kind: str                      # "similar_code" | "similar_report_text" | "ai_style_text"
+    kind: str                      # "similar_code" | "similar_report_text" | "copied_chunk" | "ai_style_text"
     summary: str
     evidence: List[Evidence]
     scores: Dict[str, float] = field(default_factory=dict)
@@ -62,6 +62,7 @@ def ai_confidence(s: Dict[str, float]) -> float:
 ESTIMATORS = {
     "similar_code": code_confidence,
     "similar_report_text": report_confidence,
+    "copied_chunk": report_confidence,
     "ai_style_text": ai_confidence,
 }
 

@@ -16,3 +16,7 @@ transformers>=4.40
 torch>=2.2
 sentencepiece>=0.2     # DeBERTa tokenizer
 protobuf>=4.25
+
+# Demo app for the Integrity Agent (streamlit run projectiq_integrity/app.py)
+streamlit>=1.46   # width="stretch" in tables
+pandas>=2.1

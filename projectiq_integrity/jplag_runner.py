@@ -225,12 +225,18 @@ class JPlagReport:
                       key=lambda p: p.max_similarity, reverse=True)
 
     def fragment(self, path: str, lines: Tuple[int, int], max_lines: int) -> str:
-        src = self.files.get(path, [])
+        src = self.files.get(_posix(path), [])
         a, b = max(1, lines[0]), min(len(src), lines[1])
         chunk = src[a - 1:b]
         if len(chunk) > max_lines:
             chunk = chunk[:max_lines] + [f"... ({b - a + 1} lines in total)"]
         return "\n".join(chunk).rstrip()
+
+
+def _posix(path: str) -> str:
+    """JPlag on Windows names files with backslashes (S101\\app.py) while its result zip
+    stores them with forward slashes. Use forward slashes everywhere."""
+    return path.replace("\\", "/")
 
 
 def parse_result(result_file: Path) -> JPlagReport:
@@ -248,7 +254,7 @@ def parse_result(result_file: Path) -> JPlagReport:
             if name.startswith("basecode/") and name.endswith(".json"):
                 sid = name[len("basecode/"):-len(".json")]
                 base_tokens[sid] = sum(m.get("tokens", 0) for m in json.loads(zf.read(name)))
-        files = {name[len("files/"):]: zf.read(name).decode("utf-8", errors="replace").splitlines()
+        files = {_posix(name[len("files/"):]): zf.read(name).decode("utf-8", errors="replace").splitlines()
                  for name in names if name.startswith("files/") and not name.endswith("/")}
         seen, pairs = set(), []
         for partners in overview.get("submission_ids_to_comparison_file_name", {}).values():
@@ -257,8 +263,8 @@ def parse_result(result_file: Path) -> JPlagReport:
                     continue
                 seen.add(fname)
                 c = json.loads(zf.read(fname))
-                matches = [CodeMatch(m["firstFile"], (m["startInFirst"]["line"], m["endInFirst"]["line"]),
-                                     m["secondFile"], (m["startInSecond"]["line"], m["endInSecond"]["line"]),
+                matches = [CodeMatch(_posix(m["firstFile"]), (m["startInFirst"]["line"], m["endInFirst"]["line"]),
+                                     _posix(m["secondFile"]), (m["startInSecond"]["line"], m["endInSecond"]["line"]),
                                      m.get("tokens", 0)) for m in c.get("matches", [])]
                 sims = c.get("similarities", {})
                 pairs.append(CodePair(c["id1"], c["id2"], float(sims.get("MAX", 0.0)),
