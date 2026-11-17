@@ -6,10 +6,16 @@ import os
 import re
 import unicodedata
 from difflib import SequenceMatcher
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
 import requests
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # Already-exported environment variables work without dotenv.
+    load_dotenv = None
 
 from .models import PaperReference
 from .verification_models import AcademicPaperMetadata
@@ -104,8 +110,11 @@ def _search_rank(paper: PaperReference, candidate: AcademicPaperMetadata) -> tup
     score = title_similarity(paper.title, candidate.title)
     author_agrees = _candidate_author_match(paper, candidate)
     containment = bool(paper.title and _title_containment_match(paper.title, candidate.title) and author_agrees)
-    plausible = score >= MIN_SEARCH_TITLE_SCORE or containment
     year_agrees = paper.year is not None and candidate.year == paper.year
+    # Low-confidence title-only matches need independent author/year evidence.
+    # This avoids treating a generic same-topic search hit as paper identity.
+    plausible = (score >= 0.90 or containment
+                 or (score >= MIN_SEARCH_TITLE_SCORE and (author_agrees or year_agrees)))
     # Prefer good title + author + year, not just the provider's search ranking.
     quality = score + (0.12 if author_agrees else 0) + (0.04 if year_agrees else 0)
     if containment:
@@ -117,6 +126,10 @@ class AcademicPaperResolver:
     """Resolve a DOI first; otherwise search OpenAlex, rejecting weak candidates."""
 
     def __init__(self, timeout: int = REQUEST_TIMEOUT, mailto: Optional[str] = None):
+        # The project-level .env is intentionally never bundled with patches.
+        # The developer may also supply the key through their shell/CI.
+        if load_dotenv is not None:
+            load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env", override=False)
         self.timeout = timeout
         self.mailto = mailto or os.getenv("CROSSREF_MAILTO")
         self.session = requests

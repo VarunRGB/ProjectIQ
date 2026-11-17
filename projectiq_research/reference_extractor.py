@@ -8,6 +8,7 @@ import re
 from typing import List, Optional, Sequence, Tuple
 
 from .models import Hyperlink, PaperReference
+from .url_utils import extend_wrapped_url
 
 _YEAR_RE = re.compile(r"\b((?:19|20)\d{2})[a-z]?\b", re.I)
 _PAREN_YEAR_RE = re.compile(r"\(\s*((?:19|20)\d{2})[a-z]?\s*\)", re.I)
@@ -22,10 +23,181 @@ _QUOTED_TITLE_RE = re.compile(r'[“\"]([^”\"]+)[”\"]', re.S)
 _APA_YEAR_TITLE_RE = re.compile(r"\(\s*(?:19|20)\d{2}[a-z]?\s*\)\s*\.\s*(.+)", re.I | re.S)
 
 
+# PDF fonts commonly encode Latin ligatures as single glyphs (e.g. "ﬁ").
+# Normalize only those glyphs for matching; PaperReference.raw is never changed.
+_PDF_LIGATURES = str.maketrans({
+    "ﬀ": "ff", "ﬁ": "fi", "ﬂ": "fl", "ﬃ": "ffi", "ﬄ": "ffl",
+    "ﬅ": "st", "ﬆ": "st",
+})
+
+# In some IEEE/ACM proceedings, references are written as
+#   [2] A. Author, B. Author: Unquoted title, Proc. Conference, 2007.
+# These are strong venue transitions, not arbitrary commas within a title.
+_COLON_TITLE_VENUE_RE = re.compile(
+    r",\s*(?=(?:in\s+)?(?:proc(?:eedings)?\.?\b|ieee\b|acm\b|"
+    r"international\b|journal\b|transactions?\b|trans\.?\s|"
+    r"conference\b|conf\.?\s|workshop\b|symposium\b|"
+    r"\d+(?:st|nd|rd|th)\b|vol(?:ume)?\.?\s|pp?\.?\s|arxiv\b))",
+    re.I,
+)
+_INITIAL_RE = re.compile(r"(?<![A-Za-z])(?:[A-Z]\.\s*){1,4}")
+_NAME_WORD_RE = re.compile(r"^[A-Z][A-Za-zÀ-ÖØ-öø-ÿ'’\-]+$")
+_NON_AUTHOR_PREFIX = {
+    "available", "online", "doi", "url", "source", "github", "website",
+    "accessed", "proceedings", "conference", "international", "journal",
+    "publisher", "publication", "university", "institute", "copyright",
+}
+
+
+def _split_colon_author_title(text: str) -> Optional[Tuple[str, str]]:
+    """Extract a conservative author/title boundary for unquoted colon styles.
+
+    A colon in a DOI, URL, venue or paper title is not sufficient. The prefix
+    must look like a list of people. Any uncertain item is left unparsed.
+    """
+    match = re.match(r"^(?P<authors>[^:]{3,180}):\s+(?P<rest>.+)$", text, re.S)
+    if match is None:
+        return None
+    authors = match.group("authors").strip(" .,:;")
+    remainder = match.group("rest").strip()
+    if (not authors or len(authors.split()) > 28
+            or re.search(r"(?:https?://|www\.|\bdoi\b|\b(?:19|20)\d{2}\b|\d)", authors, re.I)):
+        return None
+    if not re.fullmatch(r"[A-Za-zÀ-ÖØ-öø-ÿ\s.,'’&\-]+", authors):
+        return None
+    if authors.split()[0].lower().rstrip(".") in _NON_AUTHOR_PREFIX:
+        return None
+
+    # Most conventional proceedings entries include initials ("R. Smith").
+    # Also support fully spelled names ("John Smith and Jane Doe") when each
+    # component is name-like. This deliberately excludes institutional labels.
+    if _INITIAL_RE.search(authors):
+        if not re.search(r"\b[A-Z][a-zÀ-ÖØ-öø-ÿ'’\-]{1,}\b", authors):
+            return None
+    else:
+        name_tokens = re.split(r"\s+(?:and|&)\s+|,\s*|\s+", authors)
+        if not (2 <= len(name_tokens) <= 8 and all(
+            token in {"", "and", "&"} or _NAME_WORD_RE.fullmatch(token)
+            for token in name_tokens
+        )):
+            return None
+        if any(token.lower() in _NON_AUTHOR_PREFIX for token in name_tokens):
+            return None
+
+    venue = _COLON_TITLE_VENUE_RE.search(remainder)
+    if venue:
+        title = remainder[:venue.start()]
+    else:
+        # No explicit venue: only remove a *terminal* publication-year field.
+        title = re.sub(r",\s*(?:\(?[12]\d{3}\)?[a-z]?\.?\s*)$", "", remainder, flags=re.I)
+    title = title.strip(" .,:;\"“”")
+    if not _is_plausible_title(title):
+        return None
+    if _YEAR_RE.search(title) and len(title.split()) > 30:
+        return None
+    return authors, title
+
+
+def _looks_like_person_author_list(prefix: str) -> bool:
+    """Validate the author side of a period-separated bibliography item.
+
+    Supports long lists of full names and initials, without assuming a research
+    domain or matching a paper title from external metadata.  Do not parse an
+    organization or arbitrary prose as an academic author by default.
+    """
+    if (not prefix or len(prefix) > 300 or len(prefix.split()) > 55
+            or re.search(r"(?:https?://|www\.|\bdoi\b|\d)", prefix, re.I)):
+        return False
+    if re.search(r"[!?;:]", prefix):
+        return False
+    parts = re.split(r"\s*,\s*(?:and|&)\s+|\s+(?:and|&)\s+|\s*,\s*", prefix, flags=re.I)
+    parts = [part.strip() for part in parts if part.strip()]
+    if not parts or len(parts) > 18:
+        return False
+    forbidden = _NON_AUTHOR_PREFIX | {
+        "abstract", "methods", "background", "introduction", "overview", "algorithm",
+        "research", "review", "detecting", "training", "model", "study",
+        "paper", "pages", "system", "network", "security", "data", "volume",
+        "chapter", "available", "technical", "proceeding", "study", "table",
+    }
+    for person in parts:
+        words = re.findall(r"[A-Za-zÀ-ÖØ-öø-ÿ]+(?:[-'’][A-Za-zÀ-ÖØ-öø-ÿ]+)*", person)
+        if not (2 <= len(words) <= 8):
+            return False
+        if any(word.casefold() in forbidden for word in words):
+            return False
+        # PDF text extraction sometimes splits proper names into 'Y uval'
+        # or 'V an'. A majority must still look like actual name components.
+        capitalized = sum(word[0].isupper() for word in words)
+        if capitalized / len(words) < 0.60:
+            return False
+        # An intermediate initial is fine; a trailing initial usually signals
+        # that the author list is incomplete (e.g. 'A. L.' before 'Spitz').
+        if len(words[-1]) == 1 and words[-1].upper() not in {"I", "V"}:
+            # PDF extractors can split a surname into 'Y u'. Permit the
+            # malformed terminal token only when it follows a single initial
+            # and an otherwise credible full given name.
+            broken_surname = (len(words) >= 3 and words[-1].islower()
+                              and len(words[-2]) == 1 and words[-2].isupper()
+                              and len(words[-3]) >= 2 and words[-3][0].isupper())
+            if not broken_surname:
+                return False
+    return True
+
+
+def _split_period_author_title(text: str) -> Optional[Tuple[str, str]]:
+    """Parse unquoted 'Authors. Title. Venue, year' references.
+
+    Distinguishes author initials from an author-list delimiter; supports
+    titles containing colons and question marks, and conference/arXiv venues.
+    The pair is returned only when the names and title have credible bounds.
+    """
+    for match in re.finditer(r"\.\s+(?=\S)", text):
+        authors = text[:match.start()].strip(" .,;:")
+        if not _looks_like_person_author_list(authors):
+            continue
+        remainder = text[match.end():].strip()
+        if (not remainder or remainder[0].isdigit()
+                or remainder.startswith(("(", "https://", "http://"))):
+            continue
+        # A year or edition number often follows a finished title. For a
+        # venue, the first full stop marks the end of the unquoted title.
+        # Internal question marks and colons remain part of the title.
+        title_end = re.search(r"\.\s+(?=\S)", remainder)
+        if title_end:
+            title = remainder[:title_end.start()]
+        else:
+            title = remainder
+        title = re.sub(r",\s*(?:19|20)\d{2}[a-z]?\.?\s*$", "", title, flags=re.I)
+        title = title.strip(" .,:;\"“”")
+        if not _is_plausible_title(title):
+            continue
+        if len(title.split()) > 32 or re.search(r"https?://|\bdoi\s*:", title, re.I):
+            continue
+        if re.match(
+            r"^(?:In |Proceedings |(?:IEEE|ACM) (?:International |Symposium |Conference |Transactions ))",
+            title, re.I,
+        ):
+            continue
+        return authors, title
+    return None
+
+
+def _looks_like_web_resource(raw: str) -> bool:
+    """Recognise obvious named web/software entries without inventing papers."""
+    text = _strip_label(_normalise_entry(raw))
+    if not _URL_RE.search(text) or _extract_year(raw) is not None:
+        return False
+    label = _URL_RE.sub("", text).strip(" .,:;()")
+    return bool(label and 2 <= len(label.split()) <= 16
+                and not _QUOTED_TITLE_RE.search(label)
+                and not _split_colon_author_title(label))
+
+
 def _normalise_entry(raw: str) -> str:
     # PDF line wrapping can split a DOI (10.1007/s10032-\n019-00320-5),
     # hyphenated words, or titles. Keep the original raw text unchanged.
-    text = re.sub(r"(?<=-)\s*\n\s*(?=[a-z0-9])", "", raw, flags=re.I)
+    text = re.sub(r"(?<=-)\s*\n\s*(?=[a-z0-9])", "", raw.translate(_PDF_LIGATURES), flags=re.I)
     text = re.sub(r"\s*\n\s*", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
@@ -137,12 +309,17 @@ def _extract_doi(raw: str) -> Optional[str]:
 
 def _extract_urls(raw: str) -> List[str]:
     urls: List[str] = []
-    for match in _URL_RE.finditer(_normalise_entry(raw)):
-        value = _trim_url(match.group(0))
-        if value.startswith("www."):
-            value = "https://" + value
-        if value not in urls:
-            urls.append(value)
+    lines = raw.translate(_PDF_LIGATURES).splitlines()
+    for index, line in enumerate(lines):
+        for match in _URL_RE.finditer(line):
+            value = match.group(0)
+            if match.end() == len(line.rstrip()):
+                value = extend_wrapped_url(value, lines, index)
+            value = _trim_url(value)
+            if value.startswith("www."):
+                value = "https://" + value
+            if value not in urls:
+                urls.append(value)
     return urls
 
 
@@ -175,6 +352,18 @@ def _extract_title(raw: str) -> Optional[str]:
         if _is_plausible_title(title):
             return title
 
+    # Numbered, unquoted colon style: A. Author: Title, Proc. ... 2007.
+    colon = _split_colon_author_title(text)
+    if colon:
+        return colon[1]
+
+    # IEEE/USENIX/ACM unquoted style: Authors. Title. Venue / arXiv, year.
+    # A URL-only, undated software or web citation must not be promoted into
+    # an academic-paper lookup solely because it names a human author.
+    period = None if (_URL_RE.search(text) and _extract_year(raw) is None) else _split_period_author_title(text)
+    if period:
+        return period[1]
+
     # APA / Harvard: Smith, J. (2023). Title of the study. Journal ...
     apa = _APA_YEAR_TITLE_RE.search(text)
     if apa:
@@ -202,6 +391,12 @@ def _extract_authors(raw: str) -> Optional[str]:
     if quote:
         prefix = text[:quote.start()].strip(" .,:;")
         return prefix or None
+    colon = _split_colon_author_title(text)
+    if colon:
+        return colon[0]
+    period = None if (_URL_RE.search(text) and _extract_year(raw) is None) else _split_period_author_title(text)
+    if period:
+        return period[0]
     if _looks_like_author_start(text):
         year = _YEAR_RE.search(text)
         if year:
@@ -240,6 +435,8 @@ def extract_references(
         title = _extract_title(raw)
         authors = _extract_authors(raw)
         notes: List[str] = []
+        if _looks_like_web_resource(raw):
+            notes.append("Likely a web or software resource, not an academic paper; retain its URL for manual review.")
         if not title:
             notes.append("Title could not be extracted confidently; review the raw reference.")
         if year is None:

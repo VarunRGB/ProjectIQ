@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from .verification_models import PaperVerification
 from .relevance_models import PaperRelevance
+from .recency_models import PaperRecency, RecencySummary, ResearchQualityReport
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,9 @@ class ResearchExtraction:
     document_citations: List[CitationMention] = field(default_factory=list)
     citation_reference_matches: List[Dict[str, Any]] = field(default_factory=list)
     relevance_results: List[PaperRelevance] = field(default_factory=list)
+    recency_results: List[PaperRecency] = field(default_factory=list)
+    recency_summary: Optional[RecencySummary] = None
+    research_report: Optional[ResearchQualityReport] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """Return a JSON-serialisable representation."""

@@ -5,6 +5,7 @@ import re
 from typing import List, Tuple
 
 from .models import Hyperlink, ParsedDocument
+from .url_utils import extend_wrapped_url
 
 _URL_RE = re.compile(r"(?i)\b(?:https?://|www\.)[^\s<>\]\[(){}]+")
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\((https?://[^\s)]+)\)", re.IGNORECASE)
@@ -30,13 +31,17 @@ def _is_explicit_heading(line: str) -> bool:
 
 def _links_in_text(text: str, line_offset: int = 0) -> List[Hyperlink]:
     found: List[Hyperlink] = []
-    for line_number, line in enumerate(text.splitlines(), start=1):
+    lines = text.splitlines()
+    for line_number, line in enumerate(lines, start=1):
         for match in _MARKDOWN_LINK_RE.finditer(line):
             found.append(Hyperlink(match.group(1).strip(), _clean_url(match.group(2)),
                                    line_offset + line_number, "markdown"))
         # URLs may also be pasted without Markdown link syntax.
         for match in _URL_RE.finditer(line):
-            url = _clean_url(match.group(0))
+            raw_url = match.group(0)
+            if match.end() == len(line.rstrip()):
+                raw_url = extend_wrapped_url(raw_url, lines, line_number - 1)
+            url = _clean_url(raw_url)
             if not any(item.url == url and item.line_number == line_offset + line_number for item in found):
                 found.append(Hyperlink(url, url, line_offset + line_number, "text"))
     return found

@@ -62,28 +62,49 @@ def _build_result(paper: PaperReference, metadata: Optional[AcademicPaperMetadat
     if author_match is None:
         notes.append("Author match could not be determined confidently.")
 
+    # A searchable title is not proof of identity. OpenAlex may suggest a
+    # thematically similar but completely different paper. In particular,
+    # a near-ish title PLUS conflicting authors and year must not become a
+    # `needs_review` record whose abstract contaminates Phase 3.
+    conflicting_independent_evidence = author_match is False and year_match is False
+    title_identity = title_match is True or contaminated_title
+    corroborated_approximate = (score >= REVIEW_TITLE_THRESHOLD
+                               and (author_match is True or year_match is True))
+
     if doi_match and title_match is False and not contaminated_title:
-        # A direct identifier pointing at conflicting metadata warrants investigation.
+        # Exact DOI is a strong identifier, but conflicting bibliographic
+        # fields require human review, not an automated identity assertion.
         status = "metadata_mismatch"
+    elif conflicting_independent_evidence and not doi_match:
+        status = "not_found"
+        notes.append("Search candidate rejected: both authors and year conflict; no identity was established.")
     elif title_match is True and year_match is not False and author_match is not False:
         status = "verified"
-    elif (title_match or contaminated_title) and year_match is False:
-        status = "needs_review"  # Keep existing public API for version-year differences.
-    elif contaminated_title:
+    elif title_identity and (year_match is False or author_match is False):
+        # Good title but conflicting version or author list: unresolved.
         status = "needs_review"
-    elif score >= REVIEW_TITLE_THRESHOLD:
+    elif contaminated_title and author_match is True:
+        status = "needs_review"
+    elif corroborated_approximate:
         status = "needs_review"
     elif doi_match and title_match is None:
         status = "needs_review"
     else:
-        # A low-scoring title-search hit is not proof of bad bibliography metadata.
         status = "not_found" if metadata.provider != "crossref" else "metadata_mismatch"
         notes.append("The returned search candidate is not reliable enough to confirm this citation.")
 
+    # Only accepted identities may supply external abstracts to the semantic
+    # scorer. Retain conflicting search metadata for audit *only* when an
+    # exact DOI points to a mismatched bibliographic record.
+    expose_metadata = status in {"verified", "needs_review", "metadata_mismatch"}
     return PaperVerification(
-        **base, status=status, provider=metadata.provider, verified_title=metadata.title,
-        verified_authors=metadata.authors, verified_year=metadata.year,
-        verified_doi=metadata.doi, verified_url=metadata.landing_page_url,
+        **base, status=status,
+        provider=metadata.provider if expose_metadata else None,
+        verified_title=metadata.title if expose_metadata else None,
+        verified_authors=metadata.authors if expose_metadata else [],
+        verified_year=metadata.year if expose_metadata else None,
+        verified_doi=metadata.doi if expose_metadata else None,
+        verified_url=metadata.landing_page_url if expose_metadata else None,
         title_similarity=round(score, 4), title_match=title_match,
         year_match=year_match, author_match=author_match, notes=notes,
         verified_abstract=(metadata.abstract if status in {"verified", "needs_review"} else None),

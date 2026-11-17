@@ -11,6 +11,8 @@ from .reference_extractor import extract_references
 from .section_detector import detect_sections
 from .verification import verify_papers
 from .relevance_scorer import assess_relevance
+from .recency_analyzer import analyze_recency
+from .research_report import build_research_report
 
 
 def _analyse_parsed_document(document: ParsedDocument, verify: bool) -> ResearchExtraction:
@@ -111,8 +113,9 @@ def analyze_research_document(
     encoder=None,
     cross_encoder=None,
     paper_abstracts=None,
+    as_of_date=None,
 ) -> ResearchExtraction:
-    """Full Research Agent: Phases 1, 2 and 3, in one future-orchestrator call.
+    """Full Research Agent: Phases 1–4A, in one future-orchestrator call.
 
     Unlike analyze_document, Phase 3 ALWAYS runs here. `verify=False` skips only
     online Phase 2, useful when evaluating the local neural scorer offline.
@@ -124,4 +127,6 @@ def analyze_research_document(
         result, document, encoder=encoder, cross_encoder=cross_encoder,
         paper_abstracts=paper_abstracts,
     )
+    result.recency_results, result.recency_summary = analyze_recency(result, as_of_date=as_of_date)
+    result.research_report = build_research_report(result, result.recency_summary)
     return result

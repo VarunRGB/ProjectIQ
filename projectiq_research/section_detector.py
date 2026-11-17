@@ -15,7 +15,9 @@ LITERATURE_ALIASES = {
     "related works", "related studies", "background and related work",
     "background and related works", "previous studies", "prior studies",
     "prior work", "existing work", "existing studies", "review of related literature",
-    "review of related studies", "state of the art", "state of art",
+    "review of related studies", "review of related work", "related literature",
+    "related research", "prior research", "previous research", "existing approaches",
+    "review of previous work", "related and prior work", "state of the art", "state of art",
 }
 REFERENCES_ALIASES = {
     "references", "reference", "reference list", "list of references", "bibliography",
@@ -41,6 +43,21 @@ _OTHER_SECTION_HEADINGS = {
 _ALL_KNOWN = LITERATURE_ALIASES | REFERENCES_ALIASES | _OTHER_SECTION_HEADINGS
 
 
+def _compact_heading(value: str) -> str:
+    """Undo character/word spacing artifacts in PDF heading extraction only.
+
+    Some two-column PDFs yield `VI. R ELA TED WORK` or `I NTRODUCTION`.
+    Comparing the compact *entire* heading against a bounded alias set is
+    safer than fuzzy-matching arbitrary body lines.
+    """
+    return re.sub(r"[^a-z0-9]", "", value.casefold())
+
+
+_COMPACT_ALIASES = {_compact_heading(alias): alias for alias in _ALL_KNOWN}
+_COMPACT_LITERATURE = {_compact_heading(alias) for alias in LITERATURE_ALIASES}
+_COMPACT_REFERENCES = {_compact_heading(alias) for alias in REFERENCES_ALIASES}
+
+
 def _normalise_heading(line: str) -> str:
     value = line.strip().strip("*_")
     value = re.sub(r"^#{1,6}\s*", "", value)
@@ -52,7 +69,7 @@ def _normalise_heading(line: str) -> str:
 
 
 def _known_heading(normalised: str) -> bool:
-    if normalised in _ALL_KNOWN:
+    if normalised in _ALL_KNOWN or _compact_heading(normalised) in _COMPACT_ALIASES:
         return True
     # Appendix A / Appendix I / Annexure 2 and common supplementary sections.
     return bool(re.fullmatch(
@@ -89,21 +106,31 @@ def _is_heading_boundary(
     normalized = _normalise_heading(stripped)
     if _known_heading(normalized):
         return True
+    # Numbered section headings must be checked BEFORE bibliography-number
+    # detection. Otherwise "2. APPROACH" is incorrectly treated as reference
+    # [2] and the preceding Related Work section swallows the methodology.
+    # Only do this outside the bibliography, where numbered lines are entries.
+    numbered = re.match(r"^\d{1,2}(?:\.\d{1,2}){0,3}[.)]?\s+(.+)$", stripped)
+    if numbered and not in_references:
+        rest = numbered.group(1).strip()
+        letters = [char for char in rest if char.isalpha()]
+        words = re.findall(r"[A-Za-z][A-Za-z\-]*", rest)
+        heading_case = (bool(letters) and all(char.isupper() for char in letters))
+        title_case = (bool(words) and all(
+            word[0].isupper() or word.lower() in {"and", "of", "for", "in", "to", "the", "a"}
+            for word in words
+        ))
+        if (2 <= len(rest) <= 90 and len(words) <= 12
+                and (heading_case or title_case or line_number in heading_lines)
+                and not re.search(r"\b(?:19|20)\d{2}\b|\bdoi\b|https?://", rest, re.I)
+                and not re.search(r"[.!?,;:]$", rest) and "," not in rest):
+            return True
+
     if _looks_like_bibliography_entry(stripped):
         return False
 
     if re.match(r"^#{1,6}\s+\S", stripped):
         return True
-
-    # Numbered headings are supported, but ordinary bibliography page numbers
-    # (e.g. '446. doi: ...') are not section boundaries.
-    numbered = re.match(r"^\d+(?:\.\d+)*[.)]?\s+(.+)$", stripped)
-    if numbered and not in_references:
-        rest = numbered.group(1)
-        if (len(rest) <= 90 and len(rest.split()) <= 12
-                and not re.search(r"\b(?:19|20)\d{2}\b|doi:|https?://", rest, re.I)
-                and rest[0].isupper() and "," not in rest):
-            return True
 
     # Inside references, PDF extractors may mark a wrapped all-caps *paper*
     # title as a heading. Ignore that hint unless this is an isolated heading.
@@ -123,9 +150,9 @@ def _is_heading_boundary(
 
 def _section_for_heading(line: str) -> Optional[str]:
     normalized = _normalise_heading(line)
-    if normalized in LITERATURE_ALIASES:
+    if normalized in LITERATURE_ALIASES or _compact_heading(normalized) in _COMPACT_LITERATURE:
         return "literature_review"
-    if normalized in REFERENCES_ALIASES:
+    if normalized in REFERENCES_ALIASES or _compact_heading(normalized) in _COMPACT_REFERENCES:
         return "references"
     return None
 

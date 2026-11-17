@@ -11,7 +11,7 @@ from typing import Dict, Mapping, Optional
 import numpy as np
 
 from .models import ParsedDocument, ResearchExtraction
-from .relevance_context import ReportEvidence, prepare_relevance_context
+from .relevance_context import ReportEvidence, prepare_relevance_context, is_method_section
 from .relevance_models import PaperRelevance
 
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -271,7 +271,7 @@ def _method_adoption_evidence(
     # explicit adoption claim and independent semantic method similarity.
     if (independent_method is not None and independent_method >= 0.45
             and _is_technique_led(paper_title)
-            and any(s in _METHOD_SECTION_NAMES for s in section_names)):
+            and any(is_method_section(s) for s in section_names)):
         named_model = re.compile(r"\b(?:[A-Z]{2,}[-]?\d+|[A-Z][a-z]+(?:Net|Former)[-]?\d+)\b")
         for claim in citation_claims:
             if (_ADOPTION_ACTION_RE.search(claim) and not _NON_ADOPTION_RE.search(claim)
@@ -383,7 +383,7 @@ def _cited_method_adoption(
     in a Methods/Literature Review paragraph as evidence. The paper still needs
     an independent model-based method score (checked in `_classification`).
     """
-    if not any(s in _METHOD_SECTION_NAMES for s in section_names):
+    if not any(is_method_section(s) for s in section_names):
         return False
     paper_terms = _domain_terms(" ".join(paper_texts)) - _GENERIC_METHOD_TERMS
     for claim in citation_claims:
@@ -500,6 +500,25 @@ def _classification(
     )
 
 
+def _identity_safe_for_semantics(verification) -> bool:
+    """Only reliable identity matches may supply external metadata to Phase 3.
+
+    `needs_review` is a *bibliographic review status*, not necessarily an
+    established paper identity. A title-search candidate needs an actual
+    author and title corroboration before we trust its title/abstract.
+    """
+    if verification is None:
+        return False
+    if verification.status == "verified":
+        return True
+    if verification.status != "needs_review":
+        return False
+    return (verification.author_match is True
+            and (verification.title_match is True or
+                 (verification.title_similarity is not None
+                  and verification.title_similarity >= 0.72)))
+
+
 def assess_relevance(
     extraction: ResearchExtraction,
     document: ParsedDocument,
@@ -524,7 +543,7 @@ def assess_relevance(
     for index, paper in enumerate(extraction.papers):
         verification = verifications[index] if index < len(verifications) else None
         status = verification.status if verification else "not_checked"
-        accepted = status in {"verified", "needs_review"}
+        accepted = _identity_safe_for_semantics(verification)
         best_title = (verification.verified_title if verification and accepted and verification.verified_title else paper.title or "")
         abstract = _clean_text(
             abstracts.get(index) or (getattr(verification, "verified_abstract", None) if accepted else None), 1100
@@ -635,7 +654,8 @@ def assess_relevance(
         method_strength, support_traces, support_terms = _specific_method_support(
             evidence.method_sentences, title, evidence.citation_claims.get(index, []),
             evidence.citation_aliases.get(index, []), evidence.topic_passages,
-            evidence.independent_methodology_passages, sections, abstract, status,
+            evidence.independent_methodology_passages, sections, abstract,
+            status if _identity_safe_for_semantics(verifications[index] if index < len(verifications) else None) else "not_found",
             method, independent_method,
         )
         # Keep the v1.3 detailed evidence field but distinguish observed exact
@@ -654,7 +674,7 @@ def assess_relevance(
             usage_evidence = []
         specific_overlap = len(_specific_subject_terms(evidence.title) & _specific_subject_terms(title))
         technique_led = _is_technique_led(title)
-        accepted = status in {"verified", "needs_review"}
+        accepted = _identity_safe_for_semantics(verifications[index] if index < len(verifications) else None)
         shared_task = bool(_task_families(_problem_phrase(evidence.title))
                            & _task_families(_problem_phrase(title)))
         label, explanation = _classification(
@@ -726,8 +746,22 @@ def assess_relevance(
         notes.extend(support_traces)
         if method_strength == "moderate" and support_traces:
             notes.append("Review the paper's full text before treating claimed adoption as proven.")
-        if adopted:
-            notes.append("An explicitly adopted, named technique was found in a method citation; claim support is not verified.")
+        if adopted and method_strength == "none":
+            # A citation can *sound* like method adoption without proving that
+            # this particular reference supplied a technique actually used.
+            # Keep the useful diagnostic, but do not contradict the structured
+            # `method_evidence_strength` / `method_evidence_traces` fields.
+            notes.append(
+                "A citation-level method-use cue was detected, but no "
+                "reference-specific method adoption was corroborated; "
+                "this cue was not counted as method-use evidence."
+            )
+        elif adopted:
+            notes.append(
+                "A citation-level method-use cue was detected and has "
+                "corroborating method evidence; claim support by the cited "
+                "paper is not independently verified."
+            )
         if anchors:
             notes.append("Shared non-generic method anchors in uncited report text: " + ", ".join(sorted(anchors)[:8]))
         if context is not None and context >= 0.5 and label in {"possibly_unrelated", "insufficient_evidence", "partially_relevant"}:

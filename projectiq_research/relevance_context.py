@@ -9,17 +9,243 @@ from typing import Dict, List
 
 from .models import ParsedDocument, ResearchExtraction
 
-_HEADING_RE = re.compile(
-    r"^\s*(?:#{1,6}\s+|(?:chapter\s+)?\d+(?:\.\d+)*[.)]?\s+|[IVXLCDM]+[.)]\s+)?"
-    r"(abstract|introduction|background|literature review|review of literature|related work|"
-    r"method|methods|methodology|materials and methods|proposed methodology|"
-    r"proposed system|system architecture|implementation|experimental setup|"
-    r"results(?: and discussion)?|discussion|conclusions?|references|bibliography|"
-    r"acknowledgements?|keywords|index terms|biograph(?:y|ies)(?: of authors)?)\s*[:.]?\s*$",
-    re.I,
+# Headings have two independent properties: their *surface wording* and their
+# *structural position*. Numbered/Markdown subsections inherit an enclosing
+# methodological role unless they explicitly introduce another kind of content.
+# This keeps unknown but legitimate method subheadings usable without treating
+# arbitrary unnumbered prose as a method heading.
+_NUMBERED_HEADING_RE = re.compile(
+    r"^\s*(?:(?:chapter|section)\s+)?(\d+(?:\.\d+)*)(?:[.):\u2013\u2014-])?\s+(.+?)\s*$", re.I
 )
-_METHODS = ("method", "methods", "methodology", "materials and methods", "proposed methodology",
-            "proposed system", "system architecture", "implementation", "experimental setup")
+_ROMAN_HEADING_RE = re.compile(r"^\s*([IVXLCDM]+)[.)]\s+(.+?)\s*$", re.I)
+_MARKDOWN_HEADING_RE = re.compile(r"^\s*(#{1,6})\s+(.+?)\s*$")
+
+# These are *families of research-section intentions*, not a closed list of
+# acceptable titles or subject-specific keywords. An unknown numbered child of
+# a method section inherits the method role via the outline hierarchy.
+_SECTION_FAMILIES = (
+    ("references", re.compile(r"^(?:references|bibliography|works cited|literature cited|appendix(?:es)?|supplementary materials?)$", re.I)),
+    ("front_matter", re.compile(r"^(?:keywords?|index terms|general terms|categories and subject descriptors|authors?|author information|affiliations?)$", re.I)),
+    ("closing", re.compile(r"(?:^|\b)(?:conclusions?|limitations?|future work|acknowledg(?:e)?ments?|author contributions|conflicts? of interest|funding)(?:\b|$)", re.I)),
+    ("results", re.compile(r"(?:^|\b)(?:results?|findings|discussion|evaluation|performance evaluation|experiments?(?!al (?:setup|design|procedure|method))|ablation|benchmarks?|validation|error analysis|quantitative analysis|qualitative analysis)(?:\b|$)", re.I)),
+    ("abstract", re.compile(r"^(?:abstract|executive summary|summary|synopsis)$", re.I)),
+    ("literature", re.compile(r"(?:^|\b)(?:literature (?:review|survey)|review of (?:the )?literature|related (?:work|studies|research)|prior (?:work|research|studies)|previous (?:work|studies)|state of (?:the )?art|existing (?:approaches|methods|systems|work)|theoretical framework)(?:\b|$)", re.I)),
+    ("background", re.compile(r"^(?:background|preliminaries|foundations|theoretical background|conceptual background|problem context)$", re.I)),
+    ("introduction", re.compile(r"^(?:introduction|overview|motivation|problem statement|problem definition|problem formulation|research questions?|research objectives?|objectives?|aims?(?: and objectives)?|contributions?|scope of (?:the )?study)$", re.I)),
+    ("methodology", re.compile(
+        r"(?:^|\b)(?:method(?:ology|ologies|s)?|approach(?:es)?|proposed (?:solution|system|work|technique)|"
+        r"materials and methods|experimental (?:setup|design|procedure|method)|research design|study design|"
+        r"system (?:overview|model|design|architecture)|model (?:design|architecture|development|training|selection)|"
+        r"algorithm(?:s|ic framework)?|procedures?|protocols?|implementation|architecture|"
+        r"framework|pipeline|workflow|training|inference|classification|"
+        r"feature (?:extraction|engineering|selection)|pre[- ]?processing|post[- ]?processing|"
+        r"data (?:collection|acquisition|preparation|processing|preprocessing|augmentation|sources|description)|"
+        r"dataset(?:s)?|sampling|instrumentation|apparatus|simulation (?:setup|method|model)|"
+        r"empirical strategy|estimation strategy|analytical strategy|computational (?:methods?|procedure|approach)|"
+        r"numerical (?:methods?|scheme)|implementation details|system configuration|"
+        r"experimental protocol|methodological framework|statistical (?:analysis|methods?)|"
+        r"analysis plan|study (?:population|setting|participants)|participants|materials|"
+        r"case study design|measurements?|data analysis|data sources)(?:\b|$)", re.I
+    )),
+)
+
+
+@dataclass(frozen=True)
+class _Heading:
+    title: str
+    role: str
+    depth: int
+    number: tuple[int, ...] | None = None
+    # Structural headings are evidence of a boundary even if their exact
+    # vocabulary isn't known. A plain prose line never gets this privilege.
+
+
+# PDF text can contain inter-character spaces within section headings, for
+# example `R ELA TED WORK`, `I NTRODUCTION`, `B ACKGROUND &M OTIVATION`.
+# This fallback is only used for exact, compact heading-family equivalents;
+# it does not fuzzy-match arbitrary research vocabulary.
+_COMPACT_ROLE_HEADINGS = {
+    "introduction": "introduction",
+    "background": "background",
+    "backgroundmotivation": "background",
+    "backgroundandmotivation": "background",
+    "relatedwork": "literature",
+    "relatedworks": "literature",
+    "relatedstudies": "literature",
+    "relatedresearch": "literature",
+    "literaturereview": "literature",
+    "reviewofliterature": "literature",
+    "literaturesurvey": "literature",
+    "priorwork": "literature",
+    "previouswork": "literature",
+    "stateoftheart": "literature",
+    "methods": "methodology",
+    "methodology": "methodology",
+    "proposedapproach": "methodology",
+    "approach": "methodology",
+    "training": "methodology",
+    "classification": "methodology",
+    "implementation": "methodology",
+    "results": "results",
+    "discussion": "results",
+    "evaluation": "results",
+    "references": "references",
+    "bibliography": "references",
+    "conclusions": "closing",
+    "conclusion": "closing",
+    "acknowledgments": "closing",
+    "acknowledgements": "closing",
+    "limitations": "closing",
+    "limitationsdiscussions": "closing",
+}
+
+
+def _heading_role(title: str) -> str:
+    canonical = re.sub(r"[_–—-]+", " ", title).strip(" \t.:;").casefold()
+    canonical = re.sub(r"\s+", " ", canonical)
+    compact = re.sub(r"[^a-z0-9]", "", canonical)
+    if compact in _COMPACT_ROLE_HEADINGS:
+        return _COMPACT_ROLE_HEADINGS[compact]
+    for role, pattern in _SECTION_FAMILIES:
+        if pattern.search(canonical):
+            return role
+    return "other"
+
+
+def _parse_heading(line: str) -> _Heading | None:
+    value = line.strip()
+    if not value or len(value) > 125:
+        return None
+    numbered = _NUMBERED_HEADING_RE.fullmatch(value)
+    roman = None if numbered else _ROMAN_HEADING_RE.fullmatch(value)
+    markdown = None if numbered or roman else _MARKDOWN_HEADING_RE.fullmatch(value)
+    structural = bool(numbered or roman or markdown)
+    number = None
+    if numbered:
+        number = tuple(int(component) for component in numbered.group(1).split("."))
+        if number[0] > 150:  # Years, street addresses and page noise are not section indices.
+            return None
+        title = numbered.group(2)
+        depth = len(number)
+    elif roman:
+        title = roman.group(2)
+        depth = 1
+    elif markdown:
+        title = markdown.group(2)
+        depth = len(markdown.group(1))
+        prefix = _NUMBERED_HEADING_RE.fullmatch(title)
+        if prefix:
+            title = prefix.group(2)
+            number = tuple(int(component) for component in prefix.group(1).split("."))
+    else:
+        title = value
+        depth = 1
+    # Disallow sentence-like numbered list items and long body lines. Section
+    # titles in ordinary PDFs rarely end in sentence punctuation.
+    title = title.strip(" \t#")
+    title = title.lstrip(".:–—- ")
+    if not title or len(title) > 105 or len(title.split()) > 13:
+        return None
+    if re.search(r"[.!?]$", title) and not title.endswith("."):
+        return None
+    if re.search(r"[.!?]$", title) and title.endswith("."):
+        title = title[:-1].rstrip()
+        if not title or (structural and len(title.split()) > 5):
+            return None
+    if any(x in title for x in ("[", "]", "=", "\u2022")):
+        return None
+    role = _heading_role(title)
+    # Ordinary prose can contain words such as 'method', 'algorithm' or
+    # 'results'. Without numbering/Markdown, demand a compact heading-like
+    # line, not just a taxonomy word appearing somewhere in a sentence.
+    if not structural:
+        words = title.split()
+        if len(words) > 8 or re.search(r"[.!?;]$", value) or "," in title:
+            return None
+        if words and words[0].casefold() in {"we", "our", "this", "these", "those", "they", "it"}:
+            return None
+        letters = [c for c in title if c.isalpha()]
+        upper = bool(letters and all(c.isupper() for c in letters))
+        important = [w for w in words if w.casefold() not in {"and", "of", "the", "for", "to", "in", "a", "an", "with"}]
+        title_case = bool(important and sum(w[0].isupper() for w in important) / len(important) >= .7)
+        core_head = bool(role != "other" and len(words) <= 4 and
+                         _heading_role(words[0]) == role)
+        if not (upper or title_case or core_head):
+            return None
+    # Unknown standalone sentences are never headings, even if title-cased.
+    # Unknown *numbered* or Markdown headings are trusted as structural breaks.
+    if role == "other" and not structural:
+        letters = [c for c in title if c.isalpha()]
+        if not letters or len(letters) < 6 or not all(c.isupper() for c in letters):
+            return None
+    if role == "other" and structural and title.endswith(('.', ':', ';', ',')):
+        return None
+    if role == "other" and numbered and title[0].islower():
+        return None
+    # Single numeric list entries must not accidentally absorb arbitrary prose.
+    if role == "other" and numbered and depth == 1 and title.split()[0].casefold() in {
+        "we", "the", "our", "this", "these", "first", "second", "third",
+    }:
+        return None
+    return _Heading(title.lower(), role, depth, number)
+
+
+def _heading(line: str) -> str:
+    """Compatibility helper returning a lowercase title or empty string."""
+    parsed = _parse_heading(line)
+    return parsed.title if parsed else ""
+
+
+def is_method_section(name: str) -> bool:
+    """Shared role check used by the relevance scorer's evidence safeguards."""
+    return _heading_role(name) == "methodology"
+
+
+def _line_annotation(lines: List[str]) -> tuple[Dict[str, List[str]], List[str]]:
+    """Aggregate semantic sections and preserve a per-line effective section.
+
+    Numbered subheading under Methods may have a completely unknown name,
+    e.g. '3.1 Candidate class creation'; it inherits the parent's method role.
+    A new top-level heading (including unknown headings) ends the old role.
+    Explicit Results/References always override ancestors.
+    """
+    blocks: Dict[str, List[str]] = {}
+    labels: List[str] = []
+    stack: list[tuple[int, str, str]] = []  # depth, effective role, label
+    active_role = ""
+    active_label = ""
+    current_top_number: int | None = None
+    for line in lines:
+        heading = _parse_heading(line)
+        # A numbered sequence restarting inside chapter 4 is usually an
+        # algorithm/list of steps, not chapters 1-4 all over again.
+        if (heading is not None and heading.number and heading.depth == 1
+                and current_top_number is not None
+                and heading.number[0] <= current_top_number
+                and heading.role == "other"):
+            heading = None
+        elif (heading is not None and heading.number and heading.depth == 1
+              and heading.role == "other" and active_role == "methodology"
+              and current_top_number is None):
+            heading = None
+        if heading:
+            if heading.number and heading.depth == 1:
+                current_top_number = max(current_top_number or 0, heading.number[0])
+            while stack and stack[-1][0] >= heading.depth:
+                stack.pop()
+            parent_role = stack[-1][1] if stack else ""
+            parent_label = stack[-1][2] if stack else ""
+            role = (parent_role if heading.role == "other" and parent_role else heading.role)
+            active_role = role
+            # An unknown child should retain an inherited *method label* so
+            # downstream adoption checks don't mistake it for a generic section.
+            active_label = (parent_label if heading.role == "other" and parent_label else heading.title)
+            stack.append((heading.depth, active_role, active_label))
+        elif active_role and line.strip() and not _is_page_furniture(line):
+            if active_role in {"abstract", "introduction", "background", "literature", "methodology"}:
+                blocks.setdefault(active_role, []).append(line.strip())
+        labels.append(active_label)
+    return blocks, labels
 
 
 @dataclass
@@ -46,11 +272,6 @@ class ReportEvidence:
 
 def _clean(text: str, limit: int) -> str:
     return re.sub(r"\s+", " ", text).strip()[:limit].rstrip()
-
-
-def _heading(line: str) -> str:
-    match = _HEADING_RE.fullmatch(line.strip())
-    return match.group(1).lower() if match else ""
 
 
 def _is_page_furniture(line: str) -> bool:
@@ -82,7 +303,8 @@ def _citation_claim(lines: List[str], sections: List[str], index: int,
         if i >= len(sections) or sections[i] != section:
             continue
         value = lines[i].strip()
-        if value and not _heading(value) and not _is_page_furniture(value):
+        parsed = _parse_heading(value)
+        if value and (not parsed or parsed.role == "other") and not _is_page_furniture(value):
             parts.append(value)
     combined = " ".join(parts)
     candidate_sentences = _sentences(combined)
@@ -101,16 +323,7 @@ def _citation_claim(lines: List[str], sections: List[str], index: int,
 
 
 def _sections(lines: List[str]) -> Dict[str, List[str]]:
-    blocks: Dict[str, List[str]] = {}
-    current = None
-    for line in lines:
-        heading = _heading(line)
-        if heading:
-            current = heading
-            blocks.setdefault(current, [])
-        elif current is not None and line.strip() and not _is_page_furniture(line):
-            blocks[current].append(line.strip())
-    return blocks
+    return _line_annotation(lines)[0]
 
 
 def _title(lines: List[str]) -> str:
@@ -125,7 +338,11 @@ def _title(lines: List[str]) -> str:
     candidates = []
     for i, line in enumerate(prefix[:abstract_at]):
         value = line.strip()
-        if not value or value.isdigit() or _heading(value):
+        if not value or value.isdigit():
+            continue
+        parsed = _parse_heading(value)
+        if parsed and (parsed.number is not None or parsed.role in {
+                "abstract", "introduction", "background", "literature", "references", "front_matter"}):
             continue
         if re.fullmatch(r"(?i)(?:page|p\.)\s*\d+(?:\s*/\s*\d+)?", value):
             continue
@@ -146,7 +363,7 @@ def _title(lines: List[str]) -> str:
     title = [first]
     for value in prefix[first_i + 1:min(first_i + 4, abstract_at)]:
         part = value.strip()
-        if (not part or _heading(part) or "@" in part or " • " in part or
+        if (not part or "@" in part or " • " in part or
                 len(part) > 100 or re.match(r"^\d+\s*Department\b", part, re.I) or
                 (part.endswith(".") and len(part.split()) > 4)):
             break
@@ -199,14 +416,7 @@ def _citation_context(lines: List[str], line_no: int, reference_start: int | Non
 
 
 def _section_per_line(lines: List[str]) -> List[str]:
-    current = ""
-    sections = []
-    for line in lines:
-        heading = _heading(line)
-        if heading:
-            current = heading
-        sections.append(current)
-    return sections
+    return _line_annotation(lines)[1]
 
 
 def prepare_relevance_context(document: ParsedDocument, extraction: ResearchExtraction) -> ReportEvidence:
@@ -244,7 +454,7 @@ def prepare_relevance_context(document: ParsedDocument, extraction: ResearchExtr
     # inserted into a Methods paragraph cannot itself establish that a method
     # is genuinely used. Papers mentioned ONLY on citation-bearing lines may
     # conservatively receive partial relevance rather than method confirmation.
-    methods_text = " ".join(" ".join(sections.get(name, [])) for name in _METHODS if sections.get(name))
+    methods_text = " ".join(sections.get("methodology", []))
     methodology_passages = _chunks(methods_text, max_chars=620, max_chunks=32)
     # PDF line breaks are arbitrary: a single sentence often spans three or
     # more lines. Remove *citation-bearing sentences*, rather than destroying
@@ -292,7 +502,7 @@ def prepare_relevance_context(document: ParsedDocument, extraction: ResearchExtr
             citation_claims.setdefault(index, [])
             if claim and claim not in citation_claims[index] and len(citation_claims[index]) < 3:
                 citation_claims[index].append(claim)
-            if alias and section in _METHODS:
+            if alias and is_method_section(section):
                 citation_aliases.setdefault(index, [])
                 if alias not in citation_aliases[index]:
                     citation_aliases[index].append(alias)
