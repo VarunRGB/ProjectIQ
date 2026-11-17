@@ -33,6 +33,8 @@ class PaperVerification:
     year_match: Optional[bool] = None
     author_match: Optional[bool] = None
     notes: List[str] = field(default_factory=list)
+    # Retained from verified academic metadata for Phase 3; optional for older callers.
+    verified_abstract: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

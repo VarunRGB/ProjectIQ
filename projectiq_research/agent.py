@@ -6,29 +6,15 @@ from typing import Union
 from .citation_extractor import extract_citations, extract_document_citations
 from .citation_linker import match_citations_to_references
 from .document_parser import load_document
-from .models import ResearchExtraction
+from .models import ParsedDocument, ResearchExtraction
 from .reference_extractor import extract_references
 from .section_detector import detect_sections
 from .verification import verify_papers
+from .relevance_scorer import assess_relevance
 
 
-def analyze_document(
-    path: Union[str, Path],
-    verify: bool = True,
-) -> ResearchExtraction:
-    """Run document extraction, citation linking, and optional paper verification.
-
-    Phase 1: Extract sections, Literature Review citations, document-wide
-    citations, reference entries, and hyperlinks. Link in-text citations to
-    bibliography entries when possible.
-    Phase 2: Verify reference metadata against academic databases (optional).
-
-    Set verify=False to run the fully offline extraction/linking workflow.
-    """
-    # --------------------------------------------------
-    # PHASE 1: DOCUMENT EXTRACTION
-    # --------------------------------------------------
-    document = load_document(path)
+def _analyse_parsed_document(document: ParsedDocument, verify: bool) -> ResearchExtraction:
+    """Shared Phase 1/2 implementation; accept a parsed document to avoid re-reading files."""
     literature, references, notes = detect_sections(document)
 
     # This list is strictly limited to the Literature Review section.
@@ -110,4 +96,32 @@ def analyze_document(
             "Phase 2 skipped: no extracted paper references were available."
         )
 
+    return result
+
+
+def analyze_document(path: Union[str, Path], verify: bool = True) -> ResearchExtraction:
+    """Backwards-compatible Phase 1/2 entry point (existing tests unchanged)."""
+    return _analyse_parsed_document(load_document(path), verify=verify)
+
+
+def analyze_research_document(
+    path: Union[str, Path],
+    verify: bool = True,
+    *,
+    encoder=None,
+    cross_encoder=None,
+    paper_abstracts=None,
+) -> ResearchExtraction:
+    """Full Research Agent: Phases 1, 2 and 3, in one future-orchestrator call.
+
+    Unlike analyze_document, Phase 3 ALWAYS runs here. `verify=False` skips only
+    online Phase 2, useful when evaluating the local neural scorer offline.
+    Optional encoder/reranker injection enables tests and reuse by an orchestrator.
+    """
+    document = load_document(path)
+    result = _analyse_parsed_document(document, verify=verify)
+    result.relevance_results = assess_relevance(
+        result, document, encoder=encoder, cross_encoder=cross_encoder,
+        paper_abstracts=paper_abstracts,
+    )
     return result

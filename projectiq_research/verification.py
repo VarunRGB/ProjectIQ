@@ -86,6 +86,7 @@ def _build_result(paper: PaperReference, metadata: Optional[AcademicPaperMetadat
         verified_doi=metadata.doi, verified_url=metadata.landing_page_url,
         title_similarity=round(score, 4), title_match=title_match,
         year_match=year_match, author_match=author_match, notes=notes,
+        verified_abstract=(metadata.abstract if status in {"verified", "needs_review"} else None),
     )
 
 

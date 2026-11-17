@@ -70,6 +70,36 @@ def _title_containment_match(query: str, candidate_title: Optional[str]) -> bool
     return len(c.split()) >= 8 and len(c) >= 45 and c in q
 
 
+def _openalex_abstract(inverted_index: Any, max_words: int = 1200) -> Optional[str]:
+    """Reconstruct an OpenAlex abstract; missing or malformed records are safe.
+
+    OpenAlex sends a word -> positions inverted index instead of plain abstract.
+    Truncate pathological indexes before allocating memory.
+    """
+    if not isinstance(inverted_index, dict):
+        return None
+    words = [None] * max_words
+    for token, positions in inverted_index.items():
+        if not isinstance(token, str) or not isinstance(positions, list):
+            continue
+        for position in positions:
+            if type(position) is int and 0 <= position < max_words:
+                words[position] = token
+    # Do not invent skipped words. Normal valid inverted indexes are contiguous.
+    return " ".join(word for word in words if word).strip() or None
+
+
+def _clean_crossref_abstract(value: Any) -> Optional[str]:
+    """Crossref abstracts frequently contain JATS/XML formatting tags."""
+    if not isinstance(value, str):
+        return None
+    from html import unescape
+    value = re.sub(r"<[^>]*>", " ", value)
+    value = unescape(value)
+    value = re.sub(r"\s+", " ", value).strip()
+    return value[:8000] or None
+
+
 def _search_rank(paper: PaperReference, candidate: AcademicPaperMetadata) -> tuple:
     score = title_similarity(paper.title, candidate.title)
     author_agrees = _candidate_author_match(paper, candidate)
@@ -119,7 +149,7 @@ class AcademicPaperResolver:
             provider="crossref", provider_id=doi, title=titles[0] if titles else None,
             authors=authors, year=year, doi=doi,
             landing_page_url=item.get("URL") or (f"https://doi.org/{doi}" if doi else None),
-            abstract=item.get("abstract"),
+            abstract=_clean_crossref_abstract(item.get("abstract")),
         )
 
     @staticmethod
@@ -135,6 +165,7 @@ class AcademicPaperResolver:
             provider="openalex", provider_id=item.get("id"), title=item.get("title"),
             authors=authors, year=item.get("publication_year"), doi=doi,
             landing_page_url=primary.get("landing_page_url") or (f"https://doi.org/{doi}" if doi else None),
+            abstract=_openalex_abstract(item.get("abstract_inverted_index")),
         )
 
     def _crossref_by_doi(self, doi: str) -> Optional[AcademicPaperMetadata]:
@@ -145,22 +176,13 @@ class AcademicPaperResolver:
 
     def _openalex_candidates(self, query: str) -> List[AcademicPaperMetadata]:
         params = {
-            "search": query,
-            "per-page": 10,
-            "select": "id,doi,title,publication_year,authorships,primary_location",
+            "search": query, "per-page": 10,
+            "select": "id,doi,title,publication_year,authorships,primary_location,abstract_inverted_index",
         }
-
-        # Add API key if configured
         if self.openalex_api_key:
             params["api_key"] = self.openalex_api_key
-
         payload = self._get_json(OPENALEX_WORKS, params=params)
-
-        return [
-            self._openalex_metadata(x)
-            for x in payload.get("results") or []
-            if isinstance(x, dict)
-        ]
+        return [self._openalex_metadata(x) for x in payload.get("results") or [] if isinstance(x, dict)]
 
     def _openalex_by_title(self, title: str, paper: Optional[PaperReference] = None) -> Optional[AcademicPaperMetadata]:
         if not title or len(title.strip()) < 8:
