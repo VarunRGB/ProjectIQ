@@ -22,7 +22,7 @@ from projectiq_summarizer.rubric import load_rubric  # noqa: E402
 from projectiq_summarizer.schemas import FinalSummary, Recommendation  # noqa: E402
 from projectiq_summarizer.signals import compute_signals  # noqa: E402
 
-CASES = ROOT / "test_cases"
+CASES = ROOT / "test_cases" / "content_quality"
 
 
 def read(name):
