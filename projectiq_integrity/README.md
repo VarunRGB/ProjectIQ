@@ -1,13 +1,63 @@
 # Integrity Agent (projectiq_integrity)
 
-Collects integrity evidence for each submission and returns it to the Rubric Agent.
-It never assigns or deducts marks. Every finding carries quoted evidence, a
-confidence value and its limitations, and a faculty member makes the decision.
+Checks a student's research or project document against the reference papers it
+uses, fully offline, and returns the evidence to the Rubric Agent. It never assigns
+or deducts marks: every finding carries quoted evidence, a confidence value and its
+limitations, and a faculty member makes the decision.
 
-## Main use: a research document against its references
+## What it checks
 
-How much of a student's research or project document was taken from the papers it
-uses, from which paper, and whether whole chunks were copied.
+Every sentence of the document (outside its reference list) is matched to the closest
+sentence in the reference papers.
+
+| Type | How it is decided | Counted as copying |
+|---|---|---|
+| verbatim | the same words; hyphens, dashes, quotes, capitals and up to 2 misspelt words ignored | yes |
+| near-verbatim | word overlap 0.45 or more: words swapped, added or removed | yes |
+| paraphrase | MiniLM finds a sentence with the same meaning (similarity 0.60 or more), then DeBERTa confirms that each sentence implies the other | yes |
+| similar meaning (not confirmed) | MiniLM finds it, DeBERTa does not confirm both ways | no, shown for review |
+
+- **Copied chunk:** 3 or more consecutive sentences copied from the same part of one
+  reference (one unmatched sentence allowed inside).
+- **Percentages** are shares of the document's words: overall, per type, per reference,
+  and inside copied chunks.
+- Text in quotation marks and the reference list are never counted. Copied text with a
+  citation but no quotation marks is labelled "cited, not quoted".
+- **AI-style writing:** run on the student's own sentences only (copied ones are left
+  out). Flagged only when style measures (stock phrases, very even rhythm, few
+  specifics) and perplexity from distilgpt2 agree. Never flagged for typo-heavy or
+  short text, and confidence is capped at 0.70. Advisory only.
+
+## 1. One-time setup
+
+```bash
+pip install -r requirements.txt
+python scripts/setup_offline.py          # 5 models into models/ (about 700 MB), online once
+python scripts/setup_offline.py --check  # everything should say [ok]
+```
+
+After this nothing is downloaded at run time. To set up another laptop without
+internet, copy the `models/` folder. It is in `.gitignore`: share it through a drive,
+not git.
+
+## 2. See it on screen (demo app)
+
+```bash
+streamlit run projectiq_integrity/app.py
+```
+
+Your browser opens http://localhost:8501; the app runs on this computer only. Run the
+sample, or upload a document and its reference papers. It shows the overlap
+percentage, a breakdown by type and by reference, copied chunks side by side, the
+document with copied sentences highlighted (hover one to see its source), the AI-style
+result, and downloads for the HTML and JSON reports.
+
+This is a temporary screen for showing the Integrity Agent. The faculty review screen
+is a separate module.
+
+## 3. Command line
+
+One document:
 
 ```bash
 python -m projectiq_integrity --document paper.pdf --references refs/ --out outputs/doc
@@ -15,133 +65,66 @@ python -m projectiq_integrity --document paper.pdf --references refs/ --out outp
 
 Then open `outputs/doc/paper_similarity.html` in a browser.
 
-| Type | How it is decided | Counted as copying |
-|---|---|---|
-| verbatim | word 3-gram overlap 0.80 or more | yes |
-| near-verbatim | word overlap 0.45 or more (a few words changed) | yes |
-| paraphrase | MiniLM finds a sentence with the same meaning (similarity 0.60 or more), then DeBERTa confirms that each sentence implies the other | yes |
-| similar meaning (not confirmed) | MiniLM finds it, DeBERTa does not confirm both ways | no, shown for review |
-
-- **Copied chunk:** 3 or more consecutive sentences copied from the same part of one reference (one unmatched sentence allowed inside).
-- **Percentages** are shares of the document's words: overall, per type, per reference, and inside chunks.
-- Text in quotation marks and the reference list are never counted. Copied text that carries a citation but no quotation marks is labelled "cited, not quoted".
-- A reference's own abstract and title page count as source text; only its reference list is skipped.
-
-Many students at once, each folder holding one document and a `references/` subfolder:
+Many students, each folder holding one document and a `references/` subfolder:
 
 ```bash
 python -m projectiq_integrity --submissions cohort/ --out outputs/docs
 ```
 
-`summary.csv` then lists every student's percentages, with a link to each HTML report.
+`summary.csv` lists every student's percentages, AI-style flag and HTML report.
 
-## Also available: comparing a whole class
+Sample: `tests/fixtures/research/` holds a report with a copied 4-sentence chunk and two
+paraphrases (`S201_report.txt`), an original report (`S202_original.txt`), and two
+reference papers.
 
-| Check | How | Flags when |
-|---|---|---|
-| Code similarity | JPlag 6.1.0 on every pair of submissions, starter code excluded | similarity is 50% or more (provisional) |
-| Report similarity | Research Integrity Analyzer's `overlap_analyzer.py`, run against the other students' reports and a reference folder | 2 or more near-verbatim or reworded sentences come from one source (provisional) |
-| AI-style text | Style measures plus perplexity from distilgpt2, run locally | both checks agree; never for typo-heavy or short text |
+## 4. Benchmark: how well does it work?
 
-A finding is shown only if it has at least one quoted passage or code fragment.
+`tests/fixtures/benchmark/` has a student paper with 25 planted cases (verbatim,
+near-verbatim, paraphrase, and traps that must not be flagged), 4 reference papers and
+an answer key. Run `python -m projectiq_integrity.benchmark`, or pick "Benchmark paper"
+in the app, to see what the tool gets right. Details in that folder's README.
 
-## 1. One-time setup (Windows)
+## 5. From other ProjectIQ code
 
-**Java 21.** JPlag 6.1.0 (the version automate-jplag downloads) needs Java 21 or newer.
-Java 17 is too old. Keep JDK 17 installed if you need it; install 21 next to it:
+```python
+from projectiq_integrity import run_integrity
 
-```powershell
-winget install EclipseAdoptium.Temurin.21.JDK
+result = run_integrity("S101/report.pdf", "S101/references", submission_id="S101")
+for finding in result.findings:          # Finding: kind, summary, evidence, confidence, limitations
+    print(finding.kind, finding.confidence, finding.summary)
 ```
 
-Open a new PowerShell window, then put JDK 21 first for this window only:
+`result` is the shared `AgentResult` from `contracts.py`.
 
-```powershell
-$jdk = (Get-ChildItem "C:\Program Files\Eclipse Adoptium\jdk-21*")[0].FullName
-$env:Path = "$jdk\bin;" + $env:Path
-java -version     # must say 21
+## 6. Validate (plan Days 5 to 8)
+
+```bash
+python scripts/validate.py --marks marks.csv --split test
+python scripts/validate.py --controls controls.csv --integrity-dir outputs/docs
 ```
 
-To make it permanent: Start, "Edit the system environment variables", Path, move
-the JDK 21 `bin` entry above the JDK 17 one.
-
-**Python packages and offline models** (from the ProjectIQ folder, venv active, online once):
-
-```powershell
-pip install -r requirements.txt
-python scripts\setup_offline.py          # JPlag jar + 5 models into tools\ and models\ (about 780 MB)
-python scripts\setup_offline.py --check  # everything should say [ok]
-```
-
-After this, no step goes online. To set up another laptop without internet, copy
-the `models\` and `tools\` folders. Both are in `.gitignore`: share them through a
-drive, not git.
-
-## 2. Run it on a cohort
-
-```text
-cohort\
-  code\        S101\ (folder) or S101.zip or S101.ipynb, one per student
-  starter\     the starter code every student was given (optional, recommended)
-  reports\     S101.pdf / S101.docx / S101.txt, one per student
-  references\  papers or notes students might copy from (optional)
-```
-
-The file or folder name is the submission id, so code and report must use the same name.
-
-```powershell
-python -m projectiq_integrity --code cohort\code --base-code cohort\starter `
-    --reports cohort\reports --references cohort\references --out outputs\integrity
-```
-
-Output: one `S101.json` per submission (the shared `AgentResult`) and `summary.csv`.
-Add `--template dept_template.docx` to ignore the department's report template text,
-and `--old-code last_year\code` to compare against earlier years.
-
-Try it on the bundled samples (5 students, 2 planted copies, 1 AI-style report):
-
-```powershell
-python -m projectiq_integrity --code tests\fixtures\integrity\code --base-code tests\fixtures\integrity\starter `
-    --reports tests\fixtures\integrity\reports --references tests\fixtures\integrity\references
-```
-
-## 3. Validate (plan Days 5 to 8)
-
-```powershell
-python scripts\validate.py --marks marks.csv --split test
-python scripts\validate.py --controls controls.csv --integrity-dir outputs\integrity
-```
-
-Examples of both CSV files are in `tests\fixtures\integrity\validation\`. The script
-reports Spearman correlation (with a 95% interval), quadratic weighted kappa, mean
-absolute error, mean signed error and the share of marks within 1 point; for the
-planted controls, detection rate, precision and false flags per check.
+Examples of both CSV files are in `tests/fixtures/validation/`. The script reports
+Spearman correlation (with a 95% interval), quadratic weighted kappa, mean absolute
+error, mean signed error and the share of marks within 1 point; for planted controls,
+detection rate, precision and false flags per finding type.
 
 **Before reporting any number:** tune the thresholds marked PROVISIONAL in
 `projectiq_integrity/config.py` on the dev split only, then report the test split.
 
-## 4. What changed from automate-jplag
-
-| automate-jplag | Integrity Agent |
-|---|---|
-| Merged each student's files into one file | Keeps files separate, so matches show the real file and line numbers |
-| No starter-code exclusion | `--base-code` removes code everyone was given |
-| `--min-tokens 5` (matches tiny fragments) | JPlag's default (12 for Python) |
-| Excel sheet of percentages | `Finding` objects with both code fragments quoted |
-| Downloads the jar at run time | Jar fetched once by `setup_offline.py` |
-| Unzip, notebook conversion | Kept, with a guard against unsafe zip paths; notebook conversion no longer needs nbconvert |
-
-## 5. Files
+## 7. Files
 
 | File | Purpose |
 |---|---|
+| `document_check.py` | Matching, types, copied chunks, percentages, HTML report |
+| `documents.py` | Reading the document and reference papers (PDF, Word, text) |
+| `ai_indicators.py` | Style measures plus perplexity, agreement rule |
+| `evidence.py` | Evidence builder (no quote, no finding) and confidence estimator |
 | `contracts.py` | `Evidence`, `Finding`, `AgentResult`: the shared result object |
-| `jplag_runner.py` | Prepare submissions, run JPlag, parse the `.jplag` result |
-| `document_check.py` | Document vs its references: types, chunks, percentages, HTML report |
-| `report_similarity.py` | Report loading, cohort and reference overlap, template removal |
-| `ai_indicators.py` | Style plus perplexity, agreement rule |
-| `evidence.py` | Evidence builder and confidence estimator |
-| `agent.py`, `__main__.py` | The agent and its command line |
-| `ria/` | Research Integrity Analyzer (Surabhi, Gaurav, Luv; CCNLP), vendored |
+| `agent.py`, `__main__.py` | `run_integrity()` and the command line |
+| `app.py` | Temporary demo screen (Streamlit) |
+| `benchmark.py` | Compares a check with an answer key |
+| `config.py` | Thresholds |
+| `ria/` | Sentence matching, PDF reading and model loading (Research Integrity Analyzer) |
 | `../scripts/validate.py` | Agreement with faculty and planted-control metrics |
-| `../scripts/setup_offline.py` | One-time download of JPlag and models |
+| `../scripts/setup_offline.py` | One-time model download |
+| `../scripts/make_benchmark.py` | Builds the benchmark paper, references and answer key |

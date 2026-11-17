@@ -1,28 +1,26 @@
 """One-time setup for fully offline ProjectIQ runs. Run ONCE while online:
 
-    python scripts/setup_offline.py           # everything (about 780 MB)
+    python scripts/setup_offline.py           # everything (about 700 MB)
     python scripts/setup_offline.py --check   # list what is present
 
-Downloads into the project:
-  tools/jplag-6.1.0.jar                 code similarity (needs Java 21+)
-  models/all-MiniLM-L6-v2               embeddings (summariser + report similarity)
-  models/nli-deberta-v3-small           NLI (claim vs evidence)
+Downloads into the project's models/ folder:
+  models/all-MiniLM-L6-v2               embeddings (summariser + finding similar sentences)
+  models/nli-deberta-v3-small           NLI (confirms paraphrases)
   models/distilgpt2                     perplexity for the AI-text check
   models/en_core_web_sm, models/nltk_data   sentence splitting and stop-words
 
 After this nothing is downloaded at run time (HF_HUB_OFFLINE=1 is set by the code).
-To set up a second laptop with no internet, copy the models/ and tools/ folders.
+To set up a second laptop with no internet, copy the models/ folder.
 """
 import argparse
 import os
 import sys
-import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from projectiq_integrity.config import JPLAG_JAR, JPLAG_URL, JPLAG_VERSION, MODELS_DIR  # noqa: E402
+from projectiq_integrity.config import MODELS_DIR  # noqa: E402
 
 MODELS = {
     "all-MiniLM-L6-v2": ("sentence-transformers", "sentence-transformers/all-MiniLM-L6-v2", "90 MB"),
@@ -67,15 +65,6 @@ def fetch_model(folder: str, kind: str, name: str) -> None:
             raise RuntimeError("NLTK download failed")
 
 
-def fetch_jplag() -> None:
-    JPLAG_JAR.parent.mkdir(parents=True, exist_ok=True)
-    tmp = JPLAG_JAR.with_suffix(".part")
-    with urllib.request.urlopen(JPLAG_URL, timeout=120) as resp, open(tmp, "wb") as fh:
-        while chunk := resp.read(1 << 20):
-            fh.write(chunk)
-    tmp.replace(JPLAG_JAR)
-
-
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true", help="only list what is present")
@@ -86,9 +75,8 @@ def main() -> int:
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
     missing = 0
-    items = [("jplag", JPLAG_JAR, f"JPlag {JPLAG_VERSION} (85 MB)", fetch_jplag)]
-    items += [(f, MODELS_DIR / f, f"{n} ({size})", (lambda f=f, k=k, n=n: fetch_model(f, k, n)))
-              for f, (k, n, size) in MODELS.items()]
+    items = [(f, MODELS_DIR / f, f"{n} ({size})", (lambda f=f, k=k, n=n: fetch_model(f, k, n)))
+             for f, (k, n, size) in MODELS.items()]
     for label, path, desc, fetch in items:
         if present(path):
             print(f"[ok]      {label}")

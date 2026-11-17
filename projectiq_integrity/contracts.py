@@ -15,13 +15,13 @@ from pydantic import BaseModel, Field
 
 class Evidence(BaseModel):
     source: str = Field(description='"report", "code", "cohort", "corpus" or "execution"')
-    location: str = Field(description='e.g. "report p.12", "S101/app.py:40-58"')
+    location: str = Field(description='e.g. "document p.12", "paper_x para 4"')
     quote: str = Field(description="the exact passage, code fragment or log line")
 
 
 class Finding(BaseModel):
     claim_id: Optional[str] = Field(default=None, description='"C3", issued by the Summarizer')
-    kind: str = Field(description='e.g. "similar_code", "similar_report_text", "ai_style_text"')
+    kind: str = Field(description='"copied_chunk", "similar_report_text" or "ai_style_text"')
     summary: str
     evidence: List[Evidence]
     confidence: float = Field(ge=0.0, le=1.0)

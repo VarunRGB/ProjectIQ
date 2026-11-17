@@ -1,5 +1,0 @@
-Edit distance and its uses
-
-Approximate string matching compares two strings by counting the minimum number of single-character edits needed to change one into the other. This measure, known as the Levenshtein distance, is widely used in spelling correction and record linkage.
-
-The classic dynamic programming algorithm fills a table of size m by n and runs in quadratic time.

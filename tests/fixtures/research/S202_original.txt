@@ -1,0 +1,27 @@
+Crop Disease Detection on Tomato Leaves
+
+Abstract
+
+We built a mobile app that tells farmers in Nashik whether a tomato leaf shows early blight, late blight or leaf mould. Photos are classified on the phone itself, so the app works in fields without mobile data.
+
+Introduction
+
+Farmers we spoke to in two villages said they usually notice blight only after it has spread across a whole row. A local agronomy officer visits each village about once a month, which is too slow for a disease that can move through a field in a week.
+
+Method
+
+We took 1,450 photographs of leaves in three farms over six weeks, at different times of day. A plant pathology student from our college labelled every image, and we checked a random 10% of her labels with the agronomy officer, who agreed on 94% of them.
+
+We fine-tuned MobileNetV3-Small because it runs in under 80 milliseconds on a four-year-old Android phone. Images were resized to 224 pixels, and we balanced the classes by oversampling leaf mould, which had only 180 photos.
+
+Results
+
+On 290 held-out photos the model reached 91% accuracy. Most mistakes were between early and late blight on leaves that were also wet, because water drops look like lesions in the photos.
+
+Conclusion
+
+The app is useful as an early warning, but it should not replace the agronomy officer. Next season we will collect photos after rain, since that is when most errors happened.
+
+References
+
+[1] Howard A. et al. Searching for MobileNetV3. ICCV 2019.

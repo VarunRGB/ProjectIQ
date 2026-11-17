@@ -8,8 +8,6 @@ st_testing = pytest.importorskip("streamlit.testing.v1")
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
 import fake_models  # noqa: E402
-from projectiq_integrity.config import JPLAG_JAR  # noqa: E402
-from projectiq_integrity.jplag_runner import java_major_version  # noqa: E402
 
 APP = str(ROOT / "projectiq_integrity" / "app.py")
 
@@ -30,12 +28,12 @@ def test_document_tab_runs_on_sample(app):
     assert metrics["Overlap with references"] == "32.9%"
     assert metrics["Inside copied chunks"] == "18.4%"
     assert any("Chunk 1" in e.label for e in app.expander)
+    assert any("Not flagged" in s.value for s in app.success)   # AI-style section shown
 
 
-@pytest.mark.skipif(not JPLAG_JAR.exists() or java_major_version() < 21, reason="needs Java 21 and JPlag")
-def test_class_tab_runs_on_sample(app):
-    app.button(key="run_class").click().run()
+def test_benchmark_mode_shows_answer_key(app):
+    app.radio[0].set_value("Benchmark paper (with answer key)").run()
+    app.button(key="run_doc").click().run()
     assert not app.exception
-    shown = ([f"error: {e.value}" for e in app.error] + [f"note: {c.value}" for c in app.caption]
-             + [f"section: {e.label}" for e in app.expander])
-    assert any("Similar code" in e.label for e in app.expander), "No code finding. The app showed:\n" + "\n".join(shown)
+    labels = {m.label for m in app.metric}
+    assert {"Copied sentences caught", "False alarms", "Chunks found"} <= labels
