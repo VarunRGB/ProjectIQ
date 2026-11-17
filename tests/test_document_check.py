@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import fake_models  # noqa: E402
 from projectiq_integrity import document_check as dc  # noqa: E402
 from projectiq_integrity.__main__ import main as cli  # noqa: E402
-from projectiq_integrity.report_similarity import load_report  # noqa: E402
+from projectiq_integrity.documents import load_document  # noqa: E402
 
 DOC, REFS = FIX / "S201_report.txt", FIX / "references"
 
@@ -86,7 +86,7 @@ def test_chunks_break_on_other_reference_or_gap():
 
 
 def test_reference_heading_excluded_in_text_documents():
-    doc = load_report(DOC)
+    doc = load_document(DOC)
     refs = [s for s in doc.sentences if s.section == "References"]
     assert refs and any("Redmon" in s.text for s in refs)
     assert not any("Redmon" in s.text or "Bossard" in s.text for s in doc.body_sentences())
@@ -96,7 +96,7 @@ def test_headingless_document_is_still_checked(models, tmp_path):
     from dataclasses import replace
 
     from projectiq_integrity.ria.pdf_extractor import FRONT_MATTER
-    doc = load_report(DOC)
+    doc = load_document(DOC)
     as_front = replace(doc, sentences=[replace(s, section=FRONT_MATTER) for s in doc.sentences])
     notes = []
     rescued = dc._rescue_front_matter(as_front, notes)
@@ -148,16 +148,22 @@ def test_runs_with_the_real_model_classes():
         assert rep.backends["nli"] == "transformers-nli"
 
 
-def test_hyphens_dashes_and_case_do_not_change_verbatim():
-    words, chars = dc.copy_overlap("They run well in real time and are Two Stage.",
-                                   "They run well in real-time and are two–stage.", 3)
-    assert words == 1.0
-    _, typo = dc.copy_overlap("Single stage detectors predict boundng boxes from full images.",
-                              "Single-stage detectors predict bounding boxes from full images.", 3)
-    assert typo >= 0.95                                # one-letter typo: still verbatim
-    words, chars = dc.copy_overlap("The model is usually evaluated with mean average precision.",
-                                   "We trained the network for 120 epochs on a single GPU.", 3)
-    assert words < 0.45 and chars < 0.95               # unrelated: neither rule fires
+def test_verbatim_means_same_words():
+    same = dc.copy_overlap("They run well in real time and are Two Stage.",
+                           "They run well in real-time and are two\u2013stage.", 3)
+    assert same[1]                                     # hyphens, dashes, capitals ignored
+    assert dc.copy_overlap("Single stage detectors predict boundng boxes from full images.",
+                           "Single-stage detectors predict bounding boxes from full images.", 3)[1]  # typo
+    swapped = dc.copy_overlap("only a few thousand labelled samples are available to us today.",
+                              "only a few thousand labelled examples are available to us today.", 3)
+    assert not swapped[1] and swapped[0] >= 0.45       # a swapped word: near-verbatim, not verbatim
+    cut = dc.copy_overlap("Each model was fine-tuned for three epochs with a learning rate of 2e-5.",
+                          "Each model was fine-tuned for three epochs with a learning rate of 2e-5 "
+                          "and a batch size of 32.", 3)
+    assert not cut[1] and cut[0] >= 0.45               # words removed: near-verbatim
+    unrelated = dc.copy_overlap("The model is usually evaluated with mean average precision.",
+                                "We trained the network for 120 epochs on a single GPU.", 3)
+    assert unrelated[0] < 0.45 and not unrelated[1]
 
 
 def test_copied_paragraph_is_all_verbatim(models):

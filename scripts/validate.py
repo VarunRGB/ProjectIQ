@@ -17,8 +17,8 @@ Agent catches the planted controls.
 2) Integrity controls (one row per planted or clean case):
 
     submission_id,kind,planted
-    S102,similar_code,1
-    S105,similar_code,0
+    S201,copied_chunk,1
+    S202,copied_chunk,0
 
    compared with the Integrity Agent's <submission>.json files: detection rate,
    precision and false flags per kind.

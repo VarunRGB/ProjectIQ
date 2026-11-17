@@ -5,6 +5,7 @@ bags of words; the "NLI" calls two sentences equivalent when they share most of
 their meaning words. Enough to exercise every code path; real runs use the real
 models from models/.
 """
+import math
 import re
 
 import numpy as np
@@ -70,9 +71,38 @@ class FakeNLI:
         return out
 
 
+def fake_scorer(level: float, spread: float):
+    """A stand-in for distilgpt2: sentence -> (summed negative log-likelihood, tokens).
+    level = typical perplexity, spread = how uneven the sentences are."""
+    def score(sentences):
+        out = []
+        for i, s in enumerate(sentences):
+            n = len(s.split()) + 2
+            out.append((s, math.log(level * (1 + spread * ((i % 3) - 1))) * n, n))
+        return out
+    return score
+
+
+AI_LIKE = fake_scorer(18, 0.1)      # very predictable and even
+HUMAN_LIKE = fake_scorer(70, 0.6)   # less predictable, uneven
+
+
+class FakeLM:
+    """Takes the place of ai_indicators.LocalLM: always 'installed', human-like scores."""
+
+    def __init__(self, *args, **kwargs):
+        self.available = True
+        self.path = "stand-in"
+
+    def __call__(self, sentences):
+        return HUMAN_LIKE(sentences)
+
+
 def install(monkeypatch):
     """Make the analyzer use the stand-ins for the rest of one test."""
+    from projectiq_integrity import ai_indicators
     from projectiq_integrity.ria import models
 
     monkeypatch.setattr(models, "get_embedder", lambda settings=None: FakeEmbedder())
     monkeypatch.setattr(models, "get_nli", lambda settings=None: FakeNLI())
+    monkeypatch.setattr(ai_indicators, "LocalLM", FakeLM)

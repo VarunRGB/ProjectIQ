@@ -15,7 +15,7 @@ MAX_EVIDENCE = 8
 
 @dataclass
 class Signal:
-    kind: str                      # "similar_code" | "similar_report_text" | "copied_chunk" | "ai_style_text"
+    kind: str                      # "similar_report_text" | "copied_chunk" | "ai_style_text"
     summary: str
     evidence: List[Evidence]
     scores: Dict[str, float] = field(default_factory=dict)
@@ -31,17 +31,6 @@ def _clip(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
 # Confidence estimator. Plain formulas so a reviewer can follow them; each one is
 # checked against the planted controls in scripts/validate.py.
 # --------------------------------------------------------------------------- #
-def code_confidence(s: Dict[str, float]) -> float:
-    """Similarity counts most; long matches count more than short ones, because
-    short programs share structure by chance."""
-    sim = s.get("max_similarity", 0.0)
-    tokens = _clip(s.get("matched_tokens", 0.0) / 150.0)
-    conf = 0.65 * sim + 0.35 * tokens
-    if s.get("smaller_submission_tokens", 1e9) < 100:
-        conf -= 0.15
-    return round(_clip(conf, 0.05, 0.95), 2)
-
-
 def report_confidence(s: Dict[str, float]) -> float:
     """Several near-copied sentences are stronger than a few reworded ones."""
     near, para = s.get("near_verbatim", 0.0), s.get("paraphrase", 0.0)
@@ -60,7 +49,6 @@ def ai_confidence(s: Dict[str, float]) -> float:
 
 
 ESTIMATORS = {
-    "similar_code": code_confidence,
     "similar_report_text": report_confidence,
     "copied_chunk": report_confidence,
     "ai_style_text": ai_confidence,

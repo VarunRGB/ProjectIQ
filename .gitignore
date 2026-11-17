@@ -26,7 +26,6 @@ outputs/
 # OS generated files
 .DS_Store
 Thumbs.db
-# Offline models and tools (download with: python scripts/setup_offline.py)
+# Offline models (download with: python scripts/setup_offline.py)
 models/
-tools/*.jar
 data/cache/

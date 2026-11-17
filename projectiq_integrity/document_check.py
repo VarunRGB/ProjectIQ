@@ -31,14 +31,15 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from .ai_indicators import SentenceScorer, ai_signals
 from .config import DEFAULT, IntegritySettings
-from .contracts import AgentResult, Evidence
+from .contracts import AgentResult, Evidence, Finding
+from .documents import build_corpus, load_document, load_folder, location_label, source_sentences
 from .evidence import Signal, build_findings
-from .report_similarity import _corpus, load_folder, load_report, location_label, source_sentences
 from .ria import models as ria_models
 from .ria.citation_analyzer import strip_citations
 from .ria.config import DEFAULT_SETTINGS as RIA_DEFAULTS, Settings as RiaSettings
-from .ria.overlap_analyzer import analyze_overlap, lexical_overlap, remove_quoted
+from .ria.overlap_analyzer import analyze_overlap, lexical_overlap, ngram_jaccard, remove_quoted
 from .ria.pdf_extractor import Document
 from .ria.preprocessing import tokenize
 
@@ -46,6 +47,7 @@ logger = logging.getLogger(__name__)
 
 VERBATIM, NEAR, PARA, SIMILAR = "verbatim", "near-verbatim", "paraphrase", "similar meaning (not confirmed)"
 COPY_CATEGORIES = (VERBATIM, NEAR, PARA)
+VERBATIM_JACCARD = 0.80
 LIMITATION = ("Overlap with a source is not proof of misconduct: shared definitions, standard "
               "phrasing and properly attributed paraphrase are normal. Text in quotation marks "
               "was excluded. A faculty member must read both passages.")
@@ -97,6 +99,9 @@ class DocumentReport:
     matches: List[SentenceMatch]
     backends: Dict[str, str]
     notes: List[str] = field(default_factory=list)
+    # AI-style check on the student's own writing (sentences not copied from a reference)
+    ai_findings: List[dict] = field(default_factory=list)
+    ai_notes: List[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -118,16 +123,36 @@ def copy_form(text: str) -> str:
     return " ".join(re.findall(r"[a-z0-9']+|[^\sa-z0-9']", text))
 
 
-def copy_overlap(a: str, b: str, n: int) -> Tuple[float, float]:
-    """(word-triple overlap, character similarity), both on the copy form.
+def copy_overlap(a: str, b: str, n: int) -> Tuple[float, bool]:
+    """(word overlap, verbatim?) on the copy form.
 
-    Word overlap decides near-verbatim. Character similarity is used ONLY to call a
-    sentence verbatim when it is 0.95 or more (one-letter changes such as a typo or
-    "colour"/"color"): unrelated sentences share 30 to 50% of characters by chance."""
+    Word overlap (word triples, with a bonus when one sentence contains the other)
+    decides near-verbatim. Verbatim is stricter: the same word triples (plain overlap
+    0.80 or more, no containment bonus), or the same words where the only differences
+    are spellings inside words: a typo, "colour"/"color". A swapped, added or removed
+    word is never verbatim."""
     fa, fb = copy_form(a), copy_form(b)
     words = lexical_overlap(fa, fb, n)
-    chars = SequenceMatcher(None, fa, fb, autojunk=False).ratio() if fa and fb else 0.0
-    return words, chars
+    verbatim = ngram_jaccard(fa, fb, n) >= VERBATIM_JACCARD or spelling_only(fa.split(), fb.split())
+    return words, verbatim
+
+
+def spelling_only(ta: List[str], tb: List[str], max_changed: int = 2) -> bool:
+    """True when two token lists differ only in up to max_changed misspelt words."""
+    if not ta or not tb or abs(len(ta) - len(tb)) > 0:
+        return False
+    changed = 0
+    for op, i1, i2, j1, j2 in SequenceMatcher(None, ta, tb, autojunk=False).get_opcodes():
+        if op == "equal":
+            continue
+        if op != "replace" or i2 - i1 != j2 - j1:
+            return False
+        for x, y in zip(ta[i1:i2], tb[j1:j2]):
+            if SequenceMatcher(None, x, y).ratio() < 0.85:
+                return False      # a different word, not a spelling of the same one
+            changed += 1
+    return changed <= max_changed
+
 
 def _confirm_paraphrases(pairs: List[Tuple[str, str]], ria_settings: RiaSettings) -> Tuple[list, str]:
     """Run DeBERTa NLI both ways. Returns ([(forward, backward)], backend)."""
@@ -146,7 +171,7 @@ def _confirm_paraphrases(pairs: List[Tuple[str, str]], ria_settings: RiaSettings
 
 def match_sentences(doc: Document, references: Dict[str, Document], settings: IntegritySettings = DEFAULT,
                     ria_settings: RiaSettings = RIA_DEFAULTS) -> Tuple[List[SentenceMatch], Dict[str, str]]:
-    corpus = _corpus({name: d for name, d in references.items()}, set())
+    corpus = build_corpus(references)
     if not corpus.sentences:
         return [], {"embeddings": "no reference text", "nli": "not run"}
     results = analyze_overlap(doc, corpus, ria_settings)
@@ -158,7 +183,7 @@ def match_sentences(doc: Document, references: Dict[str, Document], settings: In
         sent = by_index.get(r.sentence_index)
         cleaned, _ = remove_quoted(strip_citations(r.paper_text))
         words = len(tokenize(cleaned))
-        lexical, chars = copy_overlap(cleaned, r.reference_text, ria_settings.ngram_n)
+        lexical, verbatim = copy_overlap(cleaned, r.reference_text, ria_settings.ngram_n)
         pos, ref_sent = positions.get(r.reference_file, {}).get(r.reference_text, (-1, None))
         m = SentenceMatch(
             index=r.sentence_index, location=location_label(doc, sent) if sent else "?", text=r.paper_text,
@@ -166,7 +191,7 @@ def match_sentences(doc: Document, references: Dict[str, Document], settings: In
             reference_location=location_label(references[r.reference_file], ref_sent) if ref_sent else "?",
             reference_text=r.reference_text, reference_position=pos, lexical=round(lexical, 3),
             semantic=round(r.embedding_cosine, 3), cited=strip_citations(r.paper_text) != r.paper_text)
-        if lexical >= settings.verbatim_lexical or chars >= settings.verbatim_chars:
+        if verbatim:
             m.category = VERBATIM
         elif lexical >= ria_settings.near_verbatim_jaccard:
             m.category = NEAR
@@ -245,9 +270,12 @@ def _rescue_front_matter(doc: Document, notes: List[str]) -> Document:
 
 
 def check_document(document: Path, references_dir: Path, settings: IntegritySettings = DEFAULT,
-                   ria_settings: RiaSettings = RIA_DEFAULTS) -> DocumentReport:
+                   ria_settings: RiaSettings = RIA_DEFAULTS, scorer: Optional[SentenceScorer] = None,
+                   check_ai: bool = True) -> DocumentReport:
+    """The whole integrity check for one document: overlap with its references, then the
+    AI-style check on the sentences the student wrote themselves."""
     notes: List[str] = []
-    doc = _rescue_front_matter(load_report(Path(document)), notes)
+    doc = _rescue_front_matter(load_document(Path(document)), notes)
     refs = load_folder(Path(references_dir))
     if not refs:
         notes.append(f"No readable reference documents in {references_dir}.")
@@ -266,6 +294,14 @@ def check_document(document: Path, references_dir: Path, settings: IntegritySett
         notes.append("DeBERTa was not used, so no paraphrase was confirmed or counted.")
     notes.append("Percentages are shares of the document's words (quoted text and the reference "
                   "list excluded). They measure overlap for review, not misconduct.")
+
+    ai_findings, ai_notes = [], []
+    if check_ai:
+        # Copied sentences are someone else's writing, so they are left out of the AI check.
+        copied_idx = {m.index for m in copied}
+        own = " ".join(s.text for s in doc.body_sentences() if s.index not in copied_idx)
+        signals, ai_notes = ai_signals(own, f"{doc.source}", scorer=scorer, settings=settings)
+        ai_findings = [f.model_dump() for f in build_findings(signals)]
     return DocumentReport(
         document=doc.source, references=sorted(refs), sentences_checked=len(matches), words_checked=total,
         overall_percent=_pct(sum(m.words for m in copied), total),
@@ -273,7 +309,8 @@ def check_document(document: Path, references_dir: Path, settings: IntegritySett
                              for c in COPY_CATEGORIES},
         percent_by_reference={r: _pct(w, total) for r, w in sorted(by_ref.items(), key=lambda kv: -kv[1])},
         percent_in_chunks=_pct(sum(m.words for m in copied if m.index in in_chunks), total),
-        chunks=chunks, matches=matches, backends=backends, notes=notes)
+        chunks=chunks, matches=matches, backends=backends, notes=notes,
+        ai_findings=ai_findings, ai_notes=ai_notes)
 
 
 # --------------------------------------------------------------------------- #
@@ -316,9 +353,11 @@ def to_signals(report: DocumentReport, settings: IntegritySettings = DEFAULT) ->
 def to_agent_result(report: DocumentReport, submission_id: str, settings: IntegritySettings = DEFAULT) -> AgentResult:
     notes = [f"Document vs references: {report.overall_percent}% of {report.words_checked} words overlap "
              f"with {len(report.references)} reference(s); {report.percent_in_chunks}% sits in copied chunks."]
-    notes += report.notes + ["All findings are advisory. The Integrity Agent never assigns or deducts marks."]
-    return AgentResult(agent="integrity", submission_id=submission_id,
-                       findings=build_findings(to_signals(report, settings)), notes=notes)
+    notes += report.notes + report.ai_notes
+    notes.append("All findings are advisory. The Integrity Agent never assigns or deducts marks.")
+    findings = build_findings(to_signals(report, settings)) + [Finding(**f) for f in report.ai_findings]
+    findings.sort(key=lambda f: f.confidence, reverse=True)
+    return AgentResult(agent="integrity", submission_id=submission_id, findings=findings, notes=notes)
 
 
 # --------------------------------------------------------------------------- #
@@ -360,6 +399,14 @@ def to_html(report: DocumentReport) -> str:
         f"{e(c.reference_text)}</td></tr>" for c in report.chunks) or "<tr><td colspan=3>None found.</td></tr>"
     body = highlighted_document(report)
     notes = "".join(f"<li>{e(n)}</li>" for n in report.notes)
+    if report.ai_findings:
+        ai = report.ai_findings[0]
+        quotes = "".join(f"<li><small>{e(ev['location'])}</small><br>{e(ev['quote'])}</li>" for ev in ai["evidence"])
+        ai_html = (f"<p><b>Flagged (advisory).</b> {e(ai['summary'])} Confidence {ai['confidence']:.2f}.</p>"
+                   f"<ul>{quotes}</ul><p class='note'>{e(ai['limitations'])}</p>")
+    else:
+        ai_html = "<p>Not flagged: style measures and the local language model did not both point to AI-style text.</p>"
+    ai_html += "".join(f"<p class='note'>{e(n)}</p>" for n in report.ai_notes)
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <title>Similarity report: {e(report.document)}</title>
 <style>
@@ -383,6 +430,7 @@ Overlap is for a faculty member to review, not a plagiarism verdict.</p>
 <h2>Document (hover a highlighted sentence to see its source)</h2>
 <p class="note">Headings, captions and the reference list are left out. Text inside quotation marks is shown but never counted.</p>
 <div class="doc">{body}</div>
+<h2>AI-style writing (the student's own sentences only)</h2>{ai_html}
 <h2>Notes</h2><ul class="note">{notes}</ul>
 <p class="note">Models: embeddings {e(report.backends.get("embeddings", ""))}; NLI {e(report.backends.get("nli", ""))}.</p>
 </body></html>"""
