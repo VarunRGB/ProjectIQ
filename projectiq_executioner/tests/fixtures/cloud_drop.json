@@ -1,0 +1,226 @@
+{
+  "schema_version": "1.0",
+  "phase": 1,
+  "source": {
+    "kind": "github",
+    "repository": "VarunRGB/CloudDrop",
+    "commit_sha": "4325d4a5ccef75ed0d1e8f8b15bdfde41ee41124"
+  },
+  "services": [
+    {
+      "name": "backend",
+      "kind": "backend",
+      "technology": "FastAPI",
+      "root": "backend",
+      "depends_on": [
+        "sqlite",
+        "amazon_s3"
+      ]
+    },
+    {
+      "name": "frontend",
+      "kind": "frontend",
+      "technology": "React",
+      "root": "frontend",
+      "depends_on": [
+        "backend"
+      ]
+    },
+    {
+      "name": "sqlite",
+      "kind": "database",
+      "technology": "SQLite",
+      "root": ".",
+      "depends_on": []
+    },
+    {
+      "name": "amazon_s3",
+      "kind": "external_dependency",
+      "technology": "Amazon S3 (cloud storage; unverified)",
+      "root": "external",
+      "depends_on": []
+    }
+  ],
+  "routes": [
+    {
+      "path": "/api/auth/login",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/api/auth/me",
+      "method": "GET",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/api/auth/register",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/api/files",
+      "method": "GET",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/api/files/:param",
+      "method": "DELETE",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/api/files/:param/complete",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/api/files/:param/download",
+      "method": "GET",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/api/files/:param/restore",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/api/files/:param/versions",
+      "method": "GET",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/api/files/presign",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/api/auth/login",
+      "method": "POST",
+      "kind": "declared_http_route"
+    },
+    {
+      "path": "/api/auth/me",
+      "method": "GET",
+      "kind": "declared_http_route"
+    },
+    {
+      "path": "/api/auth/register",
+      "method": "POST",
+      "kind": "declared_http_route"
+    },
+    {
+      "path": "/api/files",
+      "method": "GET",
+      "kind": "declared_http_route"
+    },
+    {
+      "path": "/api/files/:file_id",
+      "method": "DELETE",
+      "kind": "declared_http_route"
+    },
+    {
+      "path": "/api/files/:file_id/complete",
+      "method": "POST",
+      "kind": "declared_http_route"
+    },
+    {
+      "path": "/api/files/:file_id/download",
+      "method": "GET",
+      "kind": "declared_http_route"
+    },
+    {
+      "path": "/api/files/:file_id/restore",
+      "method": "POST",
+      "kind": "declared_http_route"
+    },
+    {
+      "path": "/api/files/:file_id/versions",
+      "method": "GET",
+      "kind": "declared_http_route"
+    },
+    {
+      "path": "/api/files/presign",
+      "method": "POST",
+      "kind": "declared_http_route"
+    },
+    {
+      "path": "/api/health",
+      "method": "GET",
+      "kind": "declared_http_route"
+    }
+  ],
+  "pages": [
+    "frontend/index.html"
+  ],
+  "environment_variables": [
+    "ALLOWED_ORIGINS",
+    "APP_ENV",
+    "AWS_REGION",
+    "DATABASE_URL",
+    "JWT_EXPIRE_MINUTES",
+    "JWT_SECRET",
+    "MAX_UPLOAD_BYTES",
+    "S3_BUCKET_NAME"
+  ],
+  "inventory": {
+    "environment_variable_details": {
+      "APP_ENV": {
+        "required_hint": false,
+        "default_present": true,
+        "origin": "pydantic_base_settings",
+        "path": "backend/app/config.py",
+        "line": 5
+      },
+      "JWT_SECRET": {
+        "required_hint": true,
+        "default_present": false,
+        "origin": "pydantic_base_settings",
+        "path": "backend/app/config.py",
+        "line": 6
+      },
+      "JWT_EXPIRE_MINUTES": {
+        "required_hint": false,
+        "default_present": true,
+        "origin": "pydantic_base_settings",
+        "path": "backend/app/config.py",
+        "line": 7
+      },
+      "DATABASE_URL": {
+        "required_hint": false,
+        "default_present": true,
+        "origin": "pydantic_base_settings",
+        "path": "backend/app/config.py",
+        "line": 8
+      },
+      "AWS_REGION": {
+        "required_hint": false,
+        "default_present": true,
+        "origin": "pydantic_base_settings",
+        "path": "backend/app/config.py",
+        "line": 9
+      },
+      "S3_BUCKET_NAME": {
+        "required_hint": true,
+        "default_present": false,
+        "origin": "pydantic_base_settings",
+        "path": "backend/app/config.py",
+        "line": 10
+      },
+      "MAX_UPLOAD_BYTES": {
+        "required_hint": false,
+        "default_present": true,
+        "origin": "pydantic_base_settings",
+        "path": "backend/app/config.py",
+        "line": 11
+      },
+      "ALLOWED_ORIGINS": {
+        "required_hint": false,
+        "default_present": true,
+        "origin": "pydantic_base_settings",
+        "path": "backend/app/config.py",
+        "line": 12
+      }
+    }
+  },
+  "database_schema_files": [],
+  "findings": []
+}

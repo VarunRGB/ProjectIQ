@@ -1,0 +1,146 @@
+{
+  "schema_version": "1.0",
+  "phase": 1,
+  "source": {
+    "kind": "github",
+    "repository": "VarunRGB/Mini-Task-Collaboration-App",
+    "commit_sha": "c4f7965d16807fa05c3d7ffeee54f86fee4d0a37"
+  },
+  "services": [
+    {
+      "name": "backend",
+      "kind": "backend",
+      "technology": "PHP (native)",
+      "root": ".",
+      "depends_on": [
+        "mysql"
+      ]
+    },
+    {
+      "name": "frontend",
+      "kind": "frontend",
+      "technology": "HTML/JS frontend (inferred)",
+      "root": "public",
+      "depends_on": [
+        "backend"
+      ]
+    },
+    {
+      "name": "mysql",
+      "kind": "database",
+      "technology": "MySQL",
+      "root": ".",
+      "depends_on": []
+    }
+  ],
+  "routes": [
+    {
+      "path": "../auth/login.php",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "../logic/add_task.php",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "../logic/delete_task.php",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "../logic/delete_task_user.php",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "../logic/edit_task.php",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "../logic/get_tasks.php",
+      "method": "GET",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "../logic/get_user_tasks.php",
+      "method": "GET",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "../logic/update_status.php",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "auth/login.php",
+      "method": "POST",
+      "kind": "file_endpoint"
+    },
+    {
+      "path": "auth/logout.php",
+      "method": "UNKNOWN",
+      "kind": "file_endpoint"
+    },
+    {
+      "path": "auth/register.php",
+      "method": "POST",
+      "kind": "file_endpoint"
+    },
+    {
+      "path": "logic/add_task.php",
+      "method": "POST",
+      "kind": "file_endpoint"
+    },
+    {
+      "path": "logic/delete_task.php",
+      "method": "POST",
+      "kind": "file_endpoint"
+    },
+    {
+      "path": "logic/delete_task_user.php",
+      "method": "POST",
+      "kind": "file_endpoint"
+    },
+    {
+      "path": "logic/edit_task.php",
+      "method": "POST",
+      "kind": "file_endpoint"
+    },
+    {
+      "path": "logic/get_tasks.php",
+      "method": "UNKNOWN",
+      "kind": "file_endpoint"
+    },
+    {
+      "path": "logic/get_user_tasks.php",
+      "method": "UNKNOWN",
+      "kind": "file_endpoint"
+    },
+    {
+      "path": "logic/update_status.php",
+      "method": "POST",
+      "kind": "file_endpoint"
+    }
+  ],
+  "pages": [
+    "public/admin_dashboard.html",
+    "public/login.html",
+    "public/register.html",
+    "public/user_dashboard.html"
+  ],
+  "environment_variables": [],
+  "inventory": {
+    "environment_variable_details": {}
+  },
+  "database_schema_files": [
+    "sql/mini_collab_app.sql"
+  ],
+  "findings": [
+    {
+      "code": "POSSIBLE_HARDCODED_CREDENTIAL"
+    }
+  ]
+}

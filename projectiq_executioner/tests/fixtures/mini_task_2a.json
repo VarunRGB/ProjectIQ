@@ -1,0 +1,77 @@
+{
+  "schema_version": "0.1",
+  "phase": 2,
+  "stage": "plan_only",
+  "execution": "NOT_PERFORMED",
+  "readiness": "NOT_VERIFIED",
+  "status": "PLAN_ONLY",
+  "source": {
+    "kind": "github",
+    "repository": "VarunRGB/Mini-Task-Collaboration-App",
+    "commit_sha": "c4f7965d16807fa05c3d7ffeee54f86fee4d0a37"
+  },
+  "proposed_services": [
+    {
+      "name": "backend",
+      "kind": "backend",
+      "technology_hint": "PHP (native)",
+      "source_root": ".",
+      "depends_on": [
+        "mysql"
+      ],
+      "strategy": "isolated_php_container_candidate",
+      "readiness": "UNVERIFIED",
+      "startup": "NOT_ATTEMPTED"
+    },
+    {
+      "name": "frontend",
+      "kind": "frontend",
+      "technology_hint": "HTML/JS frontend (inferred)",
+      "source_root": "public",
+      "depends_on": [
+        "backend"
+      ],
+      "strategy": "isolated_web_container_candidate",
+      "readiness": "UNVERIFIED",
+      "startup": "NOT_ATTEMPTED"
+    },
+    {
+      "name": "mysql",
+      "kind": "database",
+      "technology_hint": "MySQL",
+      "source_root": ".",
+      "depends_on": [],
+      "strategy": "isolated_database_container_candidate",
+      "readiness": "UNVERIFIED",
+      "startup": "NOT_ATTEMPTED"
+    }
+  ],
+  "environment_variables": [],
+  "health_endpoint_candidates": [],
+  "blocking_conditions": [],
+  "sandbox_policy_requirements": {
+    "rootless_containers": true,
+    "privileged_containers": false,
+    "host_docker_socket_mounts": false,
+    "host_filesystem_write_mounts": false,
+    "source_checkout": "read_only_in_sandbox",
+    "writable_data": "disposable_ephemeral_volumes",
+    "network": "deny_external_egress_by_default; isolated_interservice_only",
+    "secrets": "isolated_test_credentials_only; never reuse production secrets",
+    "resource_limits": "required; choose tested CPU, memory, PID and time limits",
+    "teardown": "mandatory_even_on_failure"
+  },
+  "next_steps": [
+    "Choose allowlisted runtime images and verify a container isolation boundary",
+    "Provide synthetic test environment and isolated database/storage dependencies",
+    "Prepare sandbox-only build/start steps; never execute README or package commands on host",
+    "Create health/readiness probes with discovered ports and timeouts",
+    "Implement teardown and capture diagnostics before permitting any execution"
+  ],
+  "limitations": [
+    "A plan is not a runnable container specification and cannot establish safety or readiness.",
+    "Untrusted project code was not installed, started, built, or tested.",
+    "External services must never be contacted or mutated merely because an API URL exists.",
+    "Expected test behavior and functional evaluation belong to Phases 3-4."
+  ]
+}

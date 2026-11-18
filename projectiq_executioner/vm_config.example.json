@@ -1,0 +1,9 @@
+{
+  "base_image": "C:/ProjectIQ/workers/ubuntu-24.04-projectiq-v1.qcow2",
+  "base_sha256": "REPLACE_WITH_64_HEX_DIGITS_FROM_Get-FileHash",
+  "accelerator": "whpx",
+  "approved_snapshots": [
+    "VarunRGB/FSDL@f358b6edda071da6666e587a8f1db054965ba106",
+    "VarunRGB/Mini-Task-Collaboration-App@c4f7965d16807fa05c3d7ffeee54f86fee4d0a37"
+  ]
+}

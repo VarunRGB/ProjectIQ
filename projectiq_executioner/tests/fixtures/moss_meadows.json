@@ -1,0 +1,230 @@
+{
+  "schema_version": "1.0",
+  "phase": 1,
+  "source": {
+    "kind": "github",
+    "repository": "VarunRGB/Moss_and_Meadows",
+    "commit_sha": "f035cc64382d12bcba99140e68664a4d3c1ee210"
+  },
+  "services": [
+    {
+      "name": "frontend",
+      "kind": "frontend",
+      "technology": "Next.js, React",
+      "root": ".",
+      "depends_on": []
+    },
+    {
+      "name": "external_http_api",
+      "kind": "external_dependency",
+      "technology": "External HTTP API (source not present)",
+      "root": "external",
+      "depends_on": []
+    }
+  ],
+  "routes": [
+    {
+      "path": "/admin/dashboard",
+      "method": "GET",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/admin/orders",
+      "method": "GET",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/admin/orders/:param/status",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/cart",
+      "method": "GET",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/cart/add",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/cart/remove",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/login",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/orders",
+      "method": "GET",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/orders/checkout",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/plants",
+      "method": "GET",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/plants/add",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/plants/delete/:param",
+      "method": "DELETE",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/plants/toggle/:param",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/plants/update/:param",
+      "method": "PUT",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/signup",
+      "method": "POST",
+      "kind": "client_http_call"
+    },
+    {
+      "path": "/",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/admin",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/admin/orders",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/admin/plants",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/cart",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/contact",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/gifting",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/login",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/orders",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/orders/:id",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/payment",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/services/corporate",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/services/luxury",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/services/maintenance",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/services/medical-retail",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/services/rentals",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/shop",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/shop/:id",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/signup",
+      "method": "GET",
+      "kind": "page_route"
+    },
+    {
+      "path": "/social-impact",
+      "method": "GET",
+      "kind": "page_route"
+    }
+  ],
+  "pages": [
+    "src/app/admin/orders/page.tsx",
+    "src/app/admin/page.tsx",
+    "src/app/admin/plants/page.tsx",
+    "src/app/cart/page.tsx",
+    "src/app/contact/page.tsx",
+    "src/app/gifting/page.tsx",
+    "src/app/login/page.tsx",
+    "src/app/orders/[id]/page.tsx",
+    "src/app/orders/page.tsx",
+    "src/app/page.tsx",
+    "src/app/payment/page.tsx",
+    "src/app/services/corporate/page.tsx",
+    "src/app/services/luxury/page.tsx",
+    "src/app/services/maintenance/page.tsx",
+    "src/app/services/medical-retail/page.tsx",
+    "src/app/services/rentals/page.tsx",
+    "src/app/shop/[id]/page.tsx",
+    "src/app/shop/page.tsx",
+    "src/app/signup/page.tsx",
+    "src/app/social-impact/page.tsx"
+  ],
+  "environment_variables": [],
+  "inventory": {
+    "environment_variable_details": {}
+  },
+  "database_schema_files": [],
+  "findings": []
+}
