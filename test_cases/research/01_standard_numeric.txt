@@ -1,0 +1,19 @@
+TITLE: Smart Irrigation Using Soil Sensors
+
+1. INTRODUCTION
+This report studies low-cost irrigation control.
+
+2. LITERATURE REVIEW
+Prior work by Smith et al. (2022) describes sensor-driven irrigation [1].
+A second study evaluates soil moisture prediction (Kumar and Rao, 2024) [2].
+The discussion also links to https://example.org/irrigation-survey.
+
+3. METHODOLOGY
+The prototype uses a moisture sensor and microcontroller.
+
+4. REFERENCES
+[1] J. Smith and A. Lee, "Sensor-Driven Irrigation for Small Farms," Journal of Smart Agriculture, vol. 8, 2022. DOI: 10.1234/irrigation.2022.001
+[2] P. Kumar and S. Rao, "Soil Moisture Prediction with Lightweight Models," Proceedings of AgriTech, 2024. https://example.org/soil-moisture-paper
+
+5. APPENDIX
+Calibration notes are provided here.

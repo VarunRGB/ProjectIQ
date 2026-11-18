@@ -1,0 +1,15 @@
+1. INTRODUCTION
+This is an example with repeated section headings.
+
+2. LITERATURE REVIEW
+The first literature review is the one Phase 1 currently extracts. Smith et al. (2022) [1].
+
+3. METHODOLOGY
+Experimental design details.
+
+4. RELATED WORK
+This is a second literature-review-style section. Brown et al. (2024) [2].
+
+5. REFERENCES
+[1] J. Smith, "First Paper on the Topic," Example Journal, 2022.
+[2] P. Brown, "Second Paper on the Topic," Example Conference, 2024.

@@ -1,0 +1,13 @@
+CHAPTER 1: INTRODUCTION
+This project explores plant disease classification from leaf images.
+
+CHAPTER 2: LITERATURE REVIEW
+Earlier CNN approaches were reported by Das et al. (2020) [1].
+Transfer learning was evaluated by Green and Patel (2023) [2].
+
+CHAPTER 3: SYSTEM DESIGN
+The proposed pipeline contains image preprocessing and classification.
+
+CHAPTER 5: REFERENCES
+[1] A. Das, "Leaf Disease Recognition Using CNNs," Plant AI Journal, 2020.
+[2] M. Green and R. Patel, "Transfer Learning for Crop Health," Agriculture Computing, 2023. DOI: 10.4321/crop.2023.5

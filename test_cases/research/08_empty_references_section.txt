@@ -1,0 +1,10 @@
+1. Introduction
+The report studies crop yield forecasting.
+
+2. Literature Review
+Several forecasting approaches are discussed, including Smith et al. (2021).
+
+3. References
+
+4. Appendix
+No bibliography entries were supplied.

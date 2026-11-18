@@ -1,0 +1,9 @@
+TITLE: Explainable Credit Risk Prediction
+
+LITERATURE SURVEY
+Prior work on credit risk is described by Martin (2020).
+Explainability methods are surveyed by Gupta and Iyer (2023).
+
+BIBLIOGRAPHY
+Martin, L. (2020). Interpretable models for consumer credit risk. Finance and AI, 3(2), 51-70.
+Gupta, A., & Iyer, P. (2023). Explaining tabular predictions in lending. Journal of Responsible AI, 5(1), 11-29. https://example.org/explainable-lending

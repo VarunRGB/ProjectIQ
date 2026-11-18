@@ -20,3 +20,5 @@ protobuf>=4.25
 # Demo app for the Integrity Agent (streamlit run projectiq_integrity/app.py)
 streamlit>=1.46   # width="stretch" in tables
 pandas>=2.1
+
+fonttools

@@ -1,0 +1,12 @@
+PROJECT: Federated Learning for IoT
+
+1. INTRODUCTION
+The report investigates distributed model training.
+
+2. RELATED WORK
+Federated optimisation was evaluated in earlier work [1].
+Communication-efficient training was explored by Park et al. (2024) [2].
+
+3. REFERENCES
+[1] M. Allen and N. Park, "Federated Optimisation for Resource-Constrained IoT," Distributed Systems Journal, 2017. DOI: 10.1234/federated.2017.001
+[2] J. Park et al., "Communication Efficient Federated Learning for IoT Devices," Internet Systems Journal, 2024. https://doi.org/10.9999/iot.2024.123
