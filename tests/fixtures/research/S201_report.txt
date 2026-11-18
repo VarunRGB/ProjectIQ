@@ -1,0 +1,32 @@
+Food Item Detection Using YOLOv8
+
+Abstract
+
+This project builds a system that detects Indian food items on a plate from a single photograph and estimates calories for each item. We trained YOLOv8 on 700 images that we collected and labelled ourselves across 12 dishes.
+
+Introduction
+
+Keeping a manual food diary is tedious, and most people stop after a few days. Recognising food automatically lets users log meals simply by taking a photo instead of keeping handwritten records. Indian meals are hard for existing models, because widely used datasets like Food-101 are dominated by Western food, so systems trained on them do badly on our dishes.
+
+Related Work
+
+Single-stage detectors predict bounding boxes and class probabilities directly from full images in one evaluation. This design removes the region proposal step used by two-stage methods such as Faster R-CNN. As a result, single-stage detectors run much faster and are well suited to real time applications. However, they have historically struggled with small objects that appear in groups [1].
+
+As the YOLO authors put it, "Non-maximum suppression then removes duplicate detections that overlap strongly with a higher-scoring box." We keep the default suppression threshold of 0.45.
+
+Methodology
+
+We photographed thalis in our college canteen at lunch and dinner, under both tube lights and daylight. Each image was labelled in Roboflow with tight boxes around every visible item. We used mosaic augmentation and random scaling during training. Training ran for 120 epochs on a Google Colab T4 GPU with a batch size of 16.
+
+Results
+
+The model reached a mean average precision of 0.81 at an IoU threshold of 0.5 on our test split of 140 images. Dal and sambar were most often confused because both are yellow liquids in steel bowls. Chapati and paratha were also confused when the photo was taken from above.
+
+Conclusion
+
+Our detector works well on canteen photos, but calorie estimates are rough because one photo cannot tell how deep a bowl is. Future work will add a reference object, such as a coin, to estimate portion size.
+
+References
+
+[1] Redmon J. et al. You only look once: unified, real-time object detection. CVPR 2016.
+[2] Bossard L. et al. Food-101: mining discriminative components with random forests. ECCV 2014.

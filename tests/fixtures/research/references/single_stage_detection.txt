@@ -1,0 +1,9 @@
+Real-time object detection with single-stage networks
+
+Single-stage detectors predict bounding boxes and class probabilities directly from full images in one evaluation. This design removes the region proposal step used by two-stage methods such as Faster R-CNN. As a result, single-stage detectors run much faster and are well suited to real-time applications. However, they have historically struggled with small objects that appear in groups. Anchor boxes of fixed aspect ratios are used to predict object locations at several scales. Non-maximum suppression then removes duplicate detections that overlap strongly with a higher-scoring box.
+
+Training uses a composite loss that combines localisation error, objectness error and classification error. Data augmentation such as mosaic images and random scaling improves robustness to varied backgrounds. The model is usually evaluated with mean average precision at an intersection-over-union threshold of 0.5.
+
+References
+
+[1] Redmon J. et al. You only look once. CVPR 2016.

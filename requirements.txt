@@ -6,4 +6,19 @@ python-docx>=1.1
 pytest>=7.0
 numpy==2.5.4
 sentence-transformers==6.1.0
+
+# Integrity Agent (projectiq_integrity)
+pymupdf>=1.24          # PDF reading for report similarity (AGPL licence: fine for academic use)
+scikit-learn>=1.4
+nltk>=3.8
+spacy>=3.7
+transformers>=4.40
+torch>=2.2
+sentencepiece>=0.2     # DeBERTa tokenizer
+protobuf>=4.25
+
+# Demo app for the Integrity Agent (streamlit run projectiq_integrity/app.py)
+streamlit>=1.46   # width="stretch" in tables
+pandas>=2.1
+
 fonttools

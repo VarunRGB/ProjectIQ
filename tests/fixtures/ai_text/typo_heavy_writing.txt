@@ -1,0 +1,11 @@
+Task Scheduler
+
+This is to certify that the project work submitted by the student is a bonafide record of work carried out under the guidance of the faculty of the Department of Computer Engineering and Technology. The work has not been submitted elsewhere for the award of any degree or diploma.
+
+We would like to thank our guide and the head of the department for their constant support and encouragement throughout this project.
+
+i made a task scheduler that uses a heap so the most importent task comes out first. the heapq module only has a min heap so i store the priority as negative number which flips the order.
+
+when two task have same priority the counter keeps them in the order they where added, otherwise python tries to compare the task dicts and crashes. this took me long time to find.
+
+the schedule function keeps poping tasks untill the hours run out. a 3 hour task is skiped if only 2 hours are left, even if a smaller task comes later, which is a limitation i want to fix with a knapsack aproach.

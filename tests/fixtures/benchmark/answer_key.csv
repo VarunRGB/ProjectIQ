@@ -1,0 +1,38 @@
+case,expected,source,note,sentence
+own,none,,student's own writing,"Fake reviews mislead shoppers on Indian e-commerce sites, and many of them are written in Hinglish rather than English."
+own,none,,student's own writing,"We collected 4,200 reviews from two shopping platforms, labelled them with the help of three annotators, and fine-tuned a multilingual transformer to flag likely fake reviews."
+own,none,,student's own writing,Our best model reached an F1 score of 0.83 on fake reviews.
+P1,paraphrase,fake_review_detection,"reworded, same meaning","Because shoppers rely heavily on reviews when deciding what to buy, sellers have a reason to publish fabricated ones."
+P2,paraphrase,code_mixed_text,"reworded, same meaning",Indian users of social media and online stores often switch between two languages in the middle of a sentence.
+V1,verbatim,fake_review_detection,hyphen removed and capital changed only (Real-time -> Real time),Real time screening of new reviews is needed so that fake ones are removed before customers read them.
+own,none,,student's own writing,"On the two platforms we studied, more than a third of reviews contained at least one Hindi word."
+V2,verbatim,fake_review_detection,"copied word for word, with a citation but no quotation marks","A major obstacle is the lack of labelled data, since even human readers identify fake reviews only slightly better than chance [2]."
+H1,none,code_mixed_text,copied but inside quotation marks: must NOT be counted,"As noted in earlier work, ""Spelling is not standardised, so the same Hindi word can appear in many different romanised forms."""
+V3,verbatim,fake_review_detection,"copied chunk (1 of 4), no citation",Fake reviews are often written in bulk by paid workers who follow a template supplied by the seller.
+V4,verbatim,fake_review_detection,copied chunk (2 of 4),"As a result, deceptive reviews tend to be shorter, more emotional and less specific than genuine ones."
+V5,verbatim,fake_review_detection,copied chunk (3 of 4),They frequently mention the product name repeatedly but rarely describe concrete experiences such as delivery time or packaging.
+V6,verbatim,fake_review_detection,copied chunk (4 of 4),"Early detection systems relied on hand-crafted features such as review length, rating deviation and the proportion of capital letters."
+own,none,,student's own writing,None of these studies looked at reviews that mix Hindi and English.
+own,none,,student's own writing,Our work fills that gap for two of the largest shopping sites in India.
+N1,near-verbatim,transformer_text_classification,"copied chunk (1 of 3), two words swapped",Pre-trained models such as BERT are first trained on huge unlabelled corpora and then fine-tuned on a small labelled dataset for a particular task.
+N2,near-verbatim,transformer_text_classification,"copied chunk (2 of 3), one word swapped",This two-stage process allows strong performance even when only a few thousand labelled samples are available.
+N3,near-verbatim,transformer_text_classification,"copied chunk (3 of 3), one phrase swapped","However, the largest models require a lot of memory and are slow to run on ordinary laptops."
+V7,verbatim,code_mixed_text,"copied, then the next source sentence comes BEFORE it (order reversed)",Multilingual models such as mBERT and XLM-R handle code-mixed text better because their vocabularies include Hindi subwords.
+V8,verbatim,code_mixed_text,"copied, order reversed, cited",Models pre-trained only on English text therefore treat many Hindi words as unknown tokens [3].
+M1,paraphrase|near-verbatim|similar,transformer_text_classification,two source sentences merged into one,"Transformer models, which read all the words of a sentence in parallel and use self-attention to decide which words matter, are now the standard way to classify short texts such as reviews."
+own,none,,student's own writing,"We scraped reviews for 150 products in electronics and personal care, and kept only reviews with at least ten words."
+own,none,,student's own writing,"Three annotators labelled each review as genuine or fake using a guideline we wrote, and disagreements were settled by majority vote."
+P3,paraphrase,code_mixed_text,"reworded, same meaning","Since there is no fixed way to spell Hindi in English letters, a single word can be written in several ways."
+H2,none|similar,code_mixed_text,"the student's own method, related to a source claim but not the same statement","To reduce mistakes caused by these varied spellings, we mapped each word to one standard spelling before training."
+N4,near-verbatim,transformer_text_classification,end of the source sentence removed,Each model was fine-tuned for three epochs with a learning rate of 2e-5.
+V9,verbatim,transformer_text_classification,standard definition copied (a reviewer would likely accept this),Accuracy is the proportion of predictions that match the true labels.
+P4,paraphrase,transformer_text_classification,"reworded, same meaning","Since our classes are imbalanced and accuracy alone can give a false picture, we additionally report the F1 score for the fake class."
+own,none,,student's own writing,"The fine-tuned XLM-R model reached an F1 score of 0.83 on fake reviews, compared with 0.71 for an English-only BERT model."
+H3,none|similar,fake_review_detection,OPPOSITE meaning of a source sentence: must NOT count as paraphrase,"Training on reviews from the target platform did not help at all, giving the same accuracy as training on hotel reviews alone."
+P5,paraphrase,transformer_text_classification,"reworded, same meaning","The model made most of its mistakes on sarcastic reviews, in which the words literally say the opposite of what the writer means."
+own,none,,student's own writing,"Most other errors were very short reviews such as nice product, which could honestly be either genuine or fake."
+H4,none|similar,transformer_text_classification,"same topic as a source sentence, different statement","Lightweight models also mattered to us, because our college lab has no GPU."
+own,none,,student's own writing,"Hinglish reviews need multilingual models, and our labelled dataset will be shared with other researchers."
+V10,verbatim,transformer_text_classification,copied with one spelling mistake (acuracy),Distilled variants such as DistilBERT keep most of the acuracy while using roughly half the parameters.
+V11,verbatim,fake_review_detection,British to American spelling only (Behavioural -> Behavioral),"Behavioral signals, such as many reviews posted from one account in a short time, are harder to fake than textual cues."
+own,none,,student's own writing,In future we will add these account-level signals to our text model.

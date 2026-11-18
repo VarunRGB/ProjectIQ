@@ -15,11 +15,15 @@ import re
 import time
 from typing import List, Optional, Sequence, Set, Tuple
 
+from pathlib import Path
+
 import numpy as np
 
 from .schemas import FinalSummary
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+# Same local copy the Integrity Agent uses, put there by scripts/setup_offline.py.
+LOCAL_MODEL = Path(__file__).resolve().parent.parent / "models" / "all-MiniLM-L6-v2"
 MMR_LAMBDA = 0.66
 
 
@@ -33,6 +37,8 @@ def _get_embedding_model():
             "MiniLM post-processing requires sentence-transformers. "
             "Install it in your project venv with: pip install sentence-transformers"
         ) from exc
+    if LOCAL_MODEL.exists():
+        return SentenceTransformer(str(LOCAL_MODEL), device="cpu")
     return SentenceTransformer(MODEL_NAME)
 
 def _normalise_spacing(text: str) -> str:
