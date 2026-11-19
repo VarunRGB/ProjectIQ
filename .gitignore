@@ -29,3 +29,6 @@ Thumbs.db
 # Offline models (download with: python scripts/setup_offline.py)
 models/
 data/cache/
+
+# Local VM execution configuration
+vm_config.json
