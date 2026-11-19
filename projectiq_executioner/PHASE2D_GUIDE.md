@@ -63,3 +63,13 @@ It produces `phase1/manifest.json` and `manifest.md`, `phase2a_plan.json`, `phas
 - **D5:** Empirical isolation/security acceptance, resource quotas, failure handling, scheduling, and CI.
 
 **Principle:** New runtime support should be a versioned capability with explicit dependency and execution policies, not a student-provided command string interpreted by the Windows host. Cloud mocks/emulators are deferred.
+
+
+## D1 offline Node/Vite pilot (post-D0)
+
+The optional `node_vite_offline_v1` runtime and its separately authorized
+Linux npm cache preparation are documented in [PHASE2D_D1_GUIDE.md](PHASE2D_D1_GUIDE.md).
+The existing sealed Phase 2C image, PHP/MySQL adapter and static HTML adapter
+remain supported. No arbitrary student source is authorized; Vite needs a
+pinned reviewed fixture, official Node Linux bundle, SHA-verified cache and
+matching npm lockfile. D1 startup success does not attest isolation.

@@ -43,7 +43,7 @@ def build_capability_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any
     expected = build_vm_plan(manifest, phase2a, phase2b)
     if not isinstance(phase2c, Mapping) or any(
         phase2c.get(k) != expected.get(k) for k in
-        ('source', 'adapter', 'status', 'probe_path', 'schema_path', 'vm_limits')
+        ('source', 'adapter', 'status', 'probe_path', 'schema_path', 'project_root', 'vm_limits')
     ):
         raise VMPlanError('Phase 2C candidate differs from verified plan')
 
@@ -60,6 +60,8 @@ def build_capability_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any
             state = 'PHASE2C_CURATED_PILOT_DB_RESOURCE'
         elif kind == 'database':
             state = 'PHASE2D_DB_RESOURCE_NOT_IMPLEMENTED'
+        elif pilot and family == 'node_frontend' and expected['adapter'] == 'node_vite_offline_v1':
+            state = 'PHASE2D_NODE_VITE_OFFLINE_ASSETS_REQUIRED'
         elif pilot and family in ('static_web', 'php'):
             state = 'PHASE2C_CURATED_PILOT_ADAPTER'
         elif profile == 'unknown':
@@ -82,14 +84,18 @@ def build_capability_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any
         'schema_version': '0.1', 'phase': 2, 'stage': 'phase2d_capability_plan_only',
         'source': expected['source'], 'execution': 'NOT_PERFORMED',
         'launch_authorization': 'DENIED_UNTIL_OPERATOR_APPROVAL_AND_RUNTIME_GATES',
-        'status': ('PHASE2C_PILOT_ADAPTER_AVAILABLE' if pilot
-                   else 'NEEDS_PHASE2D_IMPLEMENTATION'),
-        'existing_pilot_adapter': expected['adapter'],
+        'status': ('PHASE2D_OFFLINE_NODE_ADAPTER_CONDITIONAL'
+                   if expected['adapter'] == 'node_vite_offline_v1' else
+                   'PHASE2C_PILOT_ADAPTER_AVAILABLE' if pilot else 'NEEDS_PHASE2D_IMPLEMENTATION'),
+        'existing_pilot_adapter': (expected['adapter']
+                                   if expected['adapter'] in ('static_html_v1', 'php_mysql_v1') else None),
+        'phase2d_adapter': (expected['adapter'] if expected['adapter'] == 'node_vite_offline_v1' else None),
         'services': records, 'missing_profiles': outstanding,
         'execution_constraints': [
             'Only pinned operator-reviewed snapshots may execute in the Phase 2C pilot.',
             'No student-defined build, install, package, or README command runs on the host.',
-            'New dependency resolution requires an offline verified cache or an approved separate build boundary.',
+            'Node/Vite execution requires operator-pinned official Linux Node.js and Linux npm cache archives.',
+            'Offline npm install uses --ignore-scripts, while Vite build runs reviewed code inside the disposable VM.',
             'External cloud APIs and real secrets are not authorized or automatically contacted.',
             'VM egress stays denied; startup success does not establish sandbox attestation.',
         ],

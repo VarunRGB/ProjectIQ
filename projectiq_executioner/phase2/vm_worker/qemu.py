@@ -151,13 +151,17 @@ def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_s
 
 class QemuWorker:
     def __init__(self, config: dict, workdir: Path, port: int, *, ram_mib: int = 1024, cpus: int = 2,
-                 trusted_template_setup: bool = False):
+                 trusted_template_setup: bool = False,
+                 trusted_dependency_fetch: bool = False):
         self.config = config
         self.workdir = Path(workdir)
         self.port = port
         self.ram_mib = ram_mib
         self.cpus = cpus
         self.trusted_template_setup = trusted_template_setup
+        if trusted_template_setup and trusted_dependency_fetch:
+            raise WorkerFailure('Trusted template baking and dependency fetch cannot share a VM mode')
+        self.trusted_dependency_fetch = trusted_dependency_fetch
         self.proc: subprocess.Popen | None = None
         self._log = None
 
@@ -182,7 +186,7 @@ class QemuWorker:
             raise WorkerFailure('KVM requires Linux')
         self._log = (self.workdir / 'qemu.log').open('wb')
         netdev = ('user,id=net0,hostfwd=tcp:127.0.0.1:' + str(self.port) + '-:22'
-                  if self.trusted_template_setup else
+                  if self.trusted_template_setup or self.trusted_dependency_fetch else
                   'user,id=net0,restrict=on,hostfwd=tcp:127.0.0.1:' + str(self.port) + '-:22')
         # Record the trusted template guest's serial console for sealing
         # diagnostics. Ordinary project execution does not expose a console.
@@ -268,6 +272,63 @@ class SSHControl:
         command = 'of=/home/projectiq/' + remote_filename
         if self.ssh('dd', command, 'status=none', timeout=timeout, input=content).returncode != 0:
             raise WorkerFailure('Unable to copy trusted input into disposable VM')
+
+    def copy_offline_asset(self, local: Path, remote_filename: str, timeout: int = 150) -> None:
+        """Transfer only operator-pinned artifacts; never mount a host directory."""
+        limits = {'node_runtime.tar.xz': 65_000_000, 'npm_cache.zip': 170_000_000}
+        limit = limits.get(remote_filename)
+        if limit is None or not Path(local).is_file() or not 0 < Path(local).stat().st_size <= limit:
+            raise WorkerFailure('Unapproved or oversized offline runtime asset')
+        # Stream the file: do not hold a large dependency cache in Windows RAM.
+        cmd = [_tool('ssh', self.config.get('ssh_binary')), *self.options(), '-T',
+               '-p', str(self.port), 'projectiq@127.0.0.1',
+               shlex.join(['dd', 'of=/home/projectiq/' + remote_filename, 'status=none'])]
+        try:
+            with Path(local).open('rb') as src:
+                result = subprocess.run(cmd, stdin=src, stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE, timeout=timeout, check=False)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise WorkerFailure('Offline runtime artifact transfer unavailable or timed out') from exc
+        if result.returncode:
+            raise WorkerFailure('Offline runtime artifact transfer failed')
+
+    def receive_offline_cache(self, local: Path, timeout: int = 180) -> None:
+        """Download only bounded cache data into the throwaway host work directory."""
+        import threading
+        cmd = [_tool('ssh', self.config.get('ssh_binary')), *self.options(), '-T',
+               '-p', str(self.port), 'projectiq@127.0.0.1',
+               shlex.join(['cat', '/home/projectiq/npm_cache.zip'])]
+        proc = None
+        expired = threading.Event()
+        def kill_if_late():
+            expired.set()
+            if proc is not None and proc.poll() is None:
+                proc.kill()
+        timer = threading.Timer(timeout, kill_if_late)
+        timer.daemon = True
+        try:
+            proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL)
+            timer.start()
+            total = 0
+            with Path(local).open('xb') as output:
+                while True:
+                    data = proc.stdout.read(64 * 1024)
+                    if not data:
+                        break
+                    total += len(data)
+                    if total > 170_000_000:
+                        raise WorkerFailure('Offline npm cache exceeds transfer limit')
+                    output.write(data)
+            if proc.wait(timeout=10) != 0 or expired.is_set() or total == 0:
+                raise WorkerFailure('Unable to retrieve approved offline npm cache')
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise WorkerFailure('Offline npm cache download failed or timed out') from exc
+        finally:
+            timer.cancel()
+            if proc is not None and proc.poll() is None:
+                proc.kill()
+                proc.wait()
 
     def receive(self, remote_filename: str, local: Path, timeout: int = 30) -> None:
         if remote_filename != 'result.json':

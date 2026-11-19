@@ -100,6 +100,29 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
                 manual_review.extend(['SQL_DUMP_APPLY_ONLY_INSIDE_THROWAWAY_VM', 'PHP_PDO_CONNECTOR_REBIND_IN_VM_ONLY'])
             else:
                 manual_review.append('PHP_MYSQL_NEEDS_HTML_ENTRY_AND_SINGLE_SQL_SCHEMA')
+    elif (not backends and len(frontends) == 1
+          and frontends[0]['family'] == 'node_frontend' and not dbs and not others):
+        # Phase 2D D1: only simple, standalone Vite frontend repositories.
+        # Require repository-evidenced Vite and npm lockfile, not merely React.
+        root = frontends[0]['root']
+        prefix = '' if root == '.' else root + '/'
+        technologies = manifest.get('technologies') or []
+        has_vite = any(isinstance(t, dict) and t.get('name', '').lower() == 'vite'
+                       for t in technologies)
+        setup = manifest.get('setup_files') or []
+        if (safe_path(root) is not None and has_vite and isinstance(setup, list)
+                and prefix + 'package.json' in setup
+                and prefix + 'package-lock.json' in setup):
+            adapter = 'node_vite_offline_v1'
+            expected_probe = '/index.html'
+            manual_review.extend([
+                'D1_NODE_RUNTIME_TARBALL_SHA256_REQUIRED',
+                'D1_NPM_CACHE_AND_PACKAGE_LOCK_SHA256_REQUIRED',
+                'NPM_CI_OFFLINE_IGNORE_SCRIPTS_INSIDE_DISPOSABLE_VM_ONLY',
+                'VITE_BUILD_EXECUTES_REVIEWED_SOURCE_INSIDE_VM_ONLY',
+            ])
+        else:
+            manual_review.append('NODE_VITE_NEEDS_EVIDENCED_VITE_NPM_LOCK_AND_SAFE_ROOT')
     if adapter is None:
         manual_review.append('NO_CURATED_VM_GUEST_ADAPTER_FOR_DETECTED_ARCHITECTURE')
 
@@ -116,6 +139,7 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
         'adapter': adapter,
         'probe_path': expected_probe,
         'schema_path': schema,
+        'project_root': frontends[0]['root'] if adapter == 'node_vite_offline_v1' else None,
         'guest_profile': 'ubuntu_template_prebaked_offline',
         'linux_guest_mode': 'single_vm_multiple_local_processes',
         'application_preparation': {
@@ -125,8 +149,8 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
             'docker_probe_ignored_on_vm_path': True,
         },
         'vm_limits': {
-            'vcpu': 2, 'ram_mib': 3072 if adapter == 'php_mysql_v1' else 1024,
-            'wall_seconds': 240 if adapter == 'php_mysql_v1' else 140,
+            'vcpu': 2, 'ram_mib': 3072 if adapter in ('php_mysql_v1', 'node_vite_offline_v1') else 1024,
+            'wall_seconds': 480 if adapter == 'node_vite_offline_v1' else (240 if adapter == 'php_mysql_v1' else 140),
             'max_snapshot_zip_bytes': 30_000_000,
             'max_output_bytes': 64_000,
         },
@@ -140,7 +164,7 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
         ],
         'limitations': [
             'VM image installation/baking and security acceptance remain operator tasks.',
-            'Only two guest adapters are implemented; other architectures are not claimed runnable.',
+            'Only static HTML, curated PHP/MySQL, and offline single-service Vite adapters are implemented.',
             'No Docker daemon is required; Phase 2B Docker probe statuses are legacy data only.',
             'Successful HTTP readiness proves startup only, not application correctness.',
         ],

@@ -16,6 +16,7 @@ from ...github_client import GitHubClient
 from ...models import RepositorySource
 from ...safe_archive import extract_snapshot
 from .contracts import VMPlanError, build_vm_plan, load_json
+from .offline_assets import OfflineAssetError, approved_node_vite_assets
 from .qemu import (QemuWorker, SSHControl, WorkerFailure, _free_loopback_port,
                    effective_vm_vcpus, make_nocloud_iso, make_ssh_key, verify_host_toolchain)
 
@@ -62,6 +63,16 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
         result['reason'] = 'PINNED_FIXTURE_NOT_OPERATOR_APPROVED_OR_ADAPTER_MISSING'
         _save(result, output)
         return result
+    # The Node/Vite branch is opt-in per exact repository SHA. Validate both
+    # archives and their hashes before source download or VM startup.
+    node_assets = None
+    if candidate.get('adapter') == 'node_vite_offline_v1':
+        try:
+            node_assets = approved_node_vite_assets(config, identity)
+        except OfflineAssetError as exc:
+            result['reason'] = str(exc)
+            _save(result, output)
+            return result
     toolchain = verify_host_toolchain(config)
     if toolchain['status'] != 'TOOLCHAIN_AND_IMAGE_VERIFIED_NOT_SANDBOX_ATTESTED':
         result['reason'] = 'QEMU_TOOLS_OR_IMMUTABLE_BASE_IMAGE_NOT_VERIFIED'
@@ -94,7 +105,15 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             request = {
                 'adapter': candidate['adapter'], 'probe_path': candidate['probe_path'],
                 'schema_path': candidate.get('schema_path'),
+                'project_root': candidate.get('project_root'),
             }
+            if node_assets is not None:
+                request.update({
+                    'node_version': node_assets['node_version'],
+                    'node_sha256': node_assets['node_sha256'],
+                    'npm_cache_sha256': node_assets['npm_cache_sha256'],
+                    'lockfile_sha256': node_assets['lockfile_sha256'],
+                })
             (work / 'request.json').write_text(json.dumps(request), 'utf-8')
             key, pubkey = make_ssh_key(config, work)
             seed = make_nocloud_iso(work, pubkey, 'projectiq-' + uuid.uuid4().hex)
@@ -117,9 +136,12 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             ssh.copy(archive, 'snapshot.zip')
             ssh.copy(Path(__file__).with_name('guest_agent.py'), 'guest_agent.py')
             ssh.copy(work / 'request.json', 'request.json')
+            if node_assets is not None:
+                ssh.copy_offline_asset(node_assets['node_tarball'], 'node_runtime.tar.xz')
+                ssh.copy_offline_asset(node_assets['npm_cache_zip'], 'npm_cache.zip')
             result['execution'] = 'GUEST_AGENT_STARTED'
             command = ssh.ssh('python3', '/home/projectiq/guest_agent.py',
-                              timeout=125 if candidate['adapter'] == 'php_mysql_v1' else 75)
+                              timeout=415 if candidate['adapter'] == 'node_vite_offline_v1' else (125 if candidate['adapter'] == 'php_mysql_v1' else 75))
             output_path = work / 'result.json'
             ssh.receive('result.json', output_path)
             guest = load_json(output_path, limit=64_000)
@@ -154,6 +176,20 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'Trusted guest tool missing or timed out',
                 'Application HTTP readiness not established: CONNECTION_UNAVAILABLE',
                 'Application HTTP readiness not established: UNEXPECTED_HTTP_RESPONSE',
+                'NODE_VITE_INVALID_REQUEST',
+                'NODE_VITE_INVALID_PROJECT_ROOT',
+                'NODE_VITE_NODE_ARCHIVE_INVALID',
+                'NODE_VITE_NODE_HASH_MISMATCH',
+                'NODE_VITE_RUNTIME_EXTRACTION_FAILED',
+                'NODE_VITE_RUNTIME_VERSION_MISMATCH',
+                'NODE_VITE_CACHE_ARCHIVE_INVALID',
+                'NODE_VITE_CACHE_HASH_MISMATCH',
+                'NODE_VITE_MANIFEST_OR_LOCKFILE_UNSUPPORTED',
+                'NODE_VITE_LOCKFILE_HASH_MISMATCH',
+                'NODE_VITE_OFFLINE_DEPENDENCY_INSTALL_FAILED',
+                'NODE_VITE_BUILD_FAILED',
+                'NODE_VITE_BUILD_OUTPUT_MISSING',
+                'NODE_VITE_ASSET_PROBE_FAILED',
                 'UNEXPECTED_GUEST_FAILURE',
             }
             if status == 'STARTUP_FAILED':

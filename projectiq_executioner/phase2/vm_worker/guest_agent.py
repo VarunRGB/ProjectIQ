@@ -5,24 +5,37 @@ Never execute this guest agent on the ProjectIQ/Windows host.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import secrets
+import socket
+import ssl
 import shutil
 import stat
+import tarfile
 import subprocess
 import sys
 import tempfile
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import quote
 import zipfile
 from pathlib import Path, PurePosixPath
 
 
 class GuestFailure(RuntimeError):
     pass
+
+
+class NpmPreparationDiagnostic(GuestFailure):
+    """Trusted preparation-only npm failure with optional sanitized context."""
+
+    def __init__(self, code: str, safe_hint: str):
+        super().__init__(code)
+        self.safe_hint = safe_hint
 
 
 DENIED_SQL = re.compile(
@@ -92,10 +105,10 @@ def safe_extract(archive: Path, into: Path, *, max_total: int = 120_000_000) -> 
 
 
 def _trusted_process(args: list[str], *, input: bytes | None = None, timeout: int = 15,
-                     env: dict | None = None) -> subprocess.CompletedProcess:
+                     env: dict | None = None, cwd: Path | None = None) -> subprocess.CompletedProcess:
     try:
         return subprocess.run(args, input=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              timeout=timeout, check=False, env=env)
+                              timeout=timeout, check=False, env=env, cwd=cwd)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise GuestFailure('Trusted guest tool missing or timed out') from exc
 
@@ -230,6 +243,452 @@ def _provision_mysql(checkout: Path, schema_relpath: str) -> tuple[dict, str]:
 
 
 
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open('rb') as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _node_tar_extract(archive: Path, version: str, base: Path) -> tuple[Path, Path]:
+    """Unpack only an operator-pinned official linux-x64 Node.js tarball."""
+    expected_root = f'node-{version}-linux-x64'
+    if not (archive.is_file() and 0 < archive.stat().st_size <= 65_000_000):
+        raise GuestFailure('NODE_VITE_NODE_ARCHIVE_INVALID')
+    try:
+        with tarfile.open(archive, 'r:xz') as bundle:
+            members = bundle.getmembers()
+            if (not 0 < len(members) <= 20000
+                    or sum(x.size for x in members) > 350_000_000
+                    or any((x.name != expected_root and not x.name.startswith(expected_root + '/'))
+                           or x.isdev() or x.isfifo() for x in members)):
+                raise GuestFailure('NODE_VITE_NODE_ARCHIVE_INVALID')
+            # Python 3.12+ 'data' filter rejects traversal and unsafe links.
+            bundle.extractall(base, filter='data')
+    except (tarfile.TarError, OSError, ValueError) as exc:
+        raise GuestFailure('NODE_VITE_RUNTIME_EXTRACTION_FAILED') from exc
+    node_dir = base / expected_root
+    node = node_dir / 'bin' / 'node'
+    npm = node_dir / 'bin' / 'npm'
+    if not node.is_file() or not npm.is_file() or node.is_symlink():
+        raise GuestFailure('NODE_VITE_RUNTIME_EXTRACTION_FAILED')
+    return node, npm
+
+
+def _check_vite_manifest(root: Path, expected_lock_sha: str) -> None:
+    pkg = root / 'package.json'
+    lock = root / 'package-lock.json'
+    if (not pkg.is_file() or pkg.stat().st_size > 150_000 or
+            not lock.is_file() or lock.stat().st_size > 4_000_000
+            or (root / '.npmrc').exists() or (root / 'npm-shrinkwrap.json').exists()):
+        raise GuestFailure('NODE_VITE_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+    if _sha256(lock) != expected_lock_sha:
+        raise GuestFailure('NODE_VITE_LOCKFILE_HASH_MISMATCH')
+    try:
+        package = json.loads(pkg.read_text('utf-8'))
+        locked = json.loads(lock.read_text('utf-8'))
+    except (UnicodeError, ValueError, OSError) as exc:
+        raise GuestFailure('NODE_VITE_MANIFEST_OR_LOCKFILE_UNSUPPORTED') from exc
+    if (not isinstance(package, dict) or not isinstance(locked, dict)
+            or locked.get('lockfileVersion') not in (2, 3)
+            or not isinstance(locked.get('packages'), dict)
+            or len(locked['packages']) > 12000 or 'workspaces' in package):
+        raise GuestFailure('NODE_VITE_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+    direct = package.get('dependencies') or {}
+    dev = package.get('devDependencies') or {}
+    if not isinstance(direct, dict) or not isinstance(dev, dict):
+        raise GuestFailure('NODE_VITE_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+    deps = {**direct, **dev}
+    if 'vite' not in deps or any(x in deps for x in ('next', 'nuxt')):
+        raise GuestFailure('NODE_VITE_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+    # No git:, file:, link:, HTTP or alternate registries during the pilot.
+    # Offline cache still contains third-party packages and the build executes
+    # reviewed code, exclusively inside the disposable guest.
+    for value in locked['packages'].values():
+        if not isinstance(value, dict) or value.get('link') is True:
+            raise GuestFailure('NODE_VITE_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+        version = value.get('version')
+        if isinstance(version, str) and version.startswith(('file:', 'link:', 'git:', 'git+', 'http:', 'https:')):
+            raise GuestFailure('NODE_VITE_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+        resolved = value.get('resolved')
+        if resolved is not None and (not isinstance(resolved, str) or
+                                     not resolved.startswith('https://registry.npmjs.org/')):
+            raise GuestFailure('NODE_VITE_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+        if resolved and (not isinstance(value.get('integrity'), str)
+                         or not value['integrity'].startswith(('sha512-', 'sha384-', 'sha256-'))):
+            raise GuestFailure('NODE_VITE_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+
+
+
+def _isolated_npm_config_paths(base: Path) -> dict[str, str]:
+    """Give npm distinct, empty user/global config files outside the checkout.
+
+    npm 11 rejects loading the same path for both scopes, even when that path
+    is /dev/null. Both files are guest-local and cannot contain host secrets.
+    """
+    config_dir = base / '.projectiq-npm-config'
+    config_dir.mkdir(mode=0o700)
+    result = {}
+    for setting, filename in (
+        ('NPM_CONFIG_USERCONFIG', 'user.npmrc'),
+        ('NPM_CONFIG_GLOBALCONFIG', 'global.npmrc'),
+    ):
+        path = config_dir / filename
+        with path.open('xb'):
+            pass
+        path.chmod(0o600)
+        result[setting] = str(path)
+    return result
+
+
+def _prepare_vite(checkout: Path, base: Path, req: dict) -> tuple[Path, str]:
+    """Offline npm ci and Vite build; NEVER execute student commands on host."""
+    root_rel = req.get('project_root')
+    if not (root_rel == '.' or isinstance(root_rel, str) and
+            re.fullmatch('[A-Za-z0-9_./-]{1,180}', root_rel)
+            and not any(x in ('.', '..', '') for x in root_rel.split('/'))):
+        raise GuestFailure('NODE_VITE_INVALID_PROJECT_ROOT')
+    root = checkout if root_rel == '.' else checkout.joinpath(*PurePosixPath(root_rel).parts)
+    if not root.is_dir() or (checkout / '.npmrc').exists():
+        raise GuestFailure('NODE_VITE_INVALID_PROJECT_ROOT')
+    digests = ('node_sha256', 'npm_cache_sha256', 'lockfile_sha256')
+    if any(not isinstance(req.get(k), str) or not re.fullmatch('[0-9a-f]{64}', req[k]) for k in digests):
+        raise GuestFailure('NODE_VITE_INVALID_REQUEST')
+    version = req.get('node_version')
+    if not isinstance(version, str) or not re.fullmatch(r'v24\.[0-9]{1,3}\.[0-9]{1,3}', version):
+        raise GuestFailure('NODE_VITE_INVALID_REQUEST')
+    node_archive = base / 'node_runtime.tar.xz'
+    cache_archive = base / 'npm_cache.zip'
+    if not node_archive.is_file() or not cache_archive.is_file():
+        raise GuestFailure('NODE_VITE_INVALID_REQUEST')
+    if _sha256(node_archive) != req['node_sha256']:
+        raise GuestFailure('NODE_VITE_NODE_HASH_MISMATCH')
+    if _sha256(cache_archive) != req['npm_cache_sha256']:
+        raise GuestFailure('NODE_VITE_CACHE_HASH_MISMATCH')
+    _check_vite_manifest(root, req['lockfile_sha256'])
+    runtime_dir = base / 'node_runtime'
+    runtime_dir.mkdir(mode=0o700)
+    node, npm = _node_tar_extract(node_archive, version, runtime_dir)
+    node_archive.unlink(missing_ok=True)
+    node_version = _trusted_process([str(node), '--version'], timeout=15)
+    if node_version.returncode or node_version.stdout.decode('utf-8', 'replace').strip() != version:
+        raise GuestFailure('NODE_VITE_RUNTIME_VERSION_MISMATCH')
+    if not 0 < cache_archive.stat().st_size <= 170_000_000:
+        raise GuestFailure('NODE_VITE_CACHE_ARCHIVE_INVALID')
+    try:
+        npm_cache = safe_extract(cache_archive, base / 'npm_cache', max_total=250_000_000)
+    except (GuestFailure, zipfile.BadZipFile) as exc:
+        raise GuestFailure('NODE_VITE_CACHE_ARCHIVE_INVALID') from exc
+    cache_archive.unlink(missing_ok=True)
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith('NPM_CONFIG_')}
+    env['PATH'] = str(node.parent) + ':/usr/local/bin:/usr/bin:/bin'
+    env.update({'HOME': str(base), **_isolated_npm_config_paths(base), 'NPM_CONFIG_CACHE': str(npm_cache),
+                'NPM_CONFIG_OFFLINE': 'true', 'NPM_CONFIG_IGNORE_SCRIPTS': 'true',
+                'NPM_CONFIG_AUDIT': 'false', 'NPM_CONFIG_FUND': 'false',
+                'NPM_CONFIG_UPDATE_NOTIFIER': 'false', 'CI': 'true'})
+    installed = _trusted_process([str(npm), 'ci', '--offline', '--ignore-scripts',
+                                  '--no-audit', '--no-fund', '--no-progress',
+                                  '--cache', str(npm_cache)], timeout=185, env=env, cwd=root)
+    if installed.returncode:
+        raise GuestFailure('NODE_VITE_OFFLINE_DEPENDENCY_INSTALL_FAILED')
+    vite = root / 'node_modules' / 'vite' / 'bin' / 'vite.js'
+    if not vite.is_file() or not vite.resolve().is_relative_to(root.resolve()):
+        raise GuestFailure('NODE_VITE_BUILD_FAILED')
+    dist = root / 'dist'
+    if dist.is_dir():
+        shutil.rmtree(dist)
+    built = _trusted_process([str(node), str(vite), 'build', '--outDir', 'dist'],
+                             timeout=125, env=env, cwd=root)
+    if built.returncode:
+        raise GuestFailure('NODE_VITE_BUILD_FAILED')
+    index = dist / 'index.html'
+    if not index.is_file() or index.stat().st_size > 2_000_000 or b'<html' not in index.read_bytes().lower():
+        raise GuestFailure('NODE_VITE_BUILD_OUTPUT_MISSING')
+    return dist, f'Vite offline npm ci + build completed with {version}; dist/index.html generated'
+
+
+
+def _classify_npm_cache_failure(stderr: bytes) -> str:
+    """Return only a fixed, non-sensitive diagnostic for failed npm ci.
+
+    npm output may contain package URLs, server messages, token-bearing URLs,
+    or arbitrary text from an approved repository. It MUST NOT be sent to the
+    host or persisted in reports. Inspect a bounded tail and return fixed codes.
+    """
+    sample = (stderr or b'')[-24_000:].decode('utf-8', errors='replace').lower()
+    categories = (
+        ('NODE_VITE_NPM_TLS_CERTIFICATE',
+         ('self_signed_cert_in_chain', 'unable_to_verify_leaf_signature',
+          'unable_to_get_issuer_cert', 'cert_has_expired', 'err_tls_',
+          'certificate verify failed', 'depth_zero_self_signed_cert')),
+        ('NODE_VITE_NPM_NETWORK_DNS', ('eai_again', 'enotfound', 'getaddrinfo',
+                                      'name or service not known', 'temporary failure in name resolution')),
+        ('NODE_VITE_NPM_NETWORK_TIMEOUT', ('etimedout', 'esockettimedout', 'fetch timeout')),
+        ('NODE_VITE_NPM_NETWORK_CONNECTIVITY',
+         ('econnreset', 'econnrefused', 'enetunreach', 'ehostunreach', 'econnaborted')),
+        ('NODE_VITE_NPM_DISK_SPACE', ('enospc', 'no space left on device')),
+        ('NODE_VITE_NPM_FILE_PERMISSION', ('eacces', 'eperm', 'permission denied')),
+        ('NODE_VITE_NPM_INTEGRITY', ('eintegrity', 'integrity checksum failed')),
+        ('NODE_VITE_NPM_LOCKFILE_INCONSISTENT',
+         ('npm ci can only install packages when your package.json',
+          'missing from lock file', 'invalid: ', 'npm error code eusage',
+          'npm err! code eusage')),
+        ('NODE_VITE_NPM_DEPENDENCY_CONFLICT', ('eresolve', 'unable to resolve dependency tree')),
+        ('NODE_VITE_NPM_REGISTRY_DENIED', ('npm error code e403', 'npm err! code e403',
+                                          '403 forbidden')),
+        ('NODE_VITE_NPM_REGISTRY_NOT_FOUND', ('npm error code e404', 'npm err! code e404',
+                                             '404 not found')),
+        ('NODE_VITE_NPM_PLATFORM_UNSUPPORTED', ('ebadplatform', 'ebadengine')),
+        ('NODE_VITE_NPM_AUTH_REQUIRED', ('npm error code e401', 'npm err! code e401')),
+        ('NODE_VITE_NPM_MISSING_FILE', ('npm error code enoent', 'npm err! code enoent',
+                                        'cannot find module', 'err_module_not_found')),
+        ('NODE_VITE_NPM_INVALID_PACKAGE', ('ejsonparse', 'invalid version:',
+                                           'invalid tag name', 'invalid package name')),
+        ('NODE_VITE_NPM_UNSUPPORTED_PROTOCOL', ('eunsupportedprotocol', 'unsupported url type')),
+    )
+    for code, indicators in categories:
+        if any(indicator in sample for indicator in indicators):
+            return code
+    return 'NODE_VITE_NPM_FAILURE_UNCLASSIFIED'
+
+
+def _npm_operator_safe_hint(proc: subprocess.CompletedProcess, cache: Path) -> str:
+    """Opt-in, bounded npm process diagnostics for an approved fetch-only VM.
+
+    The old filter required an explicit `npm error` prefix and discarded shell,
+    loader, signal and Node.js runtime failures. Return fixed numeric metadata
+    plus at most three aggressively scrubbed *error-like* line fragments.
+    Never return complete logs, URLs, paths, credentials or source snippets.
+    """
+    logdir = cache / '_logs'
+    channels = [('stderr', bytes(proc.stderr or b'')[-12_000:]),
+                ('stdout', bytes(proc.stdout or b'')[-6_000:])]
+    logs = 0
+    if logdir.is_dir() and not logdir.is_symlink():
+        try:
+            for log in sorted(logdir.glob('*-debug-0.log'), reverse=True)[:2]:
+                if log.is_symlink() or not log.is_file():
+                    continue
+                with log.open('rb') as f:
+                    f.seek(0, os.SEEK_END)
+                    f.seek(max(0, f.tell() - 24_000))
+                    channels.append(('log', f.read(24_000)))
+                    logs += 1
+        except OSError:
+            pass
+    try:
+        exit_status = int(proc.returncode)
+    except (ValueError, TypeError):
+        exit_status = 999
+    # Numeric metadata is safe even if npm writes nothing recognizable.
+    facts = (f'npm exit {max(-999, min(exit_status, 999))} '
+             f'stdout bytes {len(proc.stdout or b"")} '
+             f'stderr bytes {len(proc.stderr or b"")} debug logs {logs}')
+    seen = set()
+    highlights = []
+    for channel, data in channels:
+        for raw in data.decode('utf-8', 'replace').splitlines()[-80:]:
+            # Only infrastructure/process error phrases, not arbitrary source
+            # output, are candidates for the opt-in diagnostic.
+            if not re.search(r'(?i)\b(?:npm|error|err!|fatal|fail(?:ed|ure)?|killed|'
+                             r'exception|exit|heap|module|libc|denied|signal|segfault)\b', raw):
+                continue
+            if re.search(r'(?i)token|password|secret|credential|authorization|bearer|'
+                         r'api[_-]?key|_auth|npmrc|private', raw):
+                continue
+            if 'complete log of this run' in raw.lower():
+                continue
+            phrase = re.sub(r'(?i)https?://\S+', '[URL]', raw)
+            phrase = re.sub(r'(?i)(?:[a-z]:[\\/]|/(?:home|tmp|var|root|etc|mnt|usr)/)\S*',
+                            '[PATH]', phrase)
+            phrase = re.sub(r'[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}', '[EMAIL]', phrase)
+            phrase = re.sub(r'\x22[^\x22]{1,180}\x22|\x27[^\x27]{1,180}\x27|\x60[^\x60]{1,180}\x60',
+                            '[QUOTED]', phrase)
+            phrase = re.sub(r'[^A-Za-z0-9 _.,!?:;()\[\]\-|]', ' ', phrase)
+            phrase = ' '.join(phrase.split())[:115]
+            if phrase and phrase not in seen:
+                highlights.append((channel, phrase))
+                seen.add(phrase)
+    # Preserve last error-like lines where npm normally places the summary.
+    selected = highlights[-3:]
+    parts = [facts] + [f'{channel} {line}' for channel, line in selected]
+    return ' | '.join(parts)[:640]
+
+
+def _npm_failure_with_debug_context(proc: subprocess.CompletedProcess, cache: Path) -> str:
+    """Classify npm's three possible output channels without exporting log text.
+
+    npm can write meaningful diagnostics only to its local _logs/*debug*.log.
+    Read at most two bounded log tails, which remain entirely inside the VM.
+    All return values are fixed literals; never include package names, URLs,
+    process output, or credentials in the host-visible result.
+    """
+    output = [bytes(proc.stderr or b'')[-24_000:], bytes(proc.stdout or b'')[-8_000:]]
+    logdir = cache / '_logs'
+    if logdir.is_dir() and not logdir.is_symlink():
+        try:
+            candidates = sorted(logdir.glob('*-debug-0.log'), reverse=True)[:2]
+            for path in candidates:
+                if path.is_symlink() or not path.is_file():
+                    continue
+                with path.open('rb') as stream:
+                    stream.seek(0, os.SEEK_END)
+                    size = stream.tell()
+                    stream.seek(max(0, size - 32_000))
+                    output.append(stream.read(32_000))
+        except OSError:
+            # Logging is a diagnostic only; it must not cause the fetch to pass.
+            pass
+    for sample in output:
+        category = _classify_npm_cache_failure(sample)
+        if category != 'NODE_VITE_NPM_FAILURE_UNCLASSIFIED':
+            return category
+    if proc.returncode in (-9, 137):
+        return 'NODE_VITE_NPM_PROCESS_TERMINATED'
+    # The operator explicitly allowed network ONLY in this preparation VM.
+    # A fixed public registry reachability probe separates basic network
+    # failure from npm/package issues without leaking any untrusted output.
+    try:
+        with urllib.request.urlopen('https://registry.npmjs.org/-/ping', timeout=10) as response:
+            if 200 <= response.status < 400:
+                return 'NODE_VITE_NPM_UNCLASSIFIED_REGISTRY_REACHABLE'
+            return 'NODE_VITE_NPM_REGISTRY_PROBE_HTTP_ERROR'
+    except urllib.error.HTTPError:
+        return 'NODE_VITE_NPM_REGISTRY_PROBE_HTTP_ERROR'
+    except urllib.error.URLError as exc:
+        if isinstance(exc.reason, socket.gaierror):
+            return 'NODE_VITE_NPM_NETWORK_DNS'
+        if isinstance(exc.reason, (ssl.SSLError, ssl.CertificateError)):
+            return 'NODE_VITE_NPM_TLS_CERTIFICATE'
+        return 'NODE_VITE_NPM_REGISTRY_PROBE_CONNECTION_FAILED'
+    except (OSError, ValueError, TimeoutError):
+        return 'NODE_VITE_NPM_REGISTRY_PROBE_CONNECTION_FAILED'
+
+
+def prepare_npm_cache(request_path: Path, *, base_dir: Path = Path('/home/projectiq')) -> dict:
+    """Separate, explicitly authorized disposable VM: downloads npm tarballs.
+
+    No student build or lifecycle scripts run here. Unlike runtime VMs this
+    trusted fetch VM has outbound network, but still no host filesystem mounts,
+    no real credentials, no root sudo, and only a reviewed pinned fixture.
+    """
+    req = json.loads(request_path.read_text('utf-8'))
+    if req.get('operation') != 'prepare_npm_cache' or req.get('adapter') != 'node_vite_offline_v1':
+        raise GuestFailure('NODE_VITE_INVALID_REQUEST')
+    snapshot = base_dir / 'snapshot.zip'
+    if not snapshot.is_file() or snapshot.stat().st_size > 30_000_000:
+        raise GuestFailure('Pinned snapshot missing or oversized')
+    checkout = safe_extract(snapshot, base_dir / 'checkout')
+    root_rel = req.get('project_root')
+    if not (root_rel == '.' or isinstance(root_rel, str) and
+            re.fullmatch('[A-Za-z0-9_./-]{1,180}', root_rel) and
+            not any(x in ('.', '..', '') for x in root_rel.split('/'))):
+        raise GuestFailure('NODE_VITE_INVALID_PROJECT_ROOT')
+    root = checkout if root_rel == '.' else checkout.joinpath(*PurePosixPath(root_rel).parts)
+    if not root.is_dir() or (checkout / '.npmrc').exists():
+        raise GuestFailure('NODE_VITE_INVALID_PROJECT_ROOT')
+    version = req.get('node_version')
+    if not isinstance(version, str) or not re.fullmatch(r'v24\.[0-9]{1,3}\.[0-9]{1,3}', version):
+        raise GuestFailure('NODE_VITE_INVALID_REQUEST')
+    node_sha = req.get('node_sha256')
+    lock_sha = req.get('lockfile_sha256')
+    if any(not isinstance(v, str) or not re.fullmatch('[0-9a-f]{64}', v) for v in (node_sha, lock_sha)):
+        raise GuestFailure('NODE_VITE_INVALID_REQUEST')
+    node_archive = base_dir / 'node_runtime.tar.xz'
+    if not node_archive.is_file() or _sha256(node_archive) != node_sha:
+        raise GuestFailure('NODE_VITE_NODE_HASH_MISMATCH')
+    _check_vite_manifest(root, lock_sha)
+    runtime = base_dir / 'node_runtime'
+    runtime.mkdir(mode=0o700)
+    node, npm = _node_tar_extract(node_archive, version, runtime)
+    node_archive.unlink(missing_ok=True)
+    ver = _trusted_process([str(node), '--version'], timeout=15)
+    if ver.returncode or ver.stdout.decode('utf-8', errors='replace').strip() != version:
+        raise GuestFailure('NODE_VITE_RUNTIME_VERSION_MISMATCH')
+    cache = base_dir / 'npm-cache'
+    cache.mkdir(mode=0o700)
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith('NPM_CONFIG_')}
+    env['PATH'] = str(node.parent) + ':/usr/local/bin:/usr/bin:/bin'
+    env.update({'HOME': str(base_dir), **_isolated_npm_config_paths(base_dir), 'NPM_CONFIG_CACHE': str(cache),
+                'NPM_CONFIG_IGNORE_SCRIPTS': 'true', 'NPM_CONFIG_AUDIT': 'false',
+                'NPM_CONFIG_FUND': 'false', 'NPM_CONFIG_UPDATE_NOTIFIER': 'false',
+                'NPM_CONFIG_REGISTRY': 'https://registry.npmjs.org/', 'CI': 'true'})
+    proc = _trusted_process([str(npm), 'ci', '--ignore-scripts', '--no-audit',
+                             '--no-fund', '--no-progress', '--cache', str(cache)],
+                            timeout=210, env=env, cwd=root)
+    if proc.returncode:
+        code = _npm_failure_with_debug_context(proc, cache)
+        # Only the specifically authorized preparation VM can return a short,
+        # filtered, operator-only diagnostic. The normal report remains a code.
+        if req.get('include_npm_diagnostic') is True:
+            # Verify npm's own CLI and HTTPS registry access, not just the
+            # Python urllib probe. These fixed commands cannot run project
+            # install scripts and are limited to the authorized fetch VM.
+            try:
+                cli = _trusted_process([str(npm), '--version'], timeout=15, env=env, cwd=root)
+                cli_status = 'PASS' if cli.returncode == 0 else 'FAIL'
+            except GuestFailure:
+                cli_status = 'TIMEOUT_OR_MISSING'
+            ping_status = 'SKIPPED'
+            if cli_status == 'PASS':
+                try:
+                    ping = _trusted_process([str(npm), 'ping', '--no-progress',
+                                             '--fetch-retries=0', '--fetch-timeout=15000'],
+                                            timeout=30, env=env, cwd=root)
+                    ping_status = 'PASS' if ping.returncode == 0 else 'FAIL'
+                except GuestFailure:
+                    ping_status = 'TIMEOUT_OR_MISSING'
+            meta = (' | npm cli ' + cli_status + ' | npm registry ping ' + ping_status)
+            raise NpmPreparationDiagnostic(code, (_npm_operator_safe_hint(proc, cache) + meta)[:640])
+        raise GuestFailure(code)
+    archive = base_dir / 'npm_cache.zip'
+    total = 0
+    count = 0
+    # Store cache only: no node_modules, checkout source, credentials, logs or
+    # outputs are transferred to the Windows host.
+    with zipfile.ZipFile(archive, 'x', compression=zipfile.ZIP_DEFLATED,
+                         compresslevel=5, allowZip64=False) as zf:
+        for item in sorted(cache.rglob('*')):
+            if item.is_dir():
+                continue
+            if item.is_symlink() or not item.is_file():
+                raise GuestFailure('NODE_VITE_CACHE_ARCHIVE_INVALID')
+            rel = item.relative_to(cache)
+            if '_logs' in rel.parts:
+                continue
+            if item.stat().st_size > 20_000_000:
+                raise GuestFailure('NODE_VITE_CACHE_ARCHIVE_INVALID')
+            count += 1
+            total += item.stat().st_size
+            if count > 12000 or total > 250_000_000:
+                raise GuestFailure('NODE_VITE_CACHE_ARCHIVE_INVALID')
+            zf.write(item, arcname='npm-cache/' + rel.as_posix())
+    if count < 1 or archive.stat().st_size > 170_000_000:
+        raise GuestFailure('NODE_VITE_CACHE_ARCHIVE_INVALID')
+    return {'status': 'CACHE_PREPARED', 'adapter': 'node_vite_offline_v1',
+            'lockfile_sha256': lock_sha, 'npm_cache_sha256': _sha256(archive),
+            'node_version': version, 'notes': ['Offline npm cache archived; no student scripts executed']}
+
+
+def _probe_vite_asset(dist: Path, port: int) -> str:
+    """Verify a built JS bundle can actually be served, not only index.html."""
+    candidates = [p for p in (dist / 'assets').rglob('*.js')
+                  if p.is_file() and p.resolve().is_relative_to(dist.resolve())
+                  and p.stat().st_size > 0]
+    if not candidates:
+        raise GuestFailure('NODE_VITE_BUILD_OUTPUT_MISSING')
+    asset = sorted(candidates, key=lambda x: str(x))[0]
+    path = '/' + quote(asset.relative_to(dist).as_posix(), safe='/')
+    try:
+        with urllib.request.urlopen('http://127.0.0.1:' + str(port) + path, timeout=5) as response:
+            if response.status == 200 and response.read(128):
+                return 'Built JS asset HTTP 200 verified'
+    except (urllib.error.URLError, OSError, ValueError):
+        pass
+    raise GuestFailure('NODE_VITE_ASSET_PROBE_FAILED')
+
+
 def _probe(url_path: str, port: int = 8765, deadline: int = 25) -> tuple[int, str]:
     last = 'CONNECTION_UNAVAILABLE'
     for _ in range(deadline):
@@ -251,7 +710,7 @@ def _probe(url_path: str, port: int = 8765, deadline: int = 25) -> tuple[int, st
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
-    if adapter not in ('static_html_v1', 'php_mysql_v1'):
+    if adapter not in ('static_html_v1', 'php_mysql_v1', 'node_vite_offline_v1'):
         raise GuestFailure('Unapproved guest adapter')
     path = req.get('probe_path')
     if not isinstance(path, str) or not re.fullmatch(r'/[A-Za-z0-9_./-]{1,150}', path) or '..' in path.split('/'):
@@ -265,7 +724,12 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         raise GuestFailure('Static site has no index.html')
     env = dict(os.environ)
     notes = []
-    if adapter == 'php_mysql_v1':
+    if adapter == 'node_vite_offline_v1':
+        dist, note = _prepare_vite(checkout, base_dir, req)
+        notes.append(note)
+        program = [sys.executable, '-m', 'http.server', str(port), '--bind', '127.0.0.1',
+                   '--directory', str(dist)]
+    elif adapter == 'php_mysql_v1':
         schema_path = req.get('schema_path')
         if not isinstance(schema_path, str) or not re.fullmatch(r'[A-Za-z0-9_./-]{1,180}', schema_path) or '..' in schema_path.split('/'):
             raise GuestFailure('Invalid schema path')
@@ -280,7 +744,9 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         server = subprocess.Popen(program, stdin=subprocess.DEVNULL, stdout=log,
                                   stderr=subprocess.STDOUT, cwd=checkout, env=env, start_new_session=True)
     try:
-        status, detail = _probe(path, port=port, deadline=35 if adapter == 'php_mysql_v1' else 20)
+        status, detail = _probe(path, port=port, deadline=35 if adapter in ('php_mysql_v1', 'node_vite_offline_v1') else 20)
+        if adapter == 'node_vite_offline_v1':
+            notes.append(_probe_vite_asset(dist, port))
         result = {'status': 'STARTUP_VERIFIED', 'adapter': adapter, 'http_status': status,
                   'readiness_path': path, 'readiness': detail, 'notes': notes}
     finally:
@@ -297,14 +763,19 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
 def main() -> int:
     result = {'status': 'STARTUP_FAILED', 'error_code': 'UNKNOWN_FAILURE'}
     try:
-        result = run(Path('/home/projectiq/request.json'))
+        request = Path('/home/projectiq/request.json')
+        meta = json.loads(request.read_text('utf-8'))
+        result = (prepare_npm_cache(request) if meta.get('operation') == 'prepare_npm_cache'
+                  else run(request))
     except GuestFailure as exc:
         # Intentionally avoid returning source strings, SQL, credentials or tracebacks.
         result = {'status': 'STARTUP_FAILED', 'error_code': str(exc)[:120]}
+        if isinstance(exc, NpmPreparationDiagnostic):
+            result['npm_operator_hint'] = exc.safe_hint
     except Exception:
         result = {'status': 'STARTUP_FAILED', 'error_code': 'UNEXPECTED_GUEST_FAILURE'}
     Path('/home/projectiq/result.json').write_text(json.dumps(result, indent=2) + '\n', 'utf-8')
-    return 0 if result['status'] == 'STARTUP_VERIFIED' else 2
+    return 0 if result['status'] in ('STARTUP_VERIFIED', 'CACHE_PREPARED') else 2
 
 
 if __name__ == '__main__':
