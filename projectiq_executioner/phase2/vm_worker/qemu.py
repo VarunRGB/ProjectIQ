@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -63,6 +64,21 @@ def verify_host_toolchain(config: dict, *, run_qemu_help: bool = False) -> dict:
                       if all(info['toolchain'].values()) and info['template_sha256_matches']
                       and firmware_ok else 'BLOCKED')
     return info
+
+
+
+def effective_vm_vcpus(config: dict, requested: int) -> int:
+    """Use a single vCPU for WHPX until SMP boot works on the validated host.
+
+    The Windows WHPX pilot booted Ubuntu with one vCPU, while its two-vCPU
+    boot stalled during secondary CPU startup. This lowers (never raises)
+    the candidate's CPU allocation and leaves Linux/KVM limits unchanged.
+    Reassess with a real two-vCPU boot before removing this workaround.
+    """
+    if type(requested) is not int or requested < 1:
+        raise WorkerFailure('VM vCPU request must be a positive integer')
+    accelerator = config.get('accelerator') or ('whpx' if os.name == 'nt' else 'kvm')
+    return 1 if accelerator == 'whpx' else requested
 
 
 def _free_loopback_port() -> int:
@@ -168,6 +184,10 @@ class QemuWorker:
         netdev = ('user,id=net0,hostfwd=tcp:127.0.0.1:' + str(self.port) + '-:22'
                   if self.trusted_template_setup else
                   'user,id=net0,restrict=on,hostfwd=tcp:127.0.0.1:' + str(self.port) + '-:22')
+        # Record the trusted template guest's serial console for sealing
+        # diagnostics. Ordinary project execution does not expose a console.
+        serial = ('file:' + (self.workdir / 'guest-serial.log').resolve().as_posix()
+                  if self.trusted_template_setup else 'none')
         args = [
             _tool('qemu-system-x86_64', self.config.get('qemu_binary')),
             '-accel', accelerator, '-m', str(self.ram_mib), '-smp', str(self.cpus),
@@ -175,7 +195,7 @@ class QemuWorker:
             '-drive', f'file={Path(seed).resolve()},media=cdrom,readonly=on',
             '-netdev', netdev,
             '-device', 'virtio-net-pci,netdev=net0',
-            '-display', 'none', '-monitor', 'none', '-serial', 'none', '-no-reboot',
+            '-display', 'none', '-monitor', 'none', '-serial', serial, '-no-reboot',
         ]
         fw = self.config.get('uefi_firmware')
         if fw:
@@ -226,9 +246,17 @@ class SSHControl:
 
     def ssh(self, *remote_argv: str, timeout: int = 20,
             input: bytes | None = None) -> subprocess.CompletedProcess:
-        # Remote arguments are controller-owned literals; never pass repository strings.
+        # OpenSSH sends a *single shell command string* to the remote host.
+        # Passing remote_argv as separate local argv elements does NOT preserve
+        # their boundaries: e.g. mysql -e 'SELECT 1;' becomes mysql -e SELECT 1;
+        # and MySQL treats '1' as a database name. Quote each trusted argument
+        # for the guest's POSIX shell before passing one command to ssh.exe.
+        # These arguments must remain controller-owned, not student-supplied.
+        if not remote_argv or not all(isinstance(arg, str) for arg in remote_argv):
+            raise WorkerFailure('Invalid trusted SSH command arguments')
+        remote_command = shlex.join(remote_argv)
         cmd = [_tool('ssh', self.config.get('ssh_binary')), *self.options(), '-T', '-p', str(self.port),
-               'projectiq@127.0.0.1', *remote_argv]
+               'projectiq@127.0.0.1', remote_command]
         return _bounded(cmd, timeout=timeout, input=input)
 
     def copy(self, local: Path, remote_filename: str, timeout: int = 60) -> None:

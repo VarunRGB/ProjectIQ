@@ -4,10 +4,12 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shlex
 import socket
 import stat
 import tempfile
 from unittest.mock import patch, MagicMock
+from types import SimpleNamespace
 import unittest
 import zipfile
 from pathlib import Path
@@ -16,11 +18,17 @@ from projectiq_executioner.phase2.planner import build_execution_plan
 from projectiq_executioner.phase2.preflight import create_preflight
 from projectiq_executioner.phase2.vm_worker.contracts import VMPlanError, build_vm_plan
 from projectiq_executioner.phase2.vm_worker.guest_agent import (
-    GuestFailure, _check_sql, _php_pdo_rebind, run, safe_extract,
+    GuestFailure, _check_sql, _php_pdo_rebind, _wait_mysql_runtime_ready,
+    _provision_mysql, run, safe_extract,
 )
 from projectiq_executioner.phase2.vm_worker.orchestrator import execute_vm_candidate
-from projectiq_executioner.phase2.vm_worker.qemu import QemuWorker, sha256_file, make_nocloud_iso, WorkerFailure
-from projectiq_executioner.phase2.vm_worker.template_bake import bake_template
+from projectiq_executioner.phase2.vm_worker.qemu import (
+    QemuWorker, SSHControl, WorkerFailure, effective_vm_vcpus, make_nocloud_iso, sha256_file,
+)
+from projectiq_executioner.phase2.vm_worker.template_bake import (
+    SEAL_SCRIPT, _check_seal_serial, _launch_seal, _wait_qemu_shutdown, _write_seal_script,
+    _wait_mysql_ready, bake_template,
+)
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures'
 
@@ -99,6 +107,72 @@ class VMContractsTest(unittest.TestCase):
             self.assertTrue(out.is_file())
 
 
+class SSHCommandContractTest(unittest.TestCase):
+    def test_remote_mysql_query_remains_one_argument(self):
+        # OpenSSH combines all remote argv elements into a shell command string.
+        # The SQL expression must survive that remote shell as one -e argument.
+        with tempfile.TemporaryDirectory() as tmp:
+            ssh = SSHControl({}, Path(tmp), 2222, Path(tmp) / 'ephemeral_key')
+            with patch('projectiq_executioner.phase2.vm_worker.qemu._tool', return_value='ssh'), \
+                 patch('projectiq_executioner.phase2.vm_worker.qemu._bounded') as execute:
+                execute.return_value.returncode = 0
+                ssh.ssh('sudo', '-n', '/usr/bin/mysql', '-e', 'SELECT 1;')
+                command = execute.call_args.args[0]
+                self.assertEqual(command[-2], 'projectiq@127.0.0.1')
+                self.assertEqual(shlex.split(command[-1]),
+                                 ['sudo', '-n', '/usr/bin/mysql', '-e', 'SELECT 1;'])
+                self.assertEqual(command[-1], "sudo -n /usr/bin/mysql -e 'SELECT 1;'")
+
+    def test_remote_shell_metacharacters_are_quoted_as_data(self):
+        # Regression: shell metacharacters cannot escape the argument boundary.
+        with tempfile.TemporaryDirectory() as tmp:
+            ssh = SSHControl({}, Path(tmp), 2222, Path(tmp) / 'ephemeral_key')
+            payload = "SELECT 'a'; echo should_not_execute"
+            with patch('projectiq_executioner.phase2.vm_worker.qemu._tool', return_value='ssh'), \
+                 patch('projectiq_executioner.phase2.vm_worker.qemu._bounded') as execute:
+                execute.return_value.returncode = 0
+                ssh.ssh('/usr/bin/mysql', '-e', payload)
+                command = execute.call_args.args[0]
+                self.assertEqual(shlex.split(command[-1]), ['/usr/bin/mysql', '-e', payload])
+                self.assertEqual(command[-2], 'projectiq@127.0.0.1')
+
+
+class MySQLReadinessTest(unittest.TestCase):
+    def test_waits_for_real_mysql_query_not_just_systemctl_start(self):
+        ssh = MagicMock()
+        ssh.ssh.side_effect = [
+            SimpleNamespace(returncode=1, stdout=b'', stderr=b'missing socket'),
+            SimpleNamespace(returncode=0, stdout=b'1\n1\n', stderr=b''),
+        ]
+        with patch('projectiq_executioner.phase2.vm_worker.template_bake.time.sleep'):
+            _wait_mysql_ready(ssh, seconds=20)
+        self.assertEqual(ssh.ssh.call_count, 2)
+        self.assertEqual(ssh.ssh.call_args.args,
+                         ('sudo', '-n', '/usr/bin/mysql', '-e', 'SELECT 1;'))
+
+    def test_failure_is_diagnostic_and_cannot_be_treated_as_ready(self):
+        ssh = MagicMock()
+        def mock_ssh(*args, **kwargs):
+            if '/usr/bin/mysql' in args:
+                return SimpleNamespace(returncode=1, stdout=b'',
+                                       stderr=b"Can't connect to local MySQL server through socket")
+            if args[0] == 'systemctl':
+                return SimpleNamespace(returncode=0, stdout=b'ActiveState=failed\n', stderr=b'')
+            if 'journalctl' in args:
+                return SimpleNamespace(returncode=0, stdout=b'mysqld exited\n', stderr=b'')
+            return SimpleNamespace(returncode=2, stdout=b'', stderr=b'not present')
+        ssh.ssh.side_effect = mock_ssh
+        with patch('projectiq_executioner.phase2.vm_worker.template_bake.time.monotonic', side_effect=[100.0, 100.1, 101.0]):
+            with self.assertRaisesRegex(WorkerFailure, 'ActiveState=failed') as failure:
+                _wait_mysql_ready(ssh, seconds=0.1)
+        self.assertIn('mysqld exited', str(failure.exception))
+        self.assertIn('never became ready', str(failure.exception))
+
+    def test_mysql_readiness_window_must_be_positive(self):
+        with self.assertRaisesRegex(WorkerFailure, 'readiness window'):
+            _wait_mysql_ready(MagicMock(), seconds=0)
+
+
 class QemuSecurityContractTest(unittest.TestCase):
     def test_qemu_flags_restrict_guest_network_and_no_host_shared_mounts(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -124,6 +198,14 @@ class QemuSecurityContractTest(unittest.TestCase):
                 self.assertNotIn('-fsdev', args)
                 self.assertNotIn('-chardev', args)
                 vm.stop()
+
+    def test_whpx_smp_boot_compatibility_cap_only_reduces_cpu(self):
+        # A 2-vCPU Ubuntu WHPX guest stalled during SMP boot on the pilot host.
+        self.assertEqual(effective_vm_vcpus({'accelerator': 'whpx'}, 2), 1)
+        self.assertEqual(effective_vm_vcpus({'accelerator': 'whpx'}, 1), 1)
+        self.assertEqual(effective_vm_vcpus({'accelerator': 'kvm'}, 2), 2)
+        with self.assertRaises(WorkerFailure):
+            effective_vm_vcpus({'accelerator': 'whpx'}, 0)
 
     def test_wrong_host_accelerator_fails_closed(self):
         """Mocked launch must still reject KVM on Windows / WHPX on Linux."""
@@ -214,6 +296,107 @@ class QemuSecurityContractTest(unittest.TestCase):
                 worker.stop()
 
 
+class TemplateSealContractTest(unittest.TestCase):
+    def test_seal_script_written_as_lf_bytes_for_linux_systemd(self):
+        # Regression: write_text() translates LF to CRLF on Windows, making
+        # the shebang /bin/sh\r and causing systemd status=203/EXEC.
+        with tempfile.TemporaryDirectory() as tmp:
+            script = Path(tmp) / 'template_seal.sh'
+            digest = _write_seal_script(script)
+            content = script.read_bytes()
+            self.assertTrue(content.startswith(b'#!/bin/sh\n'))
+            self.assertNotIn(b'\r', content)
+            self.assertEqual(content, SEAL_SCRIPT.encode('utf-8'))
+            self.assertEqual(digest, sha256_file(script))
+
+    def test_seal_writer_refuses_non_posix_shebang(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch('projectiq_executioner.phase2.vm_worker.template_bake.SEAL_SCRIPT', '#!/bin/sh\r\necho bad\r\n'):
+            script = Path(tmp) / 'template_seal.sh'
+            with self.assertRaisesRegex(WorkerFailure, 'POSIX LF shebang'):
+                _write_seal_script(script)
+            self.assertFalse(script.exists())
+
+    def test_seal_runs_as_independent_service_not_delayed_timer(self):
+        with patch('projectiq_executioner.phase2.vm_worker.template_bake._ok') as run:
+            _launch_seal(MagicMock())
+        args = run.call_args.args[1:]
+        self.assertEqual(args[:3], ('sudo', '-n', 'systemd-run'))
+        self.assertIn('--no-block', args)
+        self.assertIn('--service-type=exec', args)
+        self.assertNotIn('--on-active=4s', args)
+        self.assertEqual(args[-1], '/usr/local/sbin/projectiq-template-seal')
+        self.assertLess(SEAL_SCRIPT.index('sleep 4'), SEAL_SCRIPT.index('rm -f /etc/sudoers.d/90-cloud-init-users'))
+
+    def test_preseal_serial_probe_fails_closed_when_unobservable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vm = QemuWorker({'base_image': 'base'}, root, 5555, trusted_template_setup=True)
+            with patch('projectiq_executioner.phase2.vm_worker.template_bake._ok'), \
+                 patch('projectiq_executioner.phase2.vm_worker.template_bake.time.monotonic', side_effect=[0, -1, 9]):
+                with self.assertRaisesRegex(WorkerFailure, 'serial seal-stage channel unavailable'):
+                    _check_seal_serial(MagicMock(), vm)
+            (root / 'guest-serial.log').write_text('PROJECTIQ_SEAL_DIAG:serial_ready\n')
+            with patch('projectiq_executioner.phase2.vm_worker.template_bake._ok'):
+                _check_seal_serial(MagicMock(), vm)
+
+    def test_shutdown_timeout_includes_guest_unit_diagnostics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vm = QemuWorker({'base_image': 'base'}, Path(tmp), 5555)
+            vm.proc = MagicMock()
+            vm.proc.poll.return_value = None
+            fake_ssh = MagicMock()
+            fake_ssh.ssh.return_value.returncode = 0
+            fake_ssh.ssh.return_value.stdout = b'ActiveState=failed\nResult=exit-code\n'
+            with self.assertRaisesRegex(WorkerFailure, 'ActiveState=failed'):
+                _wait_qemu_shutdown(vm, timeout=0, ssh=fake_ssh)
+
+    def test_seal_clears_privileges_before_poweroff_and_reports_stages(self):
+        self.assertLess(SEAL_SCRIPT.index('rm -f /etc/sudoers.d/90-cloud-init-users'),
+                        SEAL_SCRIPT.index('seal_stage poweroff_requested'))
+        self.assertLess(SEAL_SCRIPT.index('cloud-init clean --logs --seed'),
+                        SEAL_SCRIPT.index('seal_stage poweroff_requested'))
+
+    def test_shutdown_requires_seal_progress_even_when_qemu_exits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            vm = QemuWorker({'base_image': str(root / 'base.qcow2')}, root, 5555)
+            vm.proc = MagicMock()
+            vm.proc.poll.return_value = 0
+            vm.proc.returncode = 0
+            (root / 'guest-serial.log').write_text('PROJECTIQ_SEAL_STAGE:started\n')
+            with self.assertRaisesRegex(WorkerFailure, 'without confirmed seal completion'):
+                _wait_qemu_shutdown(vm, timeout=1)
+            (root / 'guest-serial.log').write_text('PROJECTIQ_SEAL_STAGE:poweroff_requested\n')
+            _wait_qemu_shutdown(vm, timeout=1)
+
+    def test_trusted_template_captures_serial_but_regular_vm_does_not(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            seed = root / 'seed.iso'
+            seed.write_bytes(b'fake')
+            base = root / 'base.qcow2'
+            base.write_bytes(b'fake')
+            cfg = {'base_image': str(base), 'accelerator': 'kvm'}
+            fake_proc = MagicMock()
+            fake_proc.poll.return_value = 0
+            with patch('projectiq_executioner.phase2.vm_worker.qemu.sys.platform', 'linux'), \
+                 patch('projectiq_executioner.phase2.vm_worker.qemu._tool', side_effect=lambda n, p: p or n), \
+                 patch('projectiq_executioner.phase2.vm_worker.qemu._bounded') as cmd, \
+                 patch('projectiq_executioner.phase2.vm_worker.qemu.subprocess.Popen', return_value=fake_proc) as popen:
+                cmd.return_value.returncode = 0
+                vm = QemuWorker(cfg, root, 50505, trusted_template_setup=True)
+                vm.start(seed)
+                args = popen.call_args.args[0]
+                self.assertTrue(args[args.index('-serial') + 1].startswith('file:'))
+                vm.stop()
+                vm = QemuWorker(cfg, root, 50505)
+                vm.start(seed)
+                args = popen.call_args.args[0]
+                self.assertEqual(args[args.index('-serial') + 1], 'none')
+                vm.stop()
+
+
 class OfflineGuestTest(unittest.TestCase):
     def test_static_html_guest_end_to_end_no_vm(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -256,6 +439,39 @@ class OfflineGuestTest(unittest.TestCase):
                            "CREATE TABLE users(id INT NOT NULL);\nINSERT INTO users VALUES (1);", 'utf-8')
             self.assertIn(b'CREATE TABLE', _check_sql(sql))
 
+    def test_mysql_sql_guard_accepts_bom_utf16_dump_and_normalizes_to_utf8(self):
+        sample = "-- MySQL dump\nCREATE TABLE users(id INT NOT NULL);\nINSERT INTO users VALUES (1);\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            for encoding in ('utf-16', 'utf-16-be'):
+                with self.subTest(encoding=encoding):
+                    sql = Path(tmp) / 'schema.sql'
+                    if encoding == 'utf-16-be':
+                        data = b'\xfe\xff' + sample.encode('utf-16-be')
+                    else:
+                        data = sample.encode('utf-16')
+                    sql.write_bytes(data)
+                    self.assertEqual(_check_sql(sql), sample.encode('utf-8'))
+
+    def test_mysql_sql_guard_blocks_unsafe_utf16_commands(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sql = Path(tmp) / 'schema.sql'
+            sql.write_bytes('CREATE USER attacker IDENTIFIED BY \'bad\';'.encode('utf-16'))
+            with self.assertRaisesRegex(GuestFailure, 'outside the pilot allowlist'):
+                _check_sql(sql)
+
+    def test_mysql_sql_guard_rejects_binary_and_malformed_encodings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            sql = Path(tmp) / 'schema.sql'
+            for data in (b'CREATE TABLE users(id INT);\x00',
+                         'CREATE TABLE users(id INT);'.encode('utf-16-le'),
+                         b'\xff\xfe\x41',
+                         b'\xff\xffCREATE TABLE users(id INT);',
+                         b'\xff\xfe\x00\x00'):
+                with self.subTest(data=data[:16]):
+                    sql.write_bytes(data)
+                    with self.assertRaises(GuestFailure):
+                        _check_sql(sql)
+
     def test_mysql_sql_guard_blocks_escaping_commands(self):
         for statement in ('CREATE USER attacker IDENTIFIED BY \'x\';',
                           'SELECT * INTO OUTFILE \'/tmp/pwn\' FROM users;',
@@ -267,6 +483,49 @@ class OfflineGuestTest(unittest.TestCase):
                 f.write_text(statement, 'utf-8')
                 with self.assertRaises(GuestFailure):
                     _check_sql(f)
+
+    def test_guest_mysql_runtime_waits_for_startup(self):
+        calls = []
+        def delayed_mysql(args, **kwargs):
+            calls.append(args)
+            if len(calls) < 3:
+                return SimpleNamespace(returncode=1, stdout=b'',
+                                       stderr=b"Can't connect to local MySQL server")
+            return SimpleNamespace(returncode=0, stdout=b'1\n', stderr=b'')
+        with patch('projectiq_executioner.phase2.vm_worker.guest_agent._trusted_process',
+                   side_effect=delayed_mysql), \
+             patch('projectiq_executioner.phase2.vm_worker.guest_agent.time.sleep'):
+            _wait_mysql_runtime_ready(seconds=45)
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(calls[0][-2:], ['-e', 'SELECT 1;'])
+
+    def test_guest_mysql_runtime_never_bypasses_sudo_restriction(self):
+        def denied(args, **kwargs):
+            return SimpleNamespace(returncode=1, stdout=b'',
+                                   stderr=b'sudo: a password is required')
+        with patch('projectiq_executioner.phase2.vm_worker.guest_agent._trusted_process',
+                   side_effect=denied), \
+             patch('projectiq_executioner.phase2.vm_worker.guest_agent.time.sleep') as sleep:
+            with self.assertRaisesRegex(GuestFailure, 'admin permission unavailable'):
+                _wait_mysql_runtime_ready(seconds=45)
+            sleep.assert_not_called()
+
+    def test_guest_mysql_bootstrap_stage_errors_do_not_expose_passwords(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            (base / 'schema.sql').write_text('CREATE TABLE users(id INT);', 'utf-8')
+            statements = []
+            def fake_process(args, **kwargs):
+                if args[-2:] == ['-e', 'SELECT 1;']:
+                    return SimpleNamespace(returncode=0, stdout=b'1\n', stderr=b'')
+                statements.append(args[-1])
+                return SimpleNamespace(returncode=1, stdout=b'', stderr=b'secret-info')
+            with patch('projectiq_executioner.phase2.vm_worker.guest_agent._trusted_process',
+                       side_effect=fake_process):
+                with self.assertRaisesRegex(GuestFailure, 'bootstrap failed at database') as exc:
+                    _provision_mysql(base, 'schema.sql')
+            self.assertEqual(len(statements), 1)
+            self.assertNotIn('secret-info', str(exc.exception))
 
     def test_generic_php_pdo_rewrite_only_guest_copy(self):
         with tempfile.TemporaryDirectory() as tmp:

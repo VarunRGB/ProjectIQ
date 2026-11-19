@@ -17,7 +17,7 @@ from ...models import RepositorySource
 from ...safe_archive import extract_snapshot
 from .contracts import VMPlanError, build_vm_plan, load_json
 from .qemu import (QemuWorker, SSHControl, WorkerFailure, _free_loopback_port,
-                   make_nocloud_iso, make_ssh_key, verify_host_toolchain)
+                   effective_vm_vcpus, make_nocloud_iso, make_ssh_key, verify_host_toolchain)
 
 
 def load_config(path: Path) -> dict:
@@ -100,7 +100,8 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             seed = make_nocloud_iso(work, pubkey, 'projectiq-' + uuid.uuid4().hex)
             port = _free_loopback_port()
             limits = candidate['vm_limits']
-            worker = QemuWorker(config, work, port, ram_mib=limits['ram_mib'], cpus=limits['vcpu'])
+            worker = QemuWorker(config, work, port, ram_mib=limits['ram_mib'],
+                                cpus=effective_vm_vcpus(config, limits['vcpu']))
             worker.start(seed)
             vm_started = True
             def expire():
@@ -140,6 +141,13 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'SQL binary content is not supported',
                 'SQL dump uses operations outside the pilot allowlist',
                 'MySQL disposable database bootstrap failed',
+                'MySQL guest admin permission unavailable',
+                'MySQL service not ready before bootstrap',
+                'MySQL bootstrap failed at database',
+                'MySQL bootstrap failed at local_user',
+                'MySQL bootstrap failed at loopback_user',
+                'MySQL bootstrap failed at local_grant',
+                'MySQL bootstrap failed at loopback_grant',
                 'Schema import failed (SQL compatibility or permissions)',
                 'SQL import produced no accessible tables',
                 'PHP PDO failed to connect to disposable MySQL',

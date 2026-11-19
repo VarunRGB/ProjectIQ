@@ -125,13 +125,48 @@ def _check_sql(path: Path) -> bytes:
     if not path.is_file() or path.stat().st_size > 5_000_000:
         raise GuestFailure('Expected one bounded SQL dump')
     contents = path.read_bytes()
-    if b'\x00' in contents:
+    # MySQL dumps may be UTF-16 with a byte-order mark (for example,
+    # exports produced by a Windows client). A byte-level NUL check rejects
+    # valid UTF-16 text, so decode *strictly* before checking text content.
+    # Require the BOM for UTF-16; do not guess encodings for binary inputs.
+    encoding = 'utf-16' if contents.startswith((b'\xff\xfe', b'\xfe\xff')) else 'utf-8-sig'
+    try:
+        decoded = contents.decode(encoding)
+    except UnicodeError as exc:
+        raise GuestFailure('SQL dump text encoding is not supported') from exc
+    if '\x00' in decoded:
         raise GuestFailure('SQL binary content is not supported')
-    decoded = contents.decode('utf-8-sig')
     # MySQL mysqldump version comments are accepted but the regex also scans them.
     if DENIED_SQL.search(decoded):
         raise GuestFailure('SQL dump uses operations outside the pilot allowlist')
     return decoded.encode('utf-8')
+
+
+def _wait_mysql_runtime_ready(*, seconds: int = 45) -> None:
+    """Wait for the sealed guest's MySQL socket and local admin access.
+
+    SSH/cloud-init can become ready before mysqld on a cold single-vCPU VM.
+    The runtime account is permitted to invoke ONLY /usr/bin/mysql via sudo;
+    do not start services or expand its sudo permissions here.
+    """
+    if seconds <= 0:
+        raise GuestFailure('Invalid MySQL readiness window')
+    deadline = time.monotonic() + seconds
+    while True:
+        result = _trusted_process(['sudo', '-n', '/usr/bin/mysql', '--batch',
+                                   '--skip-column-names', '-e', 'SELECT 1;'], timeout=10)
+        if result.returncode == 0 and result.stdout.strip() == b'1':
+            return
+        # Distinguish missing runtime privilege from a service that is still
+        # starting, without returning shell output or credentials to the host.
+        stderr = result.stderr.decode('utf-8', errors='replace').lower()
+        if ('not in the sudoers' in stderr or 'not allowed to execute' in stderr
+                or 'a password is required' in stderr):
+            raise GuestFailure('MySQL guest admin permission unavailable')
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise GuestFailure('MySQL service not ready before bootstrap')
+        time.sleep(min(2, remaining))
 
 
 def _provision_mysql(checkout: Path, schema_relpath: str) -> tuple[dict, str]:
@@ -139,18 +174,26 @@ def _provision_mysql(checkout: Path, schema_relpath: str) -> tuple[dict, str]:
     # Database credentials are generated per VM and never returned to the host.
     sql_path = checkout.joinpath(*PurePosixPath(schema_relpath).parts)
     sql_data = _check_sql(sql_path)
+    # Readiness was verified in the trusted template baker, but each fresh
+    # disposable boot must wait for MySQL independently.
+    _wait_mysql_runtime_ready()
     passwd = secrets.token_urlsafe(27)
     dbname = 'projectiq_run'
     username = 'projectiq_app'
-    # String values here are generated locally, not copied from student code.
-    admin = ("CREATE DATABASE `projectiq_run` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci; "
-             f"CREATE USER '{username}'@'localhost' IDENTIFIED BY '{passwd}'; "
-             f"CREATE USER '{username}'@'127.0.0.1' IDENTIFIED BY '{passwd}'; "
-             f"GRANT ALL ON `{dbname}`.* TO '{username}'@'localhost'; "
-             f"GRANT ALL ON `{dbname}`.* TO '{username}'@'127.0.0.1';")
-    resp = _trusted_process(['sudo', '-n', '/usr/bin/mysql', '--batch', '--skip-column-names', '-e', admin])
-    if resp.returncode:
-        raise GuestFailure('MySQL disposable database bootstrap failed')
+    # Report which trusted administrative step fails, never its SQL text:
+    # CREATE USER contains a per-VM password that must stay guest-private.
+    admin_steps = (
+        ('database', 'CREATE DATABASE `projectiq_run` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;'),
+        ('local_user', f"CREATE USER '{username}'@'localhost' IDENTIFIED BY '{passwd}';"),
+        ('loopback_user', f"CREATE USER '{username}'@'127.0.0.1' IDENTIFIED BY '{passwd}';"),
+        ('local_grant', f"GRANT ALL ON `{dbname}`.* TO '{username}'@'localhost';"),
+        ('loopback_grant', f"GRANT ALL ON `{dbname}`.* TO '{username}'@'127.0.0.1';"),
+    )
+    for stage, statement in admin_steps:
+        resp = _trusted_process(['sudo', '-n', '/usr/bin/mysql', '--batch',
+                                 '--skip-column-names', '-e', statement])
+        if resp.returncode:
+            raise GuestFailure(f'MySQL bootstrap failed at {stage}')
     env = dict(os.environ)
     env.update({'PROJECTIQ_DB_HOST': '127.0.0.1', 'PROJECTIQ_DB_NAME': dbname,
                 'PROJECTIQ_DB_USER': username, 'PROJECTIQ_DB_PASSWORD': passwd})
