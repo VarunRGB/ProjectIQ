@@ -671,6 +671,277 @@ def prepare_npm_cache(request_path: Path, *, base_dir: Path = Path('/home/projec
             'node_version': version, 'notes': ['Offline npm cache archived; no student scripts executed']}
 
 
+# D2 Python/SQLite pilot: invoked only in the disposable Linux guest.
+# pip is imported directly from a SHA-pinned wheel, not installed into Ubuntu.
+_PYTHON_SHA = re.compile(r'^[0-9a-f]{64}$')
+_PYTHON_REQ = re.compile(r'^([A-Za-z][A-Za-z0-9._-]{0,63})==([0-9]+(?:\.[0-9]+){1,3}(?:[a-zA-Z0-9.]*)?)$')
+_PYTHON_WHEEL = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.+\-]{0,180}\.whl$')
+_PIP_WHEEL_FILE = 'pip-25.2-py3-none-any.whl'
+
+
+def _check_python_requirements(root: Path, sha256: str, framework: str) -> Path:
+    """Conservative single-file requirements: pinned versions, no pip options or URLs."""
+    req = root / 'requirements.txt'
+    if (not isinstance(sha256, str) or not _PYTHON_SHA.fullmatch(sha256)
+            or framework not in ('flask', 'fastapi') or not req.is_file()
+            or req.is_symlink() or req.stat().st_size > 16_000):
+        raise GuestFailure('PYTHON_WEB_REQUIREMENTS_UNSUPPORTED')
+    content = req.read_bytes()
+    if _sha256(req) != sha256:
+        raise GuestFailure('PYTHON_WEB_REQUIREMENTS_HASH_MISMATCH')
+    try:
+        lines = content.decode('utf-8-sig').splitlines()
+    except UnicodeError as exc:
+        raise GuestFailure('PYTHON_WEB_REQUIREMENTS_UNSUPPORTED') from exc
+    packages = set()
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith('#'):
+            continue
+        match = _PYTHON_REQ.fullmatch(line)
+        if not match:
+            raise GuestFailure('PYTHON_WEB_REQUIREMENTS_UNSUPPORTED')
+        name = re.sub('[-_.]+', '-', match.group(1)).lower()
+        if name in packages:
+            raise GuestFailure('PYTHON_WEB_REQUIREMENTS_UNSUPPORTED')
+        packages.add(name)
+    if (not 1 <= len(packages) <= 25 or framework not in packages
+            or framework == 'fastapi' and 'uvicorn' not in packages):
+        raise GuestFailure('PYTHON_WEB_REQUIREMENTS_UNSUPPORTED')
+    return req
+
+
+def _python_guest_root(checkout: Path, req: dict) -> Path:
+    root_rel = req.get('project_root')
+    if not (root_rel == '.' or isinstance(root_rel, str) and
+            re.fullmatch(r'[A-Za-z0-9_./-]{1,180}', root_rel) and
+            not any(p in ('.', '..', '') for p in root_rel.split('/'))):
+        raise GuestFailure('PYTHON_WEB_INVALID_PROJECT_ROOT')
+    root = checkout if root_rel == '.' else checkout.joinpath(*PurePosixPath(root_rel).parts)
+    if not root.is_dir():
+        raise GuestFailure('PYTHON_WEB_INVALID_PROJECT_ROOT')
+    return root
+
+
+def _check_guest_python312() -> None:
+    if sys.version_info[:2] != (3, 12):
+        raise GuestFailure('PYTHON_WEB_RUNTIME_VERSION_MISMATCH')
+
+
+def _python_pip_wheel(base: Path, req: dict) -> Path:
+    pip_file = base / 'python_pip.whl'
+    expected = req.get('pip_sha256')
+    if (not isinstance(expected, str) or not _PYTHON_SHA.fullmatch(expected)
+            or not pip_file.is_file() or pip_file.stat().st_size > 5_000_000
+            or _sha256(pip_file) != expected):
+        raise GuestFailure('PYTHON_WEB_PIP_BOOTSTRAP_INVALID')
+    try:
+        with zipfile.ZipFile(pip_file) as z:
+            names = set(z.namelist())
+            if (len(names) > 4000 or 'pip/__main__.py' not in names
+                    or 'pip/__init__.py' not in names
+                    or not any(n.startswith('pip-25.2.dist-info/') for n in names)):
+                raise GuestFailure('PYTHON_WEB_PIP_BOOTSTRAP_INVALID')
+    except zipfile.BadZipFile as exc:
+        raise GuestFailure('PYTHON_WEB_PIP_BOOTSTRAP_INVALID') from exc
+    return pip_file
+
+
+def _python_pip_env(base: Path, pip_wheel: Path) -> dict:
+    """No host or project Python/pip environment variables; distinct config scope."""
+    return {'PATH': '/usr/bin:/bin', 'HOME': str(base),
+            'PYTHONPATH': str(pip_wheel), 'PYTHONNOUSERSITE': '1',
+            'PYTHONDONTWRITEBYTECODE': '1', 'PIP_CONFIG_FILE': '/dev/null',
+            'PIP_DISABLE_PIP_VERSION_CHECK': '1', 'LC_ALL': 'C.UTF-8'}
+
+
+def _verify_python_pip(base: Path, pip_wheel: Path) -> dict:
+    env = _python_pip_env(base, pip_wheel)
+    check = _trusted_process(['/usr/bin/python3', '-m', 'pip', '--version'],
+                             timeout=15, env=env)
+    if check.returncode or not check.stdout.startswith(b'pip 25.2 '):
+        raise GuestFailure('PYTHON_WEB_PIP_VERSION_MISMATCH')
+    return env
+
+
+def _check_python_entry(root: Path, framework: str) -> None:
+    entry = root / ('main.py' if framework == 'fastapi' else 'app.py')
+    if not entry.is_file() or entry.is_symlink() or entry.stat().st_size > 150_000:
+        raise GuestFailure('PYTHON_WEB_ENTRYPOINT_UNSUPPORTED')
+    try:
+        body = entry.read_text('utf-8-sig')
+    except UnicodeError as exc:
+        raise GuestFailure('PYTHON_WEB_ENTRYPOINT_UNSUPPORTED') from exc
+    marker = 'FastAPI' if framework == 'fastapi' else 'Flask'
+    if not re.search(r'\bapp\s*=\s*' + marker + r'\s*\(', body):
+        raise GuestFailure('PYTHON_WEB_ENTRYPOINT_UNSUPPORTED')
+
+
+def _unpack_python_wheelhouse(archive: Path, into: Path) -> list[Path]:
+    if not archive.is_file() or not 0 < archive.stat().st_size <= 120_000_000:
+        raise GuestFailure('PYTHON_WEB_WHEELHOUSE_INVALID')
+    into.mkdir(mode=0o700)
+    files = []
+    total = 0
+    seen = set()
+    try:
+        with zipfile.ZipFile(archive) as z:
+            infos = z.infolist()
+            if not 1 <= len(infos) <= 250:
+                raise GuestFailure('PYTHON_WEB_WHEELHOUSE_INVALID')
+            for entry in infos:
+                if entry.is_dir() and entry.filename == 'wheels/':
+                    continue
+                name = entry.filename
+                if (not name.startswith('wheels/') or name.count('/') != 1
+                        or not _PYTHON_WHEEL.fullmatch(name[7:])
+                        or entry.is_dir() or entry.flag_bits & 1
+                        or stat.S_IFMT(entry.external_attr >> 16) not in (0, stat.S_IFREG)
+                        or entry.file_size > 35_000_000 or entry.file_size <= 0
+                        or name.casefold() in seen):
+                    raise GuestFailure('PYTHON_WEB_WHEELHOUSE_INVALID')
+                seen.add(name.casefold())
+                total += entry.file_size
+                if total > 180_000_000:
+                    raise GuestFailure('PYTHON_WEB_WHEELHOUSE_INVALID')
+                target = into / name[7:]
+                with z.open(entry) as source, target.open('xb') as dest:
+                    copied = 0
+                    while block := source.read(65536):
+                        copied += len(block)
+                        if copied > entry.file_size:
+                            raise GuestFailure('PYTHON_WEB_WHEELHOUSE_INVALID')
+                        dest.write(block)
+                    if copied != entry.file_size:
+                        raise GuestFailure('PYTHON_WEB_WHEELHOUSE_INVALID')
+                files.append(target)
+    except (OSError, zipfile.BadZipFile, RuntimeError) as exc:
+        raise GuestFailure('PYTHON_WEB_WHEELHOUSE_INVALID') from exc
+    if not files:
+        raise GuestFailure('PYTHON_WEB_WHEELHOUSE_INVALID')
+    return files
+
+
+def prepare_python_wheelhouse(request_path: Path, *, base_dir: Path = Path('/home/projectiq')) -> dict:
+    """Operator-approved, networked, fetch-only VM. Only wheel downloads."""
+    req = json.loads(request_path.read_text('utf-8'))
+    if (req.get('operation') != 'prepare_python_wheels'
+            or req.get('adapter') != 'python_web_offline_v1'
+            or req.get('python_version') != '3.12'
+            or req.get('python_framework') not in ('flask', 'fastapi')):
+        raise GuestFailure('PYTHON_WEB_INVALID_REQUEST')
+    _check_guest_python312()
+    snapshot = base_dir / 'snapshot.zip'
+    if not snapshot.is_file() or snapshot.stat().st_size > 30_000_000:
+        raise GuestFailure('Pinned snapshot missing or oversized')
+    checkout = safe_extract(snapshot, base_dir / 'checkout')
+    root = _python_guest_root(checkout, req)
+    requirements = _check_python_requirements(root, req.get('requirements_sha256'),
+                                             req['python_framework'])
+    _check_python_entry(root, req['python_framework'])
+    pip_file = _python_pip_wheel(base_dir, req)
+    env = _verify_python_pip(base_dir, pip_file)
+    wheels = base_dir / 'python-wheels'
+    wheels.mkdir(mode=0o700)
+    command = ['/usr/bin/python3', '-m', 'pip', '--isolated', 'download',
+               '--only-binary=:all:', '--no-cache-dir', '--disable-pip-version-check',
+               '--dest', str(wheels), '--index-url', 'https://pypi.org/simple',
+               '-r', str(requirements)]
+    result = _trusted_process(command, timeout=210, env=env, cwd=base_dir)
+    if result.returncode:
+        # Do not send package names, URLs, logs or requirement contents to host.
+        raise GuestFailure('PYTHON_WEB_WHEEL_DOWNLOAD_FAILED')
+    members = sorted(wheels.iterdir())
+    if not members or len(members) > 150 or any(
+        not p.is_file() or p.is_symlink() or not _PYTHON_WHEEL.fullmatch(p.name)
+        or not 0 < p.stat().st_size <= 35_000_000 for p in members
+    ) or sum(p.stat().st_size for p in members) > 180_000_000:
+        raise GuestFailure('PYTHON_WEB_WHEELHOUSE_INVALID')
+    archive = base_dir / 'python_wheelhouse.zip'
+    with zipfile.ZipFile(archive, 'x', compression=zipfile.ZIP_DEFLATED,
+                         compresslevel=5, allowZip64=False) as z:
+        for member in members:
+            z.write(member, arcname='wheels/' + member.name)
+    if archive.stat().st_size > 120_000_000:
+        raise GuestFailure('PYTHON_WEB_WHEELHOUSE_INVALID')
+    return {'status': 'PYTHON_WHEELHOUSE_PREPARED',
+            'python_version': '3.12', 'framework': req['python_framework'],
+            'requirements_sha256': req['requirements_sha256'],
+            'wheelhouse_sha256': _sha256(archive),
+            'notes': ['Offline Python wheelhouse prepared; no project installed or executed']}
+
+
+def _prepare_python_web(checkout: Path, base_dir: Path, req: dict,
+                        *, port: int = 8765) -> tuple[list[str], dict, str]:
+    if (req.get('adapter') != 'python_web_offline_v1' or req.get('python_version') != '3.12'
+            or req.get('python_framework') not in ('flask', 'fastapi')):
+        raise GuestFailure('PYTHON_WEB_INVALID_REQUEST')
+    _check_guest_python312()
+    root = _python_guest_root(checkout, req)
+    framework = req['python_framework']
+    requirements = _check_python_requirements(root, req.get('requirements_sha256'), framework)
+    _check_python_entry(root, framework)
+    pip_wheel = _python_pip_wheel(base_dir, req)
+    env = _verify_python_pip(base_dir, pip_wheel)
+    expected = req.get('wheelhouse_sha256')
+    archive = base_dir / 'python_wheelhouse.zip'
+    if (not isinstance(expected, str) or not _PYTHON_SHA.fullmatch(expected)
+            or not archive.is_file() or _sha256(archive) != expected):
+        raise GuestFailure('PYTHON_WEB_WHEELHOUSE_HASH_MISMATCH')
+    wheels = base_dir / 'python-wheels'
+    _unpack_python_wheelhouse(archive, wheels)
+    archive.unlink(missing_ok=True)
+    target = base_dir / 'python-site'
+    target.mkdir(mode=0o700)
+    cmd = ['/usr/bin/python3', '-m', 'pip', '--isolated', 'install',
+           '--no-index', '--find-links', str(wheels), '--no-cache-dir',
+           '--only-binary=:all:', '--no-compile', '--disable-pip-version-check',
+           '--target', str(target), '-r', str(requirements)]
+    result = _trusted_process(cmd, timeout=150, env=env, cwd=base_dir)
+    if result.returncode:
+        raise GuestFailure('PYTHON_WEB_OFFLINE_DEPENDENCY_INSTALL_FAILED')
+    env = {**env, 'PYTHONPATH': str(target), 'PYTHONUNBUFFERED': '1'}
+    check = _trusted_process(['/usr/bin/python3', '-c',
+                              'import sqlite3; import flask' if framework == 'flask'
+                              else 'import sqlite3; import fastapi, uvicorn'],
+                             timeout=15, env=env, cwd=base_dir)
+    if check.returncode:
+        raise GuestFailure('PYTHON_WEB_IMPORT_OR_SQLITE_FAILED')
+    if framework == 'flask':
+        program = ['/usr/bin/python3', '-m', 'flask', '--app', 'app', 'run',
+                   '--no-reload', '--host', '127.0.0.1', '--port', str(port)]
+    else:
+        program = ['/usr/bin/python3', '-m', 'uvicorn', 'main:app',
+                   '--host', '127.0.0.1', '--port', str(port), '--workers', '1']
+    # The caller must start in the validated backend root.
+    return program, env, 'Offline Python 3.12 wheels installed; SQLite module available'
+
+
+def _probe_python_web(path: str, framework: str, *, port: int = 8765) -> tuple[int, str]:
+    if path != ('/openapi.json' if framework == 'fastapi' else '/'):
+        raise GuestFailure('PYTHON_WEB_HTTP_PROBE_FAILED')
+    for _ in range(30):
+        try:
+            request = urllib.request.Request('http://127.0.0.1:' + str(port) + path,
+                                             headers={'User-Agent': 'ProjectIQ-Python-Probe'})
+            with urllib.request.urlopen(request, timeout=2) as response:
+                data = response.read(65_536)
+                if response.status != 200 or not data:
+                    continue
+                if framework == 'fastapi':
+                    try:
+                        obj = json.loads(data)
+                    except (ValueError, UnicodeError):
+                        continue
+                    if not isinstance(obj, dict) or 'openapi' not in obj or 'paths' not in obj:
+                        continue
+                return 200, 'HTTP_RESPONSE_OK'
+        except (OSError, urllib.error.URLError, ValueError):
+            pass
+        time.sleep(1)
+    raise GuestFailure('PYTHON_WEB_HTTP_PROBE_FAILED')
+
+
 def _probe_vite_asset(dist: Path, port: int) -> str:
     """Verify a built JS bundle can actually be served, not only index.html."""
     candidates = [p for p in (dist / 'assets').rglob('*.js')
@@ -710,10 +981,10 @@ def _probe(url_path: str, port: int = 8765, deadline: int = 25) -> tuple[int, st
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
-    if adapter not in ('static_html_v1', 'php_mysql_v1', 'node_vite_offline_v1'):
+    if adapter not in ('static_html_v1', 'php_mysql_v1', 'node_vite_offline_v1', 'python_web_offline_v1'):
         raise GuestFailure('Unapproved guest adapter')
     path = req.get('probe_path')
-    if not isinstance(path, str) or not re.fullmatch(r'/[A-Za-z0-9_./-]{1,150}', path) or '..' in path.split('/'):
+    if not isinstance(path, str) or not (path == '/' and adapter == 'python_web_offline_v1' or re.fullmatch(r'/[A-Za-z0-9_./-]{1,150}', path)) or '..' in path.split('/'):
         raise GuestFailure('Invalid readiness path')
     snapshot = base_dir / 'snapshot.zip'
     if not snapshot.is_file() or snapshot.stat().st_size > 30_000_000:
@@ -729,6 +1000,9 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         notes.append(note)
         program = [sys.executable, '-m', 'http.server', str(port), '--bind', '127.0.0.1',
                    '--directory', str(dist)]
+    elif adapter == 'python_web_offline_v1':
+        program, env, note = _prepare_python_web(checkout, base_dir, req, port=port)
+        notes.append(note)
     elif adapter == 'php_mysql_v1':
         schema_path = req.get('schema_path')
         if not isinstance(schema_path, str) or not re.fullmatch(r'[A-Za-z0-9_./-]{1,180}', schema_path) or '..' in schema_path.split('/'):
@@ -742,9 +1016,13 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
     server_log = base_dir / 'server.log'
     with server_log.open('wb') as log:
         server = subprocess.Popen(program, stdin=subprocess.DEVNULL, stdout=log,
-                                  stderr=subprocess.STDOUT, cwd=checkout, env=env, start_new_session=True)
+                                  stderr=subprocess.STDOUT, cwd=(_python_guest_root(checkout, req)
+                                  if adapter == 'python_web_offline_v1' else checkout),
+                                  env=env, start_new_session=True)
     try:
-        status, detail = _probe(path, port=port, deadline=35 if adapter in ('php_mysql_v1', 'node_vite_offline_v1') else 20)
+        status, detail = (_probe_python_web(path, req['python_framework'], port=port)
+                          if adapter == 'python_web_offline_v1' else
+                          _probe(path, port=port, deadline=35 if adapter in ('php_mysql_v1', 'node_vite_offline_v1') else 20))
         if adapter == 'node_vite_offline_v1':
             notes.append(_probe_vite_asset(dist, port))
         result = {'status': 'STARTUP_VERIFIED', 'adapter': adapter, 'http_status': status,
@@ -766,6 +1044,7 @@ def main() -> int:
         request = Path('/home/projectiq/request.json')
         meta = json.loads(request.read_text('utf-8'))
         result = (prepare_npm_cache(request) if meta.get('operation') == 'prepare_npm_cache'
+                  else prepare_python_wheelhouse(request) if meta.get('operation') == 'prepare_python_wheels'
                   else run(request))
     except GuestFailure as exc:
         # Intentionally avoid returning source strings, SQL, credentials or tracebacks.
@@ -775,7 +1054,7 @@ def main() -> int:
     except Exception:
         result = {'status': 'STARTUP_FAILED', 'error_code': 'UNEXPECTED_GUEST_FAILURE'}
     Path('/home/projectiq/result.json').write_text(json.dumps(result, indent=2) + '\n', 'utf-8')
-    return 0 if result['status'] in ('STARTUP_VERIFIED', 'CACHE_PREPARED') else 2
+    return 0 if result['status'] in ('STARTUP_VERIFIED', 'CACHE_PREPARED', 'PYTHON_WHEELHOUSE_PREPARED') else 2
 
 
 if __name__ == '__main__':

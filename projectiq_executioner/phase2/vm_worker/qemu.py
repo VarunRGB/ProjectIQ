@@ -275,7 +275,8 @@ class SSHControl:
 
     def copy_offline_asset(self, local: Path, remote_filename: str, timeout: int = 150) -> None:
         """Transfer only operator-pinned artifacts; never mount a host directory."""
-        limits = {'node_runtime.tar.xz': 65_000_000, 'npm_cache.zip': 170_000_000}
+        limits = {'node_runtime.tar.xz': 65_000_000, 'npm_cache.zip': 170_000_000,
+                  'python_pip.whl': 5_000_000, 'python_wheelhouse.zip': 120_000_000}
         limit = limits.get(remote_filename)
         if limit is None or not Path(local).is_file() or not 0 < Path(local).stat().st_size <= limit:
             raise WorkerFailure('Unapproved or oversized offline runtime asset')
@@ -292,12 +293,16 @@ class SSHControl:
         if result.returncode:
             raise WorkerFailure('Offline runtime artifact transfer failed')
 
-    def receive_offline_cache(self, local: Path, timeout: int = 180) -> None:
+    def receive_offline_cache(self, local: Path, timeout: int = 180,
+                              remote_filename: str = 'npm_cache.zip') -> None:
         """Download only bounded cache data into the throwaway host work directory."""
         import threading
+        limits = {'npm_cache.zip': 170_000_000, 'python_wheelhouse.zip': 120_000_000}
+        if remote_filename not in limits:
+            raise WorkerFailure('Unapproved offline cache destination')
         cmd = [_tool('ssh', self.config.get('ssh_binary')), *self.options(), '-T',
                '-p', str(self.port), 'projectiq@127.0.0.1',
-               shlex.join(['cat', '/home/projectiq/npm_cache.zip'])]
+               shlex.join(['cat', '/home/projectiq/' + remote_filename])]
         proc = None
         expired = threading.Event()
         def kill_if_late():
@@ -317,8 +322,8 @@ class SSHControl:
                     if not data:
                         break
                     total += len(data)
-                    if total > 170_000_000:
-                        raise WorkerFailure('Offline npm cache exceeds transfer limit')
+                    if total > limits[remote_filename]:
+                        raise WorkerFailure('Offline cache exceeds transfer limit')
                     output.write(data)
             if proc.wait(timeout=10) != 0 or expired.is_set() or total == 0:
                 raise WorkerFailure('Unable to retrieve approved offline npm cache')

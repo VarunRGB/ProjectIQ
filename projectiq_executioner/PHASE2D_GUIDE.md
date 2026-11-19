@@ -73,3 +73,12 @@ The existing sealed Phase 2C image, PHP/MySQL adapter and static HTML adapter
 remain supported. No arbitrary student source is authorized; Vite needs a
 pinned reviewed fixture, official Node Linux bundle, SHA-verified cache and
 matching npm lockfile. D1 startup success does not attest isolation.
+
+## D2 offline Python Flask/FastAPI + SQLite pilot (post-D1)
+
+`python_web_offline_v1` adds conditional single-backend Flask/FastAPI planning,
+optional embedded SQLite, SHA-pinned pip 25.2 bootstrapping, PyPI binary-wheel
+preparation in a separately authorized disposable VM, and offline wheel installation
+plus API readiness in the execution VM. See
+[PHASE2D_D2_GUIDE.md](PHASE2D_D2_GUIDE.md). D2's real Windows/WHPX
+integration results must be recorded separately; unit tests are not VM attestation.

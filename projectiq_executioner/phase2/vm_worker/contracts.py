@@ -123,6 +123,32 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
             ])
         else:
             manual_review.append('NODE_VITE_NEEDS_EVIDENCED_VITE_NPM_LOCK_AND_SAFE_ROOT')
+    elif (len(backends) == 1 and backends[0]['family'] == 'python'
+          and not frontends and not others
+          and all(db['family'] == 'sqlite' for db in dbs) and len(dbs) <= 1):
+        # D2: single-service Flask/FastAPI with optionally embedded SQLite.
+        # Runtime and wheelhouse approval remain separate, operator-only gates.
+        root = backends[0]['root']
+        prefix = '' if root == '.' else root + '/'
+        techs = manifest.get('technologies') or []
+        names = {t.get('name', '').lower() for t in techs
+                 if isinstance(t, dict) and isinstance(t.get('name'), str)}
+        frameworks = names & {'flask', 'fastapi'}
+        setup = manifest.get('setup_files') or []
+        if (safe_path(root) is not None and isinstance(setup, list)
+                and prefix + 'requirements.txt' in setup
+                and len(frameworks) == 1):
+            framework = frameworks.pop()
+            adapter = 'python_web_offline_v1'
+            expected_probe = '/openapi.json' if framework == 'fastapi' else '/'
+            manual_review.extend([
+                'D2_PYTHON312_AND_PINNED_PIP_WHEEL_REQUIRED',
+                'D2_REQUIREMENTS_AND_OFFLINE_WHEELHOUSE_SHA256_REQUIRED',
+                'D2_PYTHON_SINGLE_SERVICE_FIXED_ENTRYPOINT_ONLY',
+                'D2_SQLITE_EPHEMERAL_GUEST_FILE_ONLY',
+            ])
+        else:
+            manual_review.append('D2_PYTHON_REQUIRES_SINGLE_FLASK_OR_FASTAPI_AND_REQUIREMENTS')
     if adapter is None:
         manual_review.append('NO_CURATED_VM_GUEST_ADAPTER_FOR_DETECTED_ARCHITECTURE')
 
@@ -139,7 +165,9 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
         'adapter': adapter,
         'probe_path': expected_probe,
         'schema_path': schema,
-        'project_root': frontends[0]['root'] if adapter == 'node_vite_offline_v1' else None,
+        'project_root': (frontends[0]['root'] if adapter == 'node_vite_offline_v1' else
+                         backends[0]['root'] if adapter == 'python_web_offline_v1' else None),
+        'python_framework': framework if adapter == 'python_web_offline_v1' else None,
         'guest_profile': 'ubuntu_template_prebaked_offline',
         'linux_guest_mode': 'single_vm_multiple_local_processes',
         'application_preparation': {
@@ -149,8 +177,8 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
             'docker_probe_ignored_on_vm_path': True,
         },
         'vm_limits': {
-            'vcpu': 2, 'ram_mib': 3072 if adapter in ('php_mysql_v1', 'node_vite_offline_v1') else 1024,
-            'wall_seconds': 480 if adapter == 'node_vite_offline_v1' else (240 if adapter == 'php_mysql_v1' else 140),
+            'vcpu': 2, 'ram_mib': 3072 if adapter in ('php_mysql_v1', 'node_vite_offline_v1') else (2048 if adapter == 'python_web_offline_v1' else 1024),
+            'wall_seconds': 480 if adapter == 'node_vite_offline_v1' else (300 if adapter == 'python_web_offline_v1' else (240 if adapter == 'php_mysql_v1' else 140)),
             'max_snapshot_zip_bytes': 30_000_000,
             'max_output_bytes': 64_000,
         },
@@ -164,7 +192,7 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
         ],
         'limitations': [
             'VM image installation/baking and security acceptance remain operator tasks.',
-            'Only static HTML, curated PHP/MySQL, and offline single-service Vite adapters are implemented.',
+            'Static HTML, curated PHP/MySQL, offline single-service Vite, and conditional offline Flask/FastAPI are implemented.',
             'No Docker daemon is required; Phase 2B Docker probe statuses are legacy data only.',
             'Successful HTTP readiness proves startup only, not application correctness.',
         ],

@@ -16,7 +16,8 @@ from ...github_client import GitHubClient
 from ...models import RepositorySource
 from ...safe_archive import extract_snapshot
 from .contracts import VMPlanError, build_vm_plan, load_json
-from .offline_assets import OfflineAssetError, approved_node_vite_assets
+from .offline_assets import (OfflineAssetError, approved_node_vite_assets,
+                             approved_python_web_assets)
 from .qemu import (QemuWorker, SSHControl, WorkerFailure, _free_loopback_port,
                    effective_vm_vcpus, make_nocloud_iso, make_ssh_key, verify_host_toolchain)
 
@@ -66,9 +67,19 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
     # The Node/Vite branch is opt-in per exact repository SHA. Validate both
     # archives and their hashes before source download or VM startup.
     node_assets = None
+    python_assets = None
     if candidate.get('adapter') == 'node_vite_offline_v1':
         try:
             node_assets = approved_node_vite_assets(config, identity)
+        except OfflineAssetError as exc:
+            result['reason'] = str(exc)
+            _save(result, output)
+            return result
+    if candidate.get('adapter') == 'python_web_offline_v1':
+        try:
+            python_assets = approved_python_web_assets(config, identity)
+            if python_assets['framework'] != candidate.get('python_framework'):
+                raise OfflineAssetError('PYTHON_WEB_FRAMEWORK_PROFILE_MISMATCH')
         except OfflineAssetError as exc:
             result['reason'] = str(exc)
             _save(result, output)
@@ -106,6 +117,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'adapter': candidate['adapter'], 'probe_path': candidate['probe_path'],
                 'schema_path': candidate.get('schema_path'),
                 'project_root': candidate.get('project_root'),
+                'python_framework': candidate.get('python_framework'),
             }
             if node_assets is not None:
                 request.update({
@@ -113,6 +125,13 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                     'node_sha256': node_assets['node_sha256'],
                     'npm_cache_sha256': node_assets['npm_cache_sha256'],
                     'lockfile_sha256': node_assets['lockfile_sha256'],
+                })
+            if python_assets is not None:
+                request.update({
+                    'python_version': python_assets['python_version'],
+                    'requirements_sha256': python_assets['requirements_sha256'],
+                    'wheelhouse_sha256': python_assets['wheelhouse_sha256'],
+                    'pip_sha256': python_assets['pip_sha256'],
                 })
             (work / 'request.json').write_text(json.dumps(request), 'utf-8')
             key, pubkey = make_ssh_key(config, work)
@@ -139,9 +158,12 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             if node_assets is not None:
                 ssh.copy_offline_asset(node_assets['node_tarball'], 'node_runtime.tar.xz')
                 ssh.copy_offline_asset(node_assets['npm_cache_zip'], 'npm_cache.zip')
+            if python_assets is not None:
+                ssh.copy_offline_asset(python_assets['pip_wheel'], 'python_pip.whl')
+                ssh.copy_offline_asset(python_assets['wheelhouse_zip'], 'python_wheelhouse.zip')
             result['execution'] = 'GUEST_AGENT_STARTED'
             command = ssh.ssh('python3', '/home/projectiq/guest_agent.py',
-                              timeout=415 if candidate['adapter'] == 'node_vite_offline_v1' else (125 if candidate['adapter'] == 'php_mysql_v1' else 75))
+                              timeout=415 if candidate['adapter'] == 'node_vite_offline_v1' else (240 if candidate['adapter'] == 'python_web_offline_v1' else (125 if candidate['adapter'] == 'php_mysql_v1' else 75)))
             output_path = work / 'result.json'
             ssh.receive('result.json', output_path)
             guest = load_json(output_path, limit=64_000)
@@ -151,7 +173,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'status': status if status in ('STARTUP_VERIFIED', 'STARTUP_FAILED') else 'INVALID_REPORT',
                 'http_status': guest.get('http_status') if isinstance(guest.get('http_status'), int) else None,
                 'readiness_path': guest.get('readiness_path') if guest.get('readiness_path') == candidate['probe_path'] else None,
-                'readiness': guest.get('readiness') if guest.get('readiness') == 'HTML_RESPONSE_OK' else 'UNVERIFIED',
+                'readiness': (guest.get('readiness') if guest.get('readiness') in ('HTML_RESPONSE_OK', 'HTTP_RESPONSE_OK') else 'UNVERIFIED'),
                 'notes': [x[:160] for x in guest.get('notes', [])[:5]
                           if isinstance(x, str)] if isinstance(guest.get('notes'), list) else [],
             }
@@ -190,6 +212,19 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'NODE_VITE_BUILD_FAILED',
                 'NODE_VITE_BUILD_OUTPUT_MISSING',
                 'NODE_VITE_ASSET_PROBE_FAILED',
+                'PYTHON_WEB_INVALID_REQUEST',
+                'PYTHON_WEB_INVALID_PROJECT_ROOT',
+                'PYTHON_WEB_REQUIREMENTS_UNSUPPORTED',
+                'PYTHON_WEB_REQUIREMENTS_HASH_MISMATCH',
+                'PYTHON_WEB_PIP_BOOTSTRAP_INVALID',
+                'PYTHON_WEB_PIP_VERSION_MISMATCH',
+                'PYTHON_WEB_RUNTIME_VERSION_MISMATCH',
+                'PYTHON_WEB_WHEELHOUSE_HASH_MISMATCH',
+                'PYTHON_WEB_WHEELHOUSE_INVALID',
+                'PYTHON_WEB_OFFLINE_DEPENDENCY_INSTALL_FAILED',
+                'PYTHON_WEB_ENTRYPOINT_UNSUPPORTED',
+                'PYTHON_WEB_IMPORT_OR_SQLITE_FAILED',
+                'PYTHON_WEB_HTTP_PROBE_FAILED',
                 'UNEXPECTED_GUEST_FAILURE',
             }
             if status == 'STARTUP_FAILED':
@@ -197,7 +232,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 result['guest_error_code'] = reported if reported in allowed_guest_errors else 'UNCLASSIFIED_GUEST_FAILURE'
             if status == 'STARTUP_VERIFIED' and command.returncode == 0:
                 result.update(status='STARTUP_VERIFIED', execution='PERFORMED_IN_DISPOSABLE_VM',
-                              readiness='HTTP_200_HTML_PROBE_PASSED')
+                              readiness=('HTTP_200_API_PROBE_PASSED' if candidate['adapter'] == 'python_web_offline_v1' else 'HTTP_200_HTML_PROBE_PASSED'))
             else:
                 result.update(status='STARTUP_FAILED', execution='ATTEMPTED_IN_DISPOSABLE_VM',
                               readiness='NOT_VERIFIED', reason='GUEST_ADAPTER_FAILED')
