@@ -25,7 +25,7 @@ CHECKS = ('user_manager_reachable', 'app_process_inside_slice',
 # This code runs only inside the trusted slice and as the unprivileged app UID.
 # It reads process membership and kernel control files; then attempts limited
 # thread creation, not a fork bomb. Threads are joined before the process exits.
-CHILD = r'''import json,os,threading,time
+CHILD = r'''import json,os,threading,time,resource
 from pathlib import Path
 out={'membership':'', 'memory':'', 'pids':'', 'io':'',
      'workspace_dev':'', 'tamper_denied':False,'thread_denied':False,
@@ -54,6 +54,22 @@ try:
             ('manager', stem.parents[1]),
             ('projectiq', stem.parent),
         ]
+        # Read-only cgroup ownership and topology diagnostic. A user manager
+        # without write access to its subtree_control cannot enable `io`.
+        manager = stem.parents[1]
+        try:
+            st = (manager / 'cgroup.subtree_control').stat()
+            out['manager_control_owner'] = (
+                f'{st.st_uid}:{st.st_gid}:{oct(st.st_mode & 0o777)}'
+            )
+        except OSError as e:
+            out['manager_control_owner'] = type(e).__name__
+        try:
+            out['manager_direct_procs'] = len(
+                (manager / 'cgroup.procs').read_text().splitlines()
+            )
+        except OSError:
+            out['manager_direct_procs'] = -1
 
         def io_flag(group, filename):
             path = group / filename
@@ -69,30 +85,52 @@ try:
         raise
     stat=os.stat('/srv/projectiq-workspace')
     out['workspace_dev']=f'{os.major(stat.st_dev)}:{os.minor(stat.st_dev)}'
-    def event_max():
-        for item in (stem/'pids.events').read_text().splitlines():
+    def event_max(group):
+        path=group/'pids.events'
+        if not path.is_file(): return None
+        for item in path.read_text().splitlines():
             k,_,v=item.partition(' ')
             if k=='max': return int(v)
-        raise ValueError('missing pids events')
-    before=event_max()
+        raise ValueError('missing pids events max')
+    def maybe_int(path):
+        try: return int(path.read_text().strip())
+        except (OSError,ValueError): return None
+    scope=Path('/sys/fs/cgroup',*parts)
+    before=event_max(stem)
+    if before is None: raise FileNotFoundError('slice pids.events missing')
+    scope_before=event_max(scope)
+    out['pids_current_before']=maybe_int(stem/'pids.current')
+    out['scope_pids_max']=(scope/'pids.max').read_text().strip() if (scope/'pids.max').is_file() else 'MISSING'
+    out['nproc_soft_hard']=list(resource.getrlimit(resource.RLIMIT_NPROC))
     try:
         with (stem/'memory.max').open('w') as f: f.write('max')
         out['tamper_denied']=False
     except PermissionError:
         out['tamper_denied']=True
-    # Deliberately exceed a 32-task cgroup using at most 64 short-lived threads.
+    # Hold a bounded number of threads simultaneously. Observe cgroup counts
+    # *before* releasing them, and inspect both parent and scope event counters.
     active=[]
     ready=threading.Event()
     try:
         for i in range(64):
-            t=threading.Thread(target=lambda: ready.wait(2.0), daemon=True)
+            t=threading.Thread(target=ready.wait, daemon=True)
             t.start(); active.append(t)
-    except RuntimeError:
+    except RuntimeError as exc:
         out['thread_denied']=True
+        out['thread_error']=str(exc)[:100]
     finally:
-        ready.set()
-        for t in active: t.join(timeout=2.5)
-    out['pids_events_delta']=event_max()-before
+        out['threads_started']=len(active)
+        try:
+            out['pids_current_held']=maybe_int(stem/'pids.current')
+            out['scope_pids_current_held']=maybe_int(scope/'pids.current')
+            out['pids_events_held_delta']=event_max(stem)-before
+            scope_held=event_max(scope)
+            if scope_before is not None and scope_held is not None:
+                out['scope_pids_events_delta']=scope_held-scope_before
+        finally:
+            ready.set()
+            for t in active: t.join(timeout=2.5)
+    out['pids_events_delta']=event_max(stem)-before
 except Exception as e:
     out['error'] = type(e).__name__
     out.setdefault('error_detail', str(e)[:240])
@@ -110,6 +148,37 @@ def _run(args: list[str], *, timeout: int = 25, env: dict | None = None) -> subp
                           timeout=timeout, check=False, env=env)
 
 
+def _pid_enforcement_evidence(child: dict) -> bool:
+    """Require a rejected thread AND observed kernel task-limit evidence.
+
+    pids.events may be local-only with the cgroup2 pids_localevents mount option.
+    Accept an event in the child scope if its own pids.max is unbounded or
+    strictly higher than the parent's 32-task cap, with the parent at that cap.
+    """
+    if child.get('thread_denied') is not True:
+        return False
+    started = child.get('threads_started')
+    held = child.get('pids_current_held')
+    if type(started) is not int or not 0 <= started < 64:
+        return False
+    if type(held) is not int or not PIDS - 1 <= held <= PIDS:
+        return False
+    parent_events = child.get('pids_events_delta')
+    if type(parent_events) is int and parent_events > 0:
+        return True
+    # A systemd-created scope may have its own generous (numeric) TasksMax.
+    # That limit cannot explain a denial at the 32-task *parent* ceiling when
+    # the scope's limit is strictly larger than the parent's observed ceiling.
+    scope_max = child.get('scope_pids_max')
+    if scope_max != 'max':
+        if (type(scope_max) is not str or len(scope_max) > 12 or
+                not scope_max.isascii() or not scope_max.isdecimal() or
+                int(scope_max) <= PIDS):
+            return False
+    scope_events = child.get('scope_pids_events_delta')
+    return type(scope_events) is int and scope_events > 0
+
+
 def main() -> int:
     r = _result()
     diag = r['diagnostics']
@@ -120,7 +189,16 @@ def main() -> int:
         user_env = dict(os.environ)
         user_env['XDG_RUNTIME_DIR'] = f'/run/user/{uid}'
         user_env['DBUS_SESSION_BUS_ADDRESS'] = f'unix:path=/run/user/{uid}/bus'
-        # cloud-init may still be completing after SSH becomes reachable.
+        # SSH readiness is earlier than cloud-init runcmd completion. The
+        # root-owned marker is emitted only after both managers are reloaded.
+        marker = Path('/run/projectiq-cgroup-bootstrap.ready')
+        for _ in range(45):
+            if marker.is_file():
+                break
+            time.sleep(1)
+        diag['bootstrap_state'] = 'READY' if marker.is_file() else 'NOT_READY'
+        if not marker.is_file():
+            print(json.dumps(r, sort_keys=True)); return 0
         ready = False
         for _ in range(25):
             check = _run(['/usr/bin/systemctl', '--user', 'show', '-P',
@@ -138,6 +216,31 @@ def main() -> int:
         if start.returncode:
             diag['slice_start_error'] = start.stderr.decode('utf-8','replace')[-240:]
             print(json.dumps(r,sort_keys=True)); return 0
+        # Inspect the manager's *effective* properties, not just unit files.
+        # These are read-only and never grant the app user cgroup write access.
+        for label, unit, user in (
+                ('system_user_service', f'user@{uid}.service', False),
+                ('system_user_slice', 'user.slice', False),
+                ('system_uid_slice', f'user-{uid}.slice', False),
+                ('user_probe_slice', SLICE, True)):
+            cmd = ['/usr/bin/systemctl']
+            if user:
+                cmd.append('--user')
+            cmd.extend(['show', unit, '-p', 'IOAccounting', '-p',
+                        'Delegate', '-p', 'DelegateControllers', '-p',
+                        'DisableControllers', '-p', 'DropInPaths'])
+            observed = _run(cmd, timeout=8, env=user_env if user else None)
+            raw = observed.stdout if observed.returncode == 0 else observed.stderr
+            diag[label] = ('rc=' + str(observed.returncode) + '; ' +
+                           raw.decode('utf-8', 'replace')[-280:])[:320]
+        io_view = _run(['/usr/bin/systemctl', '--user', 'show', SLICE,
+                        '-p', 'IOWriteBandwidthMax', '-p', 'IOAccounting',
+                        '-p', 'ControlGroup'], timeout=8, env=user_env)
+        diag['user_probe_io_policy'] = (
+            'rc=' + str(io_view.returncode) + '; ' +
+            (io_view.stdout if io_view.returncode == 0 else io_view.stderr)
+            .decode('utf-8', 'replace')[-320:]
+        )[:350]
         # --scope keeps the command under a systemd-managed scope, in the
         # projectiq-probe.slice parent. sudo can ONLY switch to projectiq_run.
         command = ['/usr/bin/systemd-run', '--user', '--scope', '--quiet',
@@ -157,6 +260,20 @@ def main() -> int:
         diag['app_cgroup_tail'] = str(child.get('membership',''))[-240:]
         if type(child.get('pids_events_delta')) is int:
             diag['pids_events_delta'] = child['pids_events_delta']
+        for key in ('threads_started', 'pids_current_before',
+                    'pids_current_held', 'scope_pids_current_held',
+                    'pids_events_held_delta', 'scope_pids_events_delta'):
+            if type(child.get(key)) is int:
+                diag[key] = child[key]
+        if type(child.get('thread_denied')) is bool:
+            diag['thread_denied'] = child['thread_denied']
+        for key in ('scope_pids_max', 'thread_error'):
+            if type(child.get(key)) is str:
+                diag[key] = child[key][:100]
+        if (type(child.get('nproc_soft_hard')) is list and
+                len(child['nproc_soft_hard']) == 2 and
+                all(type(x) is int for x in child['nproc_soft_hard'])):
+            diag['nproc_soft_hard'] = str(child['nproc_soft_hard'])[:60]
         group = str(child.get('membership', '')).split('/')
         r['checks']['app_process_inside_slice'] = ('PASS' if SLICE in group
                                                         and 'piq-b3b-observe.scope' in group
@@ -166,6 +283,10 @@ def main() -> int:
             diag['child_error_detail'] = str(
                 child.get('error_detail', '')
             )[:240]
+            if type(child.get('manager_control_owner')) is str:
+                diag['manager_control_owner'] = child['manager_control_owner'][:80]
+            if type(child.get('manager_direct_procs')) is int:
+                diag['manager_direct_procs'] = child['manager_direct_procs']
             print(json.dumps(r, sort_keys=True))
             return 0
         r['checks']['memory_max_kernel_value'] = ('PASS' if child.get('memory') == str(MEMORY)
@@ -179,9 +300,8 @@ def main() -> int:
         r['checks']['io_max_workspace_device'] = 'PASS' if io_ok else 'FAIL'
         r['checks']['app_cannot_modify_limits'] = ('PASS' if child.get('tamper_denied') is True
                                                    else 'FAIL')
-        r['checks']['pids_limit_enforced'] = ('PASS' if child.get('thread_denied') is True
-                                               and type(child.get('pids_events_delta')) is int
-                                               and child['pids_events_delta'] > 0 else 'FAIL')
+        r['checks']['pids_limit_enforced'] = ('PASS' if _pid_enforcement_evidence(child)
+                                               else 'FAIL')
     except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as exc:
         diag['probe_error'] = type(exc).__name__
     print(json.dumps(r,sort_keys=True))

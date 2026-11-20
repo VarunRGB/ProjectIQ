@@ -91,7 +91,14 @@ class B3bTests(unittest.TestCase):
         self.assertIn('Delegate=cpu cpuset io memory pids',script)
         self.assertIn('MemoryMax=192M',script)
         self.assertIn('TasksMax=32',script)
-        self.assertIn('IOWriteBandwidthMax=/srv/projectiq-workspace 4M',script)
+        self.assertIn('IOWriteBandwidthMax=/srv/projectiq-workspace 4194304',script)
+        self.assertLess(script.index('/usr/bin/systemctl daemon-reload'),
+                        script.index('/usr/bin/loginctl enable-linger projectiq'))
+        self.assertIn('/usr/bin/systemctl --user daemon-reload', script)
+        self.assertIn('/run/projectiq-cgroup-bootstrap.ready', script)
+        self.assertIn('systemctl restart "user@${uid}.service"', script)
+        self.assertLess(script.index('systemctl restart "user@${uid}.service"'),
+                        script.index('projectiq-cgroup-bootstrap.ready'))
         self.assertNotIn('NOPASSWD',script)
         self.assertIn("  - path: /usr/local/sbin/projectiq-cgroup-probe-bootstrap",config)
 
@@ -108,10 +115,50 @@ class B3bTests(unittest.TestCase):
     def test_probe_no_student_code_and_bounded_thread_attempt(self):
         src = probe.CHILD
         self.assertIn('range(64)',src)
-        self.assertIn("(stem/'io.max')",src)
+        self.assertIn('target=ready.wait',src)
+        self.assertNotIn('ready.wait(2.0)',src)
+        self.assertIn('pids_current_held',src)
+        self.assertIn('scope_pids_events_delta',src)
+        self.assertIn("(stem / 'io.max')",src)
+        self.assertIn('manager_control_owner',src)
+        self.assertIn('manager_direct_procs',src)
         self.assertIn('PermissionError',src)
         self.assertIn('thread_denied',src)
         self.assertNotIn('shell=True',src)
+
+    def test_pid_enforcement_requires_bounded_kernel_evidence(self):
+        base={'thread_denied':True,'threads_started':31,
+              'pids_current_held':32,'scope_pids_max':'max',
+              'pids_events_delta':1,'scope_pids_events_delta':0}
+        self.assertTrue(probe._pid_enforcement_evidence(base))
+        self.assertTrue(probe._pid_enforcement_evidence({**base,
+            'pids_events_delta':0,'scope_pids_events_delta':1}))
+        # Real WHPX Ubuntu observation: parent 32/32 tasks, scope limit 1711,
+        # rejected 31st new thread, local scope event +1, parent event +0.
+        observed={**base, 'threads_started':30,
+                  'pids_current_before':2, 'pids_current_held':32,
+                  'scope_pids_current_held':32,
+                  'scope_pids_max':'1711', 'pids_events_delta':0,
+                  'scope_pids_events_delta':1}
+        self.assertTrue(probe._pid_enforcement_evidence(observed))
+        for invalid_limit in ('32', '16', '0', '-1', 'not-a-limit', '', None):
+            with self.subTest(invalid_limit=invalid_limit):
+                self.assertFalse(probe._pid_enforcement_evidence(
+                    {**observed, 'scope_pids_max':invalid_limit}))
+        self.assertFalse(probe._pid_enforcement_evidence(
+            {**observed, 'scope_pids_events_delta':0}))
+        for mutation in (
+            {'thread_denied':False}, {'threads_started':64},
+            {'pids_current_held':50}, {'pids_current_held':12},
+            {'pids_events_delta':0},
+            {'pids_events_delta':0,'scope_pids_events_delta':1,'scope_pids_max':'16'},
+            {'pids_events_delta':0,'scope_pids_events_delta':0},
+        ):
+            with self.subTest(mutation=mutation):
+                sample={**base,**mutation}
+                if mutation == {'pids_events_delta':0}:
+                    sample['scope_pids_events_delta']=0
+                self.assertFalse(probe._pid_enforcement_evidence(sample))
 
     def test_parse_strict_report_schema(self):
         data={'schema_version':'0.1','checks':{k:'PASS' for k in accept.CHECKS},
@@ -119,6 +166,15 @@ class B3bTests(unittest.TestCase):
         parsed=accept._parse(json.dumps(data).encode())
         self.assertEqual(parsed[1]['scope_exit_code'],0)
         self.assertEqual(len(parsed[1]['scope_error']),350)
+        data['diagnostics'].update(threads_started=31, pids_current_held=32,
+                                   scope_pids_events_delta=1, thread_denied=True,
+                                   nproc_soft_hard='[96, 96]')
+        parsed=accept._parse(json.dumps(data).encode())
+        self.assertEqual(parsed[1]['threads_started'],31)
+        self.assertEqual(parsed[1]['pids_current_held'],32)
+        self.assertIs(parsed[1]['thread_denied'], True)
+        self.assertEqual(parsed[1]['scope_pids_events_delta'],1)
+        self.assertEqual(parsed[1]['nproc_soft_hard'],'[96, 96]')
         self.assertNotIn('secret',parsed[1])
         bad=json.loads(json.dumps(data)); bad['checks']['pids_limit_enforced']=True
         self.assertIsNone(accept._parse(json.dumps(bad).encode()))

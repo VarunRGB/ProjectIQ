@@ -206,13 +206,28 @@ MemoryMax=192M
 TasksAccounting=yes
 TasksMax=32
 IOAccounting=yes
-IOWriteBandwidthMax=/srv/projectiq-workspace 4M
+# Use the same exact bytes as CGROUP_PROBE_IO_BPS; systemd 4M is decimal.
+IOWriteBandwidthMax=/srv/projectiq-workspace 4194304
 EOF
-/usr/bin/loginctl enable-linger projectiq
+# Load system-level drop-ins before linger can start user@UID.service.
 /usr/bin/systemctl daemon-reload
-# A fresh image has no earlier privileged project session that would need
-# terminating; start the user manager AFTER installing its scoped drop-in.
-/usr/bin/systemctl start "user@${uid}.service"
+/usr/bin/loginctl enable-linger projectiq
+# An SSH/PAM login may already have started this user manager before the
+# delegation drop-in was installed. `start` is a no-op for an active manager;
+# show(1) may display new properties without renewing runtime cgroup ownership.
+# This restart is ONLY inside the trusted clean-VM acceptance bootstrap.
+/usr/bin/systemctl restart "user@${uid}.service"
+n=0
+until /usr/sbin/runuser -u projectiq -- /usr/bin/env \
+  "XDG_RUNTIME_DIR=/run/user/${uid}" \
+  "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${uid}/bus" \
+  /usr/bin/systemctl --user daemon-reload; do
+    n=$((n + 1))
+    [ "$n" -lt 15 ] || exit 1
+    sleep 1
+done
+# This root-owned marker means the trusted bootstrap reached its end.
+/usr/bin/touch /run/projectiq-cgroup-bootstrap.ready
 '''
 
 
