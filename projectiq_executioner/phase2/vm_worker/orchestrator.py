@@ -230,6 +230,23 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 result['guest_result']['cgroup_placement'] = placement
             else:
                 result['guest_result']['cgroup_placement'] = {'status': 'NOT_VERIFIED'}
+            # Typed pre-exec handoff observation. Never copy raw PID/argv data.
+            evidence = guest.get('build_launch_evidence')
+            expected_builds = {
+                'node_vite_offline_v1': (1, 1, 0),
+                'node_express_offline_v1': (1, 0, 0),
+                'python_web_offline_v1': (0, 0, 1),
+                'node_fullstack_offline_v1': (2, 1, 0),
+            }.get(candidate['adapter'], (0, 0, 0))
+            required_state = 'PREEXEC_KERNEL_HANDOFF_VERIFIED' if any(expected_builds) else 'NOT_APPLICABLE'
+            if (isinstance(evidence, dict) and
+                    set(evidence) == {'status', 'npm_ci', 'vite_build', 'pip_install'} and
+                    evidence.get('status') == required_state and
+                    tuple(evidence.get(k) if type(evidence.get(k)) is int else None
+                          for k in ('npm_ci', 'vite_build', 'pip_install')) == expected_builds):
+                result['guest_result']['build_launch_evidence'] = evidence
+            else:
+                result['guest_result']['build_launch_evidence'] = {'status': 'NOT_VERIFIED'}
             if candidate['adapter'] == 'node_fullstack_offline_v1':
                 services = guest.get('service_results')
                 if isinstance(services, dict):
@@ -251,8 +268,14 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'MySQL trusted cloud-init bootstrap unavailable',
                 'RUNTIME_PRIVILEGE_BOUNDARY_UNAVAILABLE',
                 'APP_CGROUP_SERVER_PLACEMENT_NOT_VERIFIED',
+                'APP_CGROUP_BUILD_PLACEMENT_NOT_VERIFIED',
+                'APP_CGROUP_BUILD_RESUME_TIMEOUT',
+                'APP_CGROUP_BUILD_EXEC_TIMEOUT',
+                'APP_CGROUP_BUILD_GATE_RELEASE_FAILED',
+                'APP_CGROUP_OTHER_TRUSTED_COMMAND_TIMEOUT',
                 'RUNTIME_SHARED_PATH_UNSUPPORTED',
                 'WORKSPACE_DISK_QUOTA_UNAVAILABLE',
+                'WORKSPACE_BOOTSTRAP_NOT_READY',
                 'WORKSPACE_DISK_QUOTA_EXCEEDED',
                 'MySQL guest admin permission unavailable',
                 'MySQL service not ready before bootstrap',

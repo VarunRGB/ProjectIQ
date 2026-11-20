@@ -148,6 +148,45 @@ if os.environ.get('PROJECTIQ_EVAL_REQUIRED') == '1':
             sys.exit(112)
     except (OSError, ValueError):
         sys.exit(112)
+# Controller's pre-exec handshake for approved build/install commands.
+# The untrusted command has not run; never pause without the verified slice.
+if os.environ.get('PROJECTIQ_ATTEST_PAUSE') == '1':
+    if os.environ.get('PROJECTIQ_EVAL_REQUIRED') != '1':
+        sys.exit(113)
+    import pwd, stat, time
+    _gate = os.environ.get('PROJECTIQ_ATTEST_GATE', '')
+    _prefix = '/home/projectiq/.projectiq-build-release-'
+    if (not _gate.startswith(_prefix) or len(_gate) != len(_prefix) + 32 or
+            any(c not in '0123456789abcdef' for c in _gate[len(_prefix):])):
+        sys.exit(113)
+    try:
+        _controller_uid = pwd.getpwnam('projectiq').pw_uid
+        _home = os.lstat('/home/projectiq')
+        if (not stat.S_ISDIR(_home.st_mode) or _home.st_uid != _controller_uid or
+                _home.st_mode & 0o022):
+            sys.exit(113)
+    except (OSError, KeyError):
+        sys.exit(113)
+    _deadline = time.monotonic() + 28
+    while time.monotonic() < _deadline:
+        try:
+            _release = os.lstat(_gate)
+            if (not stat.S_ISREG(_release.st_mode) or
+                    _release.st_uid != _controller_uid or
+                    _release.st_mode & 0o022 or _release.st_nlink != 1):
+                sys.exit(113)
+            with open(_gate, 'rb') as _r:
+                if _r.read(4) != b'GO\n':
+                    sys.exit(113)
+            break
+        except FileNotFoundError:
+            time.sleep(0.04)
+        except OSError:
+            sys.exit(113)
+    else:
+        sys.exit(113)
+    os.environ.pop('PROJECTIQ_ATTEST_PAUSE', None)
+    os.environ.pop('PROJECTIQ_ATTEST_GATE', None)
 # No shell; the program and arguments originate from the trusted adapter.
 os.execvpe(sys.argv[1], sys.argv[1:], os.environ)
 '''
@@ -158,6 +197,7 @@ os.execvpe(sys.argv[1], sys.argv[1:], os.environ)
 # ext4 disk. Root filesystem /tmp, root QCOW2 and host disk remain distinct
 # security gaps; never claim global guest disk confinement from this check.
 WORKSPACE_PATH = Path('/srv/projectiq-workspace')
+WORKSPACE_READY_MARKER = Path('/run/projectiq-workspace-bootstrap.ready')
 
 
 def _stage_bounded_workspace(request: dict, *, base: Path) -> Path:
@@ -170,11 +210,21 @@ def _stage_bounded_workspace(request: dict, *, base: Path) -> Path:
     mib = request.get('workspace_disk_mib')
     if type(mib) is not int or not 64 <= mib <= 2048:
         raise GuestFailure('WORKSPACE_DISK_QUOTA_UNAVAILABLE')
-    # SSH readiness can precede cloud-init runcmd. Wait only for the trusted
-    # root-owned mount step; never fall back to writing on the root filesystem.
+    # Mount visibility is not completion: the root bootstrap must still
+    # chown/chmod the ext4 root. A separate root-owned marker is published
+    # only AFTER these operations succeed, preventing a startup-time race.
+    # Never accept an unmounted or incorrectly configured workspace.
     until = time.monotonic() + 85
-    while not os.path.ismount(WORKSPACE_PATH) and time.monotonic() < until:
+    while not WORKSPACE_READY_MARKER.is_file() and time.monotonic() < until:
         time.sleep(1)
+    try:
+        marker_stat = WORKSPACE_READY_MARKER.lstat()
+        if (WORKSPACE_READY_MARKER.is_symlink() or
+                not stat.S_ISREG(marker_stat.st_mode) or marker_stat.st_uid != 0 or
+                marker_stat.st_mode & 0o022):
+            raise GuestFailure('WORKSPACE_BOOTSTRAP_NOT_READY')
+    except OSError as exc:
+        raise GuestFailure('WORKSPACE_BOOTSTRAP_NOT_READY') from exc
     if not WORKSPACE_PATH.is_dir() or WORKSPACE_PATH.is_symlink() or not os.path.ismount(WORKSPACE_PATH):
         raise GuestFailure('WORKSPACE_DISK_QUOTA_UNAVAILABLE')
     try:
@@ -417,7 +467,191 @@ def _verify_live_server_process(launch: list[str], command: list[str],
     raise GuestFailure('APP_CGROUP_SERVER_PLACEMENT_NOT_VERIFIED')
 
 
-def _project_command(command: list[str], env: dict | None = None) -> list[str]:
+# B3b Gate 2A.3: trusted controller observations of the stopped pre-exec
+# resource launcher for selected dependency installations and builds. This
+# proves the kernel placement/UID at the exec handoff, not a full post-exec
+# descendant graph or resource-exhaustion behavior.
+_APP_BUILD_HANDOFFS: list[str] = []
+_BUILD_KINDS = frozenset(('npm_ci', 'vite_build', 'pip_install'))
+_BUILD_REQUIRED = {
+    'static_html_v1': {},
+    'php_mysql_v1': {},
+    'node_vite_offline_v1': {'npm_ci': 1, 'vite_build': 1},
+    'node_express_offline_v1': {'npm_ci': 1},
+    'python_web_offline_v1': {'pip_install': 1},
+    'node_fullstack_offline_v1': {'npm_ci': 2, 'vite_build': 1},
+}
+
+
+def _gated_build_pid(unit: str, command: list[str], *, controller_uid: int,
+                      app_uid: int, cgroup_root: Path = Path('/sys/fs/cgroup'),
+                      proc_root: Path = Path('/proc')) -> int | None:
+    """Return only a kernel-verified, SIGSTOPped trusted pre-exec Python PID."""
+    if not re.fullmatch(r'piq-app-[0-9a-f]{16}', unit):
+        return None
+    if not command or any(type(a) is not str or '\x00' in a for a in command):
+        return None
+    group = ('/user.slice/user-{uid}.slice/user@{uid}.service/projectiq.slice/'
+             'projectiq-eval.slice/{unit}.scope').format(uid=controller_uid, unit=unit)
+    args = ['/usr/bin/python3', '-I', '-c', APP_LIMIT_LAUNCHER, *command]
+    wanted = [arg.encode('utf-8') for arg in args]
+    try:
+        scope = cgroup_root.joinpath(*group.strip('/').split('/'))
+        if scope.is_symlink() or not scope.is_dir():
+            return None
+        pids = (scope / 'cgroup.procs').read_text(encoding='ascii').split()
+        if len(pids) > 128:
+            return None
+        for raw in pids:
+            if not raw.isascii() or not raw.isdecimal() or len(raw) > 10:
+                return None
+            pid = int(raw)
+            if pid <= 1:
+                return None
+            try:
+                task = proc_root / raw
+                status = (task / 'status').read_text(encoding='utf-8')[:16000]
+                uid_rows = [line.split()[1:] for line in status.splitlines()
+                            if line.startswith('Uid:')]
+                states = [line.split()[1] for line in status.splitlines()
+                          if line.startswith('State:')]
+                if (len(uid_rows) != 1 or len(uid_rows[0]) != 4 or
+                        any(not v.isdecimal() or int(v) != app_uid for v in uid_rows[0]) or
+                        states != ['S']):
+                    continue
+                cg_rows = [(line.split(':', 2)[2]) for line in
+                           (task / 'cgroup').read_text(encoding='utf-8').splitlines()
+                           if line.startswith('0::')]
+                if cg_rows != [group]:
+                    continue
+                actual = (task / 'cmdline').read_bytes()[:16384].split(b'\x00')
+                if [v for v in actual if v] == wanted:
+                    return pid
+            except (OSError, UnicodeError, ValueError):
+                continue
+        return None
+    except (OSError, UnicodeError, ValueError):
+        return None
+
+
+def _stop_build_scope(unit: str, uid: int) -> None:
+    """Best-effort cleanup on any failed handoff; VM teardown is the backstop."""
+    try:
+        env = dict(os.environ, XDG_RUNTIME_DIR=f'/run/user/{uid}',
+                   DBUS_SESSION_BUS_ADDRESS=f'unix:path=/run/user/{uid}/bus')
+        subprocess.run(['/usr/bin/systemctl', '--user', 'stop', unit + '.scope'],
+                       env=env, timeout=5, stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def _publish_build_release(path: Path) -> None:
+    """Atomic controller-only permission to exec; no stop signals to sudo."""
+    temporary = path.with_name(path.name + '.tmp')
+    try:
+        parent = path.parent.lstat()
+        if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != os.getuid() or
+                parent.st_mode & 0o022 or path.exists() or path.is_symlink()):
+            raise GuestFailure('APP_CGROUP_BUILD_GATE_RELEASE_FAILED')
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0)
+        fd = os.open(temporary, flags, 0o644)
+        try:
+            # Overrides a possibly restrictive SSH/controller umask (e.g. 0077).
+            # App UID can read the marker but cannot write or replace it.
+            os.fchmod(fd, 0o644)
+            if os.write(fd, b'GO\n') != 3:
+                raise OSError('Incomplete release marker')
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(temporary, path)
+    except OSError as exc:
+        raise GuestFailure('APP_CGROUP_BUILD_GATE_RELEASE_FAILED') from exc
+
+
+def _audited_build_process(args: list[str], *, env: dict | None, cwd: Path | None,
+                           input: bytes | None, timeout: int, kind: str) -> subprocess.CompletedProcess:
+    """Verify a waiting, scoped app-UID launcher before atomically releasing it."""
+    if not _APP_CGROUP_ACTIVE or kind not in _BUILD_KINDS:
+        raise GuestFailure('APP_CGROUP_BUILD_PLACEMENT_NOT_VERIFIED')
+    launch = _project_command(args, env, audit_preexec=True)
+    units = [x.partition('=')[2] for x in launch if x.startswith('--unit=')]
+    gates = [x.partition('=')[2] for x in launch if x.startswith('PROJECTIQ_ATTEST_GATE=')]
+    if (len(units) != 1 or not re.fullmatch(r'piq-app-[0-9a-f]{16}', units[0]) or
+            len(gates) != 1 or
+            not re.fullmatch(r'/home/projectiq/\.projectiq-build-release-[0-9a-f]{32}', gates[0])):
+        raise GuestFailure('APP_CGROUP_BUILD_PLACEMENT_NOT_VERIFIED')
+    unit = units[0]
+    gate = Path(gates[0])
+    temporary = gate.with_name(gate.name + '.tmp')
+    controller_uid = os.getuid()
+    try:
+        app_uid = pwd.getpwnam(APP_USER).pw_uid
+        started_at = time.monotonic()
+        child = subprocess.Popen(launch, stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
+    except (OSError, KeyError, AttributeError) as exc:
+        raise GuestFailure('APP_CGROUP_BUILD_PLACEMENT_NOT_VERIFIED') from exc
+    try:
+        deadline = min(started_at + timeout, time.monotonic() + 15)
+        pid = None
+        while time.monotonic() < deadline:
+            pid = _gated_build_pid(unit, args, controller_uid=controller_uid, app_uid=app_uid)
+            if pid is not None or child.poll() is not None:
+                break
+            time.sleep(0.03)
+        if pid is None:
+            raise GuestFailure('APP_CGROUP_BUILD_PLACEMENT_NOT_VERIFIED')
+        # The controller, not the app UID, alone can publish into its 0711 home.
+        # This avoids stopping sudo's monitor process via SIGSTOP/SIGCONT.
+        _publish_build_release(gate)
+        remaining = timeout - (time.monotonic() - started_at)
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(launch, timeout)
+        try:
+            stdout, stderr = child.communicate(input=input, timeout=remaining)
+        except subprocess.TimeoutExpired as exc:
+            raise GuestFailure('APP_CGROUP_BUILD_EXEC_TIMEOUT') from exc
+        if child.returncode == 0:
+            _APP_BUILD_HANDOFFS.append(kind)
+        return subprocess.CompletedProcess(launch, child.returncode, stdout, stderr)
+    except (OSError, subprocess.TimeoutExpired, GuestFailure) as exc:
+        _stop_build_scope(unit, controller_uid)
+        if child.poll() is None:
+            child.kill()
+        try:
+            child.communicate(timeout=3)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        if isinstance(exc, subprocess.TimeoutExpired):
+            raise GuestFailure('APP_CGROUP_BUILD_EXEC_TIMEOUT') from exc
+        if isinstance(exc, GuestFailure):
+            raise
+        raise GuestFailure('APP_CGROUP_BUILD_GATE_RELEASE_FAILED') from exc
+    finally:
+        # Only controller-owned, exact non-user-writable gate paths are used.
+        for path in (gate, temporary):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _build_handoff_report(adapter: str) -> dict:
+    """Require exact expected successful handoffs; no silent missing builds."""
+    expected = _BUILD_REQUIRED.get(adapter)
+    if expected is None:
+        raise GuestFailure('APP_CGROUP_BUILD_PLACEMENT_NOT_VERIFIED')
+    actual = {kind: _APP_BUILD_HANDOFFS.count(kind) for kind in _BUILD_KINDS}
+    if any(actual[k] != expected.get(k, 0) for k in _BUILD_KINDS):
+        raise GuestFailure('APP_CGROUP_BUILD_PLACEMENT_NOT_VERIFIED')
+    return {'status': 'PREEXEC_KERNEL_HANDOFF_VERIFIED' if expected else 'NOT_APPLICABLE',
+            'npm_ci': actual['npm_ci'], 'vite_build': actual['vite_build'],
+            'pip_install': actual['pip_install']}
+
+
+def _project_command(command: list[str], env: dict | None = None, *, audit_preexec: bool = False) -> list[str]:
     """Only project-owned subprocesses use sudo, exclusively AS APP_USER."""
     allowed = {'PATH', 'PORT', 'HOST', 'NODE_ENV', 'CI', 'PYTHONPATH',
                'PYTHONUNBUFFERED', 'PYTHONNOUSERSITE', 'PYTHONDONTWRITEBYTECODE',
@@ -440,6 +674,12 @@ def _project_command(command: list[str], env: dict | None = None) -> list[str]:
         raise GuestFailure('APP_RESOURCE_LAUNCH_INVALID_COMMAND')
     if _APP_CGROUP_ACTIVE:
         env_vars['PROJECTIQ_EVAL_REQUIRED'] = '1'
+        if audit_preexec:
+            env_vars['PROJECTIQ_ATTEST_PAUSE'] = '1'
+            env_vars['PROJECTIQ_ATTEST_GATE'] = ('/home/projectiq/.projectiq-build-release-'
+                                                 + secrets.token_hex(16))
+    elif audit_preexec:
+        raise GuestFailure('APP_CGROUP_BUILD_PLACEMENT_NOT_VERIFIED')
     runas = ['sudo', '-n', '-u', APP_USER, '--', '/usr/bin/env', '-i',
              *[key + '=' + value for key, value in sorted(env_vars.items())],
              '/usr/bin/python3', '-I', '-c', APP_LIMIT_LAUNCHER, *command]
@@ -455,13 +695,26 @@ def _project_command(command: list[str], env: dict | None = None) -> list[str]:
 
 def _trusted_process(args: list[str], *, input: bytes | None = None, timeout: int = 15,
                      env: dict | None = None, cwd: Path | None = None,
-                     project_code: bool = False) -> subprocess.CompletedProcess:
+                     project_code: bool = False, audit_kind: str | None = None) -> subprocess.CompletedProcess:
+    if audit_kind is not None:
+        if not project_code or audit_kind not in _BUILD_KINDS:
+            raise GuestFailure('APP_CGROUP_BUILD_PLACEMENT_NOT_VERIFIED')
+        if _APP_CGROUP_ACTIVE:
+            return _audited_build_process(args, env=env, cwd=cwd, input=input,
+                                          timeout=timeout, kind=audit_kind)
+        # Only the dedicated cache-preparation VM runs without the eval slice.
     try:
         return subprocess.run(_project_command(args, env) if project_code else args,
                               input=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               timeout=timeout, check=False,
                               env=None if project_code else env, cwd=cwd)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except subprocess.TimeoutExpired as exc:
+        # Distinguish an unrelated trusted-tool timeout from the audited
+        # stop/resume handshake. Do not include argv, logs or secrets.
+        if _APP_CGROUP_ACTIVE:
+            raise GuestFailure('APP_CGROUP_OTHER_TRUSTED_COMMAND_TIMEOUT') from exc
+        raise GuestFailure('Trusted guest tool missing or timed out') from exc
+    except OSError as exc:
         raise GuestFailure('Trusted guest tool missing or timed out') from exc
 
 
@@ -803,7 +1056,8 @@ def _prepare_express(checkout: Path, base: Path, req: dict, *, port: int = 8765)
                 'NODE_ENV': 'production'})
     installed = _trusted_process([str(npm), 'ci', '--offline', '--ignore-scripts',
                                   '--no-audit', '--no-fund', '--no-progress',
-                                  '--cache', str(npm_cache)], timeout=185, env=env, cwd=root, project_code=True)
+                                  '--cache', str(npm_cache)], timeout=185, env=env, cwd=root,
+                                  project_code=True, audit_kind='npm_ci')
     if installed.returncode:
         raise GuestFailure('NODE_EXPRESS_OFFLINE_DEPENDENCY_INSTALL_FAILED')
     if not (root / 'node_modules' / 'express' / 'package.json').is_file():
@@ -906,7 +1160,8 @@ def _prepare_vite(checkout: Path, base: Path, req: dict) -> tuple[Path, str]:
                 'NPM_CONFIG_UPDATE_NOTIFIER': 'false', 'CI': 'true'})
     installed = _trusted_process([str(npm), 'ci', '--offline', '--ignore-scripts',
                                   '--no-audit', '--no-fund', '--no-progress',
-                                  '--cache', str(npm_cache)], timeout=185, env=env, cwd=root, project_code=True)
+                                  '--cache', str(npm_cache)], timeout=185, env=env, cwd=root,
+                                  project_code=True, audit_kind='npm_ci')
     if installed.returncode:
         raise GuestFailure('NODE_VITE_OFFLINE_DEPENDENCY_INSTALL_FAILED')
     vite = root / 'node_modules' / 'vite' / 'bin' / 'vite.js'
@@ -916,7 +1171,8 @@ def _prepare_vite(checkout: Path, base: Path, req: dict) -> tuple[Path, str]:
     if dist.is_dir():
         shutil.rmtree(dist)
     built = _trusted_process([str(node), str(vite), 'build', '--outDir', 'dist'],
-                             timeout=125, env=env, cwd=root, project_code=True)
+                             timeout=125, env=env, cwd=root, project_code=True,
+                             audit_kind='vite_build')
     if built.returncode:
         raise GuestFailure('NODE_VITE_BUILD_FAILED')
     index = dist / 'index.html'
@@ -1427,7 +1683,8 @@ def _prepare_python_web(checkout: Path, base_dir: Path, req: dict,
            '--no-index', '--find-links', str(wheels), '--no-cache-dir',
            '--only-binary=:all:', '--no-compile', '--disable-pip-version-check',
            '--target', str(target), '-r', str(requirements)]
-    result = _trusted_process(cmd, timeout=150, env=env, cwd=base_dir, project_code=True)
+    result = _trusted_process(cmd, timeout=150, env=env, cwd=base_dir, project_code=True,
+                              audit_kind='pip_install')
     if result.returncode:
         raise GuestFailure('PYTHON_WEB_OFFLINE_DEPENDENCY_INSTALL_FAILED')
     env = {**env, 'PYTHONPATH': str(target), 'PYTHONUNBUFFERED': '1'}
@@ -1655,7 +1912,8 @@ def _d4_npm_ci(npm: Path, cache: Path, env: dict, root: Path, *, online: bool) -
             '--no-progress', '--cache', str(cache)]
     if not online:
         args.insert(2, '--offline')
-    result = _trusted_process(args, timeout=230 if online else 185, env=env, cwd=root, project_code=True)
+    result = _trusted_process(args, timeout=230 if online else 185, env=env, cwd=root,
+                              project_code=True, audit_kind='npm_ci')
     if result.returncode:
         raise GuestFailure('NODE_FULLSTACK_CACHE_FETCH_FAILED' if online
                            else 'NODE_FULLSTACK_OFFLINE_DEPENDENCY_INSTALL_FAILED')
@@ -1763,7 +2021,8 @@ def _d4_install_and_build(checkout: Path, base_dir: Path, req: dict) -> tuple[Pa
             raise GuestFailure('NODE_FULLSTACK_VITE_BUILD_FAILED')
         shutil.rmtree(dist)
     built = _trusted_process([str(node), str(vite), 'build', '--outDir', 'dist'],
-                             timeout=150, env=env, cwd=frontend, project_code=True)
+                             timeout=150, env=env, cwd=frontend, project_code=True,
+                             audit_kind='vite_build')
     if built.returncode:
         raise GuestFailure('NODE_FULLSTACK_VITE_BUILD_FAILED')
     index = dist / 'index.html'
@@ -1922,6 +2181,7 @@ def main() -> int:
                 raise GuestFailure('APP_CGROUP_ENFORCEMENT_UNAVAILABLE')
             _verify_evaluation_cgroup(app_base)
             _APP_SERVER_PLACEMENTS.clear()
+            _APP_BUILD_HANDOFFS.clear()
             _APP_CGROUP_ACTIVE = True
         result = (prepare_fullstack_cache(request, base_dir=app_base) if meta.get('operation') == 'prepare_fullstack_cache'
                   else prepare_npm_cache(request, base_dir=app_base) if meta.get('operation') == 'prepare_npm_cache'
@@ -1938,6 +2198,10 @@ def main() -> int:
                 'status': 'SERVER_PIDS_VERIFIED', 'server_count': expected,
                 'builds_verified': False, 'database_service_verified': False,
             }
+            # Count only successful, independently observed pre-exec handoffs.
+            # The existing `builds_verified=False` still means no full process
+            # graph/descendant verification has been performed.
+            result['build_launch_evidence'] = _build_handoff_report(meta.get('adapter'))
     except OSError as exc:
         if getattr(exc, 'errno', None) in (28, 122):
             result = {'status': 'STARTUP_FAILED', 'error_code': 'WORKSPACE_DISK_QUOTA_EXCEEDED'}

@@ -240,10 +240,44 @@ class D5B2Tests(unittest.TestCase):
 
     def test_guest_staging_without_mount_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(guest.Path, 'is_file', return_value=False), \
              patch.object(guest.os.path, 'ismount', return_value=False), \
              patch.object(guest.time, 'monotonic', side_effect=[0, 86]):
-            with self.assertRaisesRegex(guest.GuestFailure, 'WORKSPACE_DISK_QUOTA_UNAVAILABLE'):
+            with self.assertRaisesRegex(guest.GuestFailure, 'WORKSPACE_BOOTSTRAP_NOT_READY'):
                 guest._stage_bounded_workspace({'workspace_disk_mib': 96}, base=Path(tmp))
+
+    def test_root_bootstrap_marker_after_chown_and_chmod(self):
+        script = qemu.WORKSPACE_BOOTSTRAP_SCRIPT
+        self.assertEqual(guest.WORKSPACE_READY_MARKER.as_posix(),
+                         '/run/projectiq-workspace-bootstrap.ready')
+        self.assertLess(script.index('/usr/bin/chown projectiq:projectiq_exec'),
+                        script.index('/bin/chmod 2770'))
+        self.assertLess(script.index('/bin/chmod 2770'),
+                        script.index('/usr/bin/touch /run/projectiq-workspace-bootstrap.ready'))
+        self.assertIn('set -eu', script)
+
+    def test_workspace_marker_must_be_root_owned_and_not_writable(self):
+        from types import SimpleNamespace
+        import stat
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(guest.Path, 'is_file', return_value=True), \
+             patch.object(guest.Path, 'lstat', return_value=SimpleNamespace(
+                 st_uid=1000, st_mode=stat.S_IFREG | 0o666)), \
+             patch.object(guest.Path, 'is_symlink', return_value=False):
+            with self.assertRaisesRegex(guest.GuestFailure, 'WORKSPACE_BOOTSTRAP_NOT_READY'):
+                guest._stage_bounded_workspace({'workspace_disk_mib': 96}, base=Path(td))
+
+    def test_verified_marker_does_not_replace_mount_check(self):
+        from types import SimpleNamespace
+        import stat
+        with tempfile.TemporaryDirectory() as td, \
+             patch.object(guest.Path, 'is_file', return_value=True), \
+             patch.object(guest.Path, 'lstat', return_value=SimpleNamespace(
+                 st_uid=0, st_mode=stat.S_IFREG | 0o600)), \
+             patch.object(guest.Path, 'is_symlink', return_value=False), \
+             patch.object(guest.os.path, 'ismount', return_value=False):
+            with self.assertRaisesRegex(guest.GuestFailure, 'WORKSPACE_DISK_QUOTA_UNAVAILABLE'):
+                guest._stage_bounded_workspace({'workspace_disk_mib': 96}, base=Path(td))
 
     def test_guest_staging_malformed_quota_fails_before_mount(self):
         for val in (False, '1536', 0, 2049, None):

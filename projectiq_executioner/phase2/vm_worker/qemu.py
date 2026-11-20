@@ -172,6 +172,7 @@ done
 /bin/mount -t ext4 -o rw,nosuid,nodev,noatime "$device" /srv/projectiq-workspace
 /usr/bin/chown projectiq:projectiq_exec /srv/projectiq-workspace
 /bin/chmod 2770 /srv/projectiq-workspace
+/usr/bin/touch /run/projectiq-workspace-bootstrap.ready
 '''
 
 

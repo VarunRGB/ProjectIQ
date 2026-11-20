@@ -16,7 +16,7 @@ execution. Official scope remains in `ROADMAP.md`.
 | 2D D5 B1 | Separate app UID, no root sudo | VM plus PHP/MySQL regression verified |
 | 2D D5 B2 | Bounded workspace write quota | ENOSPC:RECOVERED VM verified |
 | 2D D5 B3a | Inherited hard RLIMIT caps | VM verified (5/5); cgroup controllers available |
-| 2D D5 **B3b** | **Systemd/cgroup enforcement** | Gate 1 7/7 clean VM; Gate 2A 434-test offline suite and FSDL/PHP/MySQL/Node reviewed fixtures verified; Gate 2A.2 independent live-server PID evidence staged for VM acceptance; builds and MySQL remain unverified |
+| 2D D5 **B3b** | **Systemd/cgroup enforcement** | Gate 1 7/7 clean VM; Gate 2A.2 server PID verification passed for FSDL, MiniCollab and D4 fullstack; Gate 2A.3 cooperative file-gate handoff awaiting real WHPX revalidation (MySQL and descendant graph pending) |
 | 2D D5 B4 | All-adapter regression/commit | Pending |
 | 2D D5c | Failure injection/cancellation/orphan recovery | Pending |
 | 2D D5d | Identity and independent isolation verification | Pending |
