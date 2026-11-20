@@ -43,7 +43,7 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
                   output_dir: Path, allow_trusted_npm_network: bool = False,
                   include_npm_diagnostic: bool = False,
                   adapter: str = 'node_vite_offline_v1') -> dict:
-    if adapter not in ('node_vite_offline_v1', 'node_express_offline_v1'):
+    if adapter not in ('node_vite_offline_v1', 'node_express_offline_v1', 'node_fullstack_offline_v1'):
         raise CachePreparationError('Unsupported Node npm cache adapter')
     if not allow_trusted_npm_network:
         raise CachePreparationError('Explicit --allow-trusted-npm-network approval required')
@@ -71,8 +71,11 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
     if output_dir.exists() and not output_dir.is_dir():
         raise CachePreparationError('Output path is not a directory')
     express = adapter == 'node_express_offline_v1'
-    cache_dest = output_dir / ('node-express-npm-cache.zip' if express else 'node-vite-npm-cache.zip')
-    profile_dest = output_dir / ('node_express_profile.json' if express else 'node_vite_profile.json')
+    fullstack = adapter == 'node_fullstack_offline_v1'
+    cache_dest = output_dir / ('node-fullstack-npm-cache.zip' if fullstack else
+                               'node-express-npm-cache.zip' if express else 'node-vite-npm-cache.zip')
+    profile_dest = output_dir / ('node_fullstack_profile.json' if fullstack else
+                                 'node_express_profile.json' if express else 'node_vite_profile.json')
     if cache_dest.exists() or profile_dest.exists():
         raise CachePreparationError('Refusing to overwrite prepared offline cache or profile')
 
@@ -89,21 +92,36 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
         c, _ = plan_from_manifest(manifest, work / 'plan')
         if c.get('adapter') != adapter:
             raise CachePreparationError('Repository does not match the selected Node/npm-lock adapter')
-        root_path = checkout if c['project_root'] == '.' else checkout.joinpath(*c['project_root'].split('/'))
-        lock = root_path / 'package-lock.json'
-        if not lock.is_file():
-            raise CachePreparationError('Approved fixture has no npm lockfile')
-        lock_sha = sha256_file(lock)
-        try:
-            (_check_express_manifest if express else _check_vite_manifest)(root_path, lock_sha)
-        except GuestFailure as exc:
-            raise CachePreparationError('Node manifest/lockfile or entrypoint is unsupported by offline pilot') from exc
-        request = {
-            'operation': 'prepare_npm_cache', 'adapter': adapter,
-            'project_root': c['project_root'], 'node_version': node_version,
-            'include_npm_diagnostic': include_npm_diagnostic is True,
-            'node_sha256': node_sha256.lower(), 'lockfile_sha256': lock_sha,
-        }
+        if fullstack:
+            from ..vm_worker.guest_agent import _d4_roots, _d4_verify_manifests
+            roots = c['service_roots']
+            front, back = _d4_roots(checkout, {'service_roots': roots})
+            hashes = {'frontend_lockfile_sha256': sha256_file(front / 'package-lock.json'),
+                      'backend_lockfile_sha256': sha256_file(back / 'package-lock.json')}
+            try:
+                _d4_verify_manifests(front, back, {**hashes, 'node_sha256': node_sha256.lower(),
+                                                    'operation': 'prepare_fullstack_cache'})
+            except GuestFailure as exc:
+                raise CachePreparationError('D4 two-service manifests are unsupported') from exc
+            request = {'operation': 'prepare_fullstack_cache', 'adapter': adapter,
+                       'service_roots': roots, 'node_version': node_version,
+                       'node_sha256': node_sha256.lower(), **hashes}
+        else:
+            root_path = checkout if c['project_root'] == '.' else checkout.joinpath(*c['project_root'].split('/'))
+            lock = root_path / 'package-lock.json'
+            if not lock.is_file():
+                raise CachePreparationError('Approved fixture has no npm lockfile')
+            lock_sha = sha256_file(lock)
+            try:
+                (_check_express_manifest if express else _check_vite_manifest)(root_path, lock_sha)
+            except GuestFailure as exc:
+                raise CachePreparationError('Node manifest/lockfile or entrypoint is unsupported by offline pilot') from exc
+            request = {
+                'operation': 'prepare_npm_cache', 'adapter': adapter,
+                'project_root': c['project_root'], 'node_version': node_version,
+                'include_npm_diagnostic': include_npm_diagnostic is True,
+                'node_sha256': node_sha256.lower(), 'lockfile_sha256': lock_sha,
+            }
         request_path = work / 'request.json'
         request_path.write_text(json.dumps(request), 'utf-8')
         key, pubkey = make_ssh_key(config, work)
@@ -120,7 +138,7 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
                 if vm.proc is not None and vm.proc.poll() is None:
                     expired.set()
                     vm.proc.kill()
-            timer = threading.Timer(540, expire)
+            timer = threading.Timer(780 if fullstack else 540, expire)
             timer.daemon = True
             timer.start()
             ssh = SSHControl(config, work, port, key)
@@ -129,14 +147,15 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
             ssh.copy(Path(__file__).resolve().parents[1] / 'vm_worker' / 'guest_agent.py', 'guest_agent.py')
             ssh.copy(request_path, 'request.json')
             ssh.copy_offline_asset(node_tarball, 'node_runtime.tar.xz')
-            command = ssh.ssh('python3', '/home/projectiq/guest_agent.py', timeout=365)
+            command = ssh.ssh('python3', '/home/projectiq/guest_agent.py', timeout=650 if fullstack else 365)
             result_path = work / 'result.json'
             ssh.receive('result.json', result_path)
             guest = json.loads(result_path.read_text('utf-8'))
             if (command.returncode != 0 or guest.get('status') != 'CACHE_PREPARED'
                     or guest.get('adapter') != adapter
                     or guest.get('node_version') != node_version
-                    or guest.get('lockfile_sha256') != lock_sha
+                    or (any(guest.get(k) != v for k, v in hashes.items()) if fullstack
+                        else guest.get('lockfile_sha256') != lock_sha)
                     or not _HEX64.fullmatch(str(guest.get('npm_cache_sha256', '')))):
                 approved_codes = {
                     'NODE_VITE_CACHE_PREPARATION_FAILED', 'NODE_VITE_CACHE_ARCHIVE_INVALID',
@@ -160,10 +179,19 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
                     'NODE_VITE_NODE_HASH_MISMATCH',
                 }
                 code = guest.get('error_code')
+                d4_codes = {
+                    'NODE_FULLSTACK_INVALID_REQUEST', 'NODE_FULLSTACK_INVALID_SERVICE_ROOTS',
+                    'NODE_FULLSTACK_NODE_HASH_MISMATCH', 'NODE_FULLSTACK_NODE_VERSION_MISMATCH',
+                    'NODE_FULLSTACK_UNSUPPORTED_MANIFEST', 'NODE_FULLSTACK_CACHE_FETCH_FAILED',
+                    'NODE_FULLSTACK_CACHE_ARCHIVE_INVALID',
+                    'NODE_VITE_MANIFEST_OR_LOCKFILE_UNSUPPORTED', 'NODE_VITE_LOCKFILE_HASH_MISMATCH',
+                    'NODE_EXPRESS_MANIFEST_OR_LOCKFILE_UNSUPPORTED', 'NODE_EXPRESS_LOCKFILE_HASH_MISMATCH',
+                    'NODE_EXPRESS_ENTRYPOINT_UNSUPPORTED',
+                }
                 detail = (code if isinstance(code, str) and (code in approved_codes or
                           (express and code.startswith('NODE_EXPRESS_') and
-                           code.replace('NODE_EXPRESS_', 'NODE_VITE_') in approved_codes))
-                          else 'UNCLASSIFIED_GUEST_FAILURE')
+                           code.replace('NODE_EXPRESS_', 'NODE_VITE_') in approved_codes) or
+                          (fullstack and code in d4_codes)) else 'UNCLASSIFIED_GUEST_FAILURE')
                 if include_npm_diagnostic:
                     hint = guest.get('npm_operator_hint')
                     # Redundant host-side character/length gate. The guest
@@ -196,18 +224,22 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
             'node_version': node_version, 'node_tarball': str(node_tarball),
             'node_sha256': node_sha256.lower(),
             'npm_cache_zip': str(cache_dest), 'npm_cache_sha256': calculated,
-            'lockfile_sha256': lock_sha,
         }
-        profile_dest.write_text(json.dumps({('node_express_offline' if express else 'node_vite_offline'): {identity: profile}}, indent=2) + '\n', 'utf-8')
+        if fullstack:
+            profile.update({'service_roots': roots, **hashes})
+        else:
+            profile['lockfile_sha256'] = lock_sha
+        key = ('node_fullstack_offline' if fullstack else
+               'node_express_offline' if express else 'node_vite_offline')
+        profile_dest.write_text(json.dumps({key: {identity: profile}}, indent=2) + '\n', 'utf-8')
         return {
             'status': 'OFFLINE_CACHE_PREPARED_NOT_SANDBOX_ATTESTED', 'source': identity,
             'network': 'EXPLICITLY_AUTHORIZED_PREPARATION_VM_ONLY',
-            'student_install_scripts': 'DISABLED',
-            'execution_vm_egress': 'DENY',
+            'student_install_scripts': 'DISABLED', 'execution_vm_egress': 'DENY',
             'cleanup': 'VM_STOPPED_DISPOSABLE_STORAGE_REMOVED',
             'cache_zip': str(cache_dest), 'profile_json': str(profile_dest),
-            'node_version': node_version, 'lockfile_sha256': lock_sha,
-            'npm_cache_sha256': calculated,
+            'node_version': node_version, 'npm_cache_sha256': calculated,
+            **(hashes if fullstack else {'lockfile_sha256': lock_sha}),
         }
 
 
@@ -221,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--node-version', default='v24.22.3')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--allow-trusted-npm-network', action='store_true')
-    parser.add_argument('--adapter', choices=('node_vite_offline_v1', 'node_express_offline_v1'),
+    parser.add_argument('--adapter', choices=('node_vite_offline_v1', 'node_express_offline_v1', 'node_fullstack_offline_v1'),
                         default='node_vite_offline_v1',
                         help='Reviewed single-service Node adapter; default preserves D1 Vite behavior')
     parser.add_argument('--diagnose-npm', action='store_true',

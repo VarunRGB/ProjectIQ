@@ -1148,7 +1148,7 @@ def _probe(url_path: str, port: int = 8765, deadline: int = 25) -> tuple[int, st
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
-    if adapter not in ('static_html_v1', 'php_mysql_v1', 'node_vite_offline_v1', 'node_express_offline_v1', 'python_web_offline_v1'):
+    if adapter not in ('static_html_v1', 'php_mysql_v1', 'node_vite_offline_v1', 'node_express_offline_v1', 'python_web_offline_v1', 'node_fullstack_offline_v1'):
         raise GuestFailure('Unapproved guest adapter')
     path = req.get('probe_path')
     if not isinstance(path, str) or not (path == '/' and adapter in ('python_web_offline_v1', 'node_express_offline_v1') or re.fullmatch(r'/[A-Za-z0-9_./-]{1,150}', path)) or '..' in path.split('/'):
@@ -1158,6 +1158,8 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         raise GuestFailure('Pinned snapshot missing or oversized')
     workspace = base_dir / 'checkout'
     checkout = safe_extract(snapshot, workspace)
+    if adapter == 'node_fullstack_offline_v1':
+        return run_fullstack(checkout, base_dir, req, port=port)
     if not (checkout / 'index.html').is_file() and adapter == 'static_html_v1':
         raise GuestFailure('Static site has no index.html')
     env = dict(os.environ)
@@ -1210,12 +1212,341 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
     return result
 
 
+# D4 reviewed dual-service pilot. Only bounded, fixed commands are permitted.
+
+
+def _d4_roots(checkout: Path, req: dict) -> tuple[Path, Path]:
+    roots = req.get('service_roots')
+    if not isinstance(roots, dict) or set(roots) != {'frontend', 'backend'}:
+        raise GuestFailure('NODE_FULLSTACK_INVALID_SERVICE_ROOTS')
+    out = {}
+    for role in ('frontend', 'backend'):
+        rel = roots[role]
+        if not (isinstance(rel, str) and rel and len(rel) <= 180
+                and re.fullmatch(r'[A-Za-z0-9_./-]+', rel)
+                and all(part not in ('', '.', '..') for part in rel.split('/'))):
+            raise GuestFailure('NODE_FULLSTACK_INVALID_SERVICE_ROOTS')
+        target = checkout.joinpath(*PurePosixPath(rel).parts)
+        if not target.is_dir() or not target.resolve().is_relative_to(checkout.resolve()):
+            raise GuestFailure('NODE_FULLSTACK_INVALID_SERVICE_ROOTS')
+        # npm searches parent folders for .npmrc, so reject configuration
+        # in *every* ancestor inside the checkout, not just the final root.
+        cursor = target
+        while cursor != checkout:
+            if (cursor / '.npmrc').exists() or (cursor / 'npm-shrinkwrap.json').exists():
+                raise GuestFailure('NODE_FULLSTACK_INVALID_SERVICE_ROOTS')
+            cursor = cursor.parent
+        out[role] = target
+    if out['frontend'] == out['backend'] or (checkout / '.npmrc').exists():
+        raise GuestFailure('NODE_FULLSTACK_INVALID_SERVICE_ROOTS')
+    return out['frontend'], out['backend']
+
+
+def _d4_verify_manifests(frontend: Path, backend: Path, req: dict) -> str:
+    keys = ('node_sha256', 'npm_cache_sha256', 'frontend_lockfile_sha256',
+            'backend_lockfile_sha256')
+    # Preparation has no cache hash yet.
+    for key in keys:
+        if key == 'npm_cache_sha256' and req.get('operation') == 'prepare_fullstack_cache':
+            continue
+        if not isinstance(req.get(key), str) or not re.fullmatch(r'[0-9a-f]{64}', req[key]):
+            raise GuestFailure('NODE_FULLSTACK_INVALID_REQUEST')
+    _check_vite_manifest(frontend, req['frontend_lockfile_sha256'])
+    entry = _check_express_manifest(backend, req['backend_lockfile_sha256'])
+    # Stronger D4 direct dependency constraints than older D1 Vite profile.
+    try:
+        package = json.loads((frontend / 'package.json').read_text('utf-8'))
+        lock = json.loads((frontend / 'package-lock.json').read_text('utf-8'))
+    except (ValueError, OSError, UnicodeError) as exc:
+        raise GuestFailure('NODE_FULLSTACK_UNSUPPORTED_MANIFEST') from exc
+    direct, dev = package.get('dependencies') or {}, package.get('devDependencies') or {}
+    version = re.compile(r'^[~^]?[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?$')
+    if (not isinstance(direct, dict) or not isinstance(dev, dict)
+            or not all(isinstance(k, str) and isinstance(v, str) and version.fullmatch(v)
+                       for k, v in {**direct, **dev}.items())
+            or not isinstance(lock.get('packages', {}).get(''), dict)
+            or lock['packages'][''].get('dependencies', {}) != direct
+            or lock['packages'][''].get('devDependencies', {}) != dev):
+        raise GuestFailure('NODE_FULLSTACK_UNSUPPORTED_MANIFEST')
+    return entry
+
+
+def _d4_node_env(base: Path, node: Path, npm_cache: Path, *, online: bool) -> dict:
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith('NPM_CONFIG_')
+           and k.upper() not in ('NODE_OPTIONS', 'NODE_PATH', 'PYTHONPATH')}
+    env['PATH'] = str(node.parent) + ':/usr/local/bin:/usr/bin:/bin'
+    env.update({'HOME': str(base), **_isolated_npm_config_paths(base),
+                'NPM_CONFIG_CACHE': str(npm_cache),
+                'NPM_CONFIG_IGNORE_SCRIPTS': 'true', 'NPM_CONFIG_AUDIT': 'false',
+                'NPM_CONFIG_FUND': 'false', 'NPM_CONFIG_UPDATE_NOTIFIER': 'false',
+                'CI': 'true'})
+    if online:
+        env['NPM_CONFIG_REGISTRY'] = 'https://registry.npmjs.org/'
+    else:
+        env['NPM_CONFIG_OFFLINE'] = 'true'
+    return env
+
+
+def _d4_npm_ci(npm: Path, cache: Path, env: dict, root: Path, *, online: bool) -> None:
+    args = [str(npm), 'ci', '--ignore-scripts', '--no-audit', '--no-fund',
+            '--no-progress', '--cache', str(cache)]
+    if not online:
+        args.insert(2, '--offline')
+    result = _trusted_process(args, timeout=230 if online else 185, env=env, cwd=root)
+    if result.returncode:
+        raise GuestFailure('NODE_FULLSTACK_CACHE_FETCH_FAILED' if online
+                           else 'NODE_FULLSTACK_OFFLINE_DEPENDENCY_INSTALL_FAILED')
+
+
+def prepare_fullstack_cache(request_path: Path, *, base_dir: Path = Path('/home/projectiq')) -> dict:
+    """One networked *preparation* VM, two manifests, no project scripts."""
+    req = json.loads(request_path.read_text('utf-8'))
+    if (req.get('operation') != 'prepare_fullstack_cache'
+            or req.get('adapter') != 'node_fullstack_offline_v1'):
+        raise GuestFailure('NODE_FULLSTACK_INVALID_REQUEST')
+    version = req.get('node_version')
+    if not isinstance(version, str) or not re.fullmatch(r'v24\.[0-9]{1,3}\.[0-9]{1,3}', version):
+        raise GuestFailure('NODE_FULLSTACK_INVALID_REQUEST')
+    snapshot, tar = base_dir / 'snapshot.zip', base_dir / 'node_runtime.tar.xz'
+    if not snapshot.is_file() or not 0 < snapshot.stat().st_size <= 30_000_000:
+        raise GuestFailure('NODE_FULLSTACK_INVALID_REQUEST')
+    checkout = safe_extract(snapshot, base_dir / 'checkout')
+    frontend, backend = _d4_roots(checkout, req)
+    _d4_verify_manifests(frontend, backend, req)
+    if not tar.is_file() or _sha256(tar) != req['node_sha256']:
+        raise GuestFailure('NODE_FULLSTACK_NODE_HASH_MISMATCH')
+    runtime = base_dir / 'node_runtime'
+    runtime.mkdir(mode=0o700)
+    node, npm = _node_tar_extract(tar, version, runtime)
+    tar.unlink(missing_ok=True)
+    result = _trusted_process([str(node), '--version'], timeout=15)
+    if result.returncode or result.stdout.decode('utf-8', 'replace').strip() != version:
+        raise GuestFailure('NODE_FULLSTACK_NODE_VERSION_MISMATCH')
+    cache = base_dir / 'npm-cache'
+    cache.mkdir(mode=0o700)
+    env = _d4_node_env(base_dir, node, cache, online=True)
+    # Shared content-addressed npm cache accumulates both dependency graphs.
+    _d4_npm_ci(npm, cache, env, frontend, online=True)
+    _d4_npm_ci(npm, cache, env, backend, online=True)
+    archive = base_dir / 'npm_cache.zip'
+    count = size = 0
+    with zipfile.ZipFile(archive, 'x', compression=zipfile.ZIP_DEFLATED,
+                         compresslevel=5, allowZip64=False) as zf:
+        for item in sorted(cache.rglob('*')):
+            if item.is_dir():
+                continue
+            if item.is_symlink() or not item.is_file() or item.stat().st_size > 20_000_000:
+                raise GuestFailure('NODE_FULLSTACK_CACHE_ARCHIVE_INVALID')
+            rel = item.relative_to(cache)
+            if '_logs' in rel.parts:
+                continue
+            count += 1
+            size += item.stat().st_size
+            if count > 12000 or size > 250_000_000:
+                raise GuestFailure('NODE_FULLSTACK_CACHE_ARCHIVE_INVALID')
+            zf.write(item, arcname='npm-cache/' + rel.as_posix())
+    if count < 1 or archive.stat().st_size > 170_000_000:
+        raise GuestFailure('NODE_FULLSTACK_CACHE_ARCHIVE_INVALID')
+    return {'status': 'CACHE_PREPARED', 'adapter': 'node_fullstack_offline_v1',
+            'node_version': version,
+            'frontend_lockfile_sha256': req['frontend_lockfile_sha256'],
+            'backend_lockfile_sha256': req['backend_lockfile_sha256'],
+            'npm_cache_sha256': _sha256(archive),
+            'notes': ['Two offline dependency graphs cached; student scripts disabled']}
+
+
+def _d4_install_and_build(checkout: Path, base_dir: Path, req: dict) -> tuple[Path, list[str], dict, Path]:
+    """Install two lockfiles from one verified cache, build Vite; no npm scripts."""
+    frontend, backend = _d4_roots(checkout, req)
+    entry = _d4_verify_manifests(frontend, backend, req)
+    version = req.get('node_version')
+    if not isinstance(version, str) or not re.fullmatch(r'v24\.[0-9]{1,3}\.[0-9]{1,3}', version):
+        raise GuestFailure('NODE_FULLSTACK_INVALID_REQUEST')
+    tar, cache_zip = base_dir / 'node_runtime.tar.xz', base_dir / 'npm_cache.zip'
+    if not tar.is_file() or _sha256(tar) != req['node_sha256']:
+        raise GuestFailure('NODE_FULLSTACK_NODE_HASH_MISMATCH')
+    if not cache_zip.is_file() or _sha256(cache_zip) != req['npm_cache_sha256']:
+        raise GuestFailure('NODE_FULLSTACK_CACHE_HASH_MISMATCH')
+    runtime = base_dir / 'node_runtime'
+    runtime.mkdir(mode=0o700)
+    node, npm = _node_tar_extract(tar, version, runtime)
+    tar.unlink(missing_ok=True)
+    ver = _trusted_process([str(node), '--version'], timeout=15)
+    if ver.returncode or ver.stdout.decode('utf-8', 'replace').strip() != version:
+        raise GuestFailure('NODE_FULLSTACK_NODE_VERSION_MISMATCH')
+    if not 0 < cache_zip.stat().st_size <= 170_000_000:
+        raise GuestFailure('NODE_FULLSTACK_CACHE_HASH_MISMATCH')
+    try:
+        cache = safe_extract(cache_zip, base_dir / 'npm_cache', max_total=250_000_000)
+    except (GuestFailure, zipfile.BadZipFile) as exc:
+        raise GuestFailure('NODE_FULLSTACK_CACHE_ARCHIVE_INVALID') from exc
+    cache_zip.unlink(missing_ok=True)
+    env = _d4_node_env(base_dir, node, cache, online=False)
+    _d4_npm_ci(npm, cache, env, frontend, online=False)
+    _d4_npm_ci(npm, cache, env, backend, online=False)
+    if not (backend / 'node_modules' / 'express' / 'package.json').is_file():
+        raise GuestFailure('NODE_FULLSTACK_OFFLINE_DEPENDENCY_INSTALL_FAILED')
+    vite = frontend / 'node_modules' / 'vite' / 'bin' / 'vite.js'
+    if not vite.is_file() or not vite.resolve().is_relative_to(frontend.resolve()):
+        raise GuestFailure('NODE_FULLSTACK_VITE_BUILD_FAILED')
+    dist = frontend / 'dist'
+    if dist.exists():
+        if not dist.is_dir() or dist.is_symlink():
+            raise GuestFailure('NODE_FULLSTACK_VITE_BUILD_FAILED')
+        shutil.rmtree(dist)
+    built = _trusted_process([str(node), str(vite), 'build', '--outDir', 'dist'],
+                             timeout=150, env=env, cwd=frontend)
+    if built.returncode:
+        raise GuestFailure('NODE_FULLSTACK_VITE_BUILD_FAILED')
+    index = dist / 'index.html'
+    if not index.is_file() or not index.stat().st_size <= 2_000_000 or b'<html' not in index.read_bytes().lower():
+        raise GuestFailure('NODE_FULLSTACK_BUILD_OUTPUT_INVALID')
+    env.update({'PORT': '8766', 'HOST': '127.0.0.1', 'NODE_ENV': 'production'})
+    return dist, [str(node), str(backend / entry)], env, backend
+
+
+def _d4_frontend_serve(dist: Path, frontend_port: int, backend_port: int) -> None:
+    """Trusted loopback static server; only /api/* GETs are forwarded locally."""
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+    from http.client import HTTPConnection
+
+    if not dist.is_dir() or not (dist / 'index.html').is_file():
+        raise GuestFailure('NODE_FULLSTACK_BUILD_OUTPUT_INVALID')
+    class Handler(SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(dist), **kwargs)
+
+        def do_GET(self):
+            if not self.path.startswith('/api/'):
+                return super().do_GET()
+            # Fixed destination, no redirects, no arbitrary host/URL parsing.
+            if not re.fullmatch(r'/api/[A-Za-z0-9_/-]{1,96}', self.path):
+                self.send_error(400)
+                return
+            conn = HTTPConnection('127.0.0.1', backend_port, timeout=3)
+            try:
+                conn.request('GET', self.path, headers={'Host': '127.0.0.1'})
+                response = conn.getresponse()
+                payload = response.read(65_537)
+                if len(payload) > 65_536 or response.status != 200:
+                    self.send_error(502)
+                    return
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Content-Length', str(len(payload)))
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                self.wfile.write(payload)
+            except (OSError, TimeoutError):
+                self.send_error(502)
+            finally:
+                conn.close()
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(('127.0.0.1', frontend_port), Handler)
+    server.serve_forever(poll_interval=0.5)
+
+
+def _d4_json(path: str, port: int) -> dict:
+    try:
+        req = urllib.request.Request(f'http://127.0.0.1:{port}{path}',
+                                      headers={'User-Agent': 'ProjectIQ-D4-Health'})
+        with urllib.request.urlopen(req, timeout=3) as response:
+            if response.status != 200:
+                raise GuestFailure('NODE_FULLSTACK_CROSS_SERVICE_PROBE_FAILED')
+            parsed = json.loads(response.read(65_537))
+        if not isinstance(parsed, dict):
+            raise ValueError('JSON object required')
+        return parsed
+    except (OSError, ValueError, urllib.error.URLError) as exc:
+        raise GuestFailure('NODE_FULLSTACK_CROSS_SERVICE_PROBE_FAILED') from exc
+
+
+def _d4_wait_json(path: str, port: int) -> dict:
+    for _ in range(30):
+        try:
+            return _d4_json(path, port)
+        except GuestFailure:
+            time.sleep(1)
+    raise GuestFailure('NODE_FULLSTACK_BACKEND_NOT_READY')
+
+
+def _d4_stop_process(proc: subprocess.Popen) -> None:
+    import signal
+    if proc.poll() is None:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+        except (ProcessLookupError, PermissionError):
+            proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            proc.kill()
+        proc.wait(timeout=5)
+
+
+def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765) -> dict:
+    if req.get('adapter') != 'node_fullstack_offline_v1' or port != 8765:
+        raise GuestFailure('NODE_FULLSTACK_INVALID_REQUEST')
+    api = req.get('probe_path')
+    health = req.get('backend_probe_path')
+    if api not in ('/api/sqlite-check', '/api/health') or health not in ('/health', '/api/health'):
+        raise GuestFailure('NODE_FULLSTACK_INVALID_REQUEST')
+    dist, program, env, backend = _d4_install_and_build(checkout, base_dir, req)
+    processes = []
+    try:
+        with (base_dir / 'd4_backend.log').open('wb') as log:
+            process = subprocess.Popen(program, stdin=subprocess.DEVNULL, stdout=log,
+                                       stderr=subprocess.STDOUT, cwd=backend,
+                                       env=env, start_new_session=True)
+        processes.append(process)
+        _d4_wait_json(health, 8766)
+        with (base_dir / 'd4_frontend.log').open('wb') as log:
+            process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
+                                        '--serve-d4-frontend', str(dist), str(port), '8766'],
+                                       stdin=subprocess.DEVNULL, stdout=log,
+                                       stderr=subprocess.STDOUT, cwd=base_dir,
+                                       start_new_session=True)
+        processes.append(process)
+        status, kind = _probe('/index.html', port=port, deadline=30)
+        if status != 200 or kind != 'HTML_RESPONSE_OK':
+            raise GuestFailure('NODE_FULLSTACK_FRONTEND_NOT_READY')
+        _probe_vite_asset(dist, port)
+        backend_api = _d4_json(api, 8766)
+        through_frontend = _d4_json(api, port)
+        if backend_api != through_frontend:
+            raise GuestFailure('NODE_FULLSTACK_CROSS_SERVICE_PROBE_FAILED')
+        sqlite_verified = (api == '/api/sqlite-check' and through_frontend.get('sqlite') is True)
+        if api == '/api/sqlite-check' and not sqlite_verified:
+            raise GuestFailure('NODE_FULLSTACK_SQLITE_CHECK_FAILED')
+        return {'status': 'STARTUP_VERIFIED', 'adapter': 'node_fullstack_offline_v1',
+                'http_status': 200, 'readiness': 'HTTP_RESPONSE_OK', 'readiness_path': api,
+                'service_results': {'frontend_http': 200, 'backend_http': 200,
+                                    'frontend_proxy_api_http': 200,
+                                    'built_asset_http': 200, 'sqlite_verified': sqlite_verified},
+                'notes': ['Two offline npm ci installs and Vite build completed',
+                          'Express started before frontend; internal API proxy returned matching JSON',
+                          'SQLite CRUD evidence requires operator-reviewed API fixture']}
+    finally:
+        for proc in reversed(processes):
+            _d4_stop_process(proc)
+
+
 def main() -> int:
+    if len(sys.argv) == 5 and sys.argv[1] == '--serve-d4-frontend':
+        _d4_frontend_serve(Path(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]))
+        return 0
     result = {'status': 'STARTUP_FAILED', 'error_code': 'UNKNOWN_FAILURE'}
     try:
         request = Path('/home/projectiq/request.json')
         meta = json.loads(request.read_text('utf-8'))
-        result = (prepare_npm_cache(request) if meta.get('operation') == 'prepare_npm_cache'
+        result = (prepare_fullstack_cache(request) if meta.get('operation') == 'prepare_fullstack_cache'
+                  else prepare_npm_cache(request) if meta.get('operation') == 'prepare_npm_cache'
                   else prepare_python_wheelhouse(request) if meta.get('operation') == 'prepare_python_wheels'
                   else run(request))
     except GuestFailure as exc:

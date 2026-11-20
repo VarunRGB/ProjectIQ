@@ -17,7 +17,8 @@ from ...models import RepositorySource
 from ...safe_archive import extract_snapshot
 from .contracts import VMPlanError, build_vm_plan, load_json
 from .offline_assets import (OfflineAssetError, approved_node_vite_assets,
-                             approved_python_web_assets, approved_node_express_assets)
+                             approved_python_web_assets, approved_node_express_assets,
+                             approved_node_fullstack_assets)
 from .qemu import (QemuWorker, SSHControl, WorkerFailure, _free_loopback_port,
                    effective_vm_vcpus, make_nocloud_iso, make_ssh_key, verify_host_toolchain)
 
@@ -82,6 +83,15 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             result['reason'] = str(exc)
             _save(result, output)
             return result
+    if candidate.get('adapter') == 'node_fullstack_offline_v1':
+        try:
+            node_assets = approved_node_fullstack_assets(config, identity)
+            if node_assets['service_roots'] != candidate.get('service_roots'):
+                raise OfflineAssetError('NODE_FULLSTACK_SERVICE_ROOT_PROFILE_MISMATCH')
+        except OfflineAssetError as exc:
+            result['reason'] = str(exc)
+            _save(result, output)
+            return result
     if candidate.get('adapter') == 'python_web_offline_v1':
         try:
             python_assets = approved_python_web_assets(config, identity)
@@ -131,7 +141,12 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                     'node_version': node_assets['node_version'],
                     'node_sha256': node_assets['node_sha256'],
                     'npm_cache_sha256': node_assets['npm_cache_sha256'],
-                    'lockfile_sha256': node_assets['lockfile_sha256'],
+                    **({'service_roots': node_assets['service_roots'],
+                        'frontend_lockfile_sha256': node_assets['frontend_lockfile_sha256'],
+                        'backend_lockfile_sha256': node_assets['backend_lockfile_sha256'],
+                        'backend_probe_path': candidate['backend_probe_path']}
+                       if candidate['adapter'] == 'node_fullstack_offline_v1' else
+                       {'lockfile_sha256': node_assets['lockfile_sha256']}),
                 })
             if python_assets is not None:
                 request.update({
@@ -170,7 +185,10 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 ssh.copy_offline_asset(python_assets['wheelhouse_zip'], 'python_wheelhouse.zip')
             result['execution'] = 'GUEST_AGENT_STARTED'
             command = ssh.ssh('python3', '/home/projectiq/guest_agent.py',
-                              timeout=415 if candidate['adapter'] in ('node_vite_offline_v1', 'node_express_offline_v1') else (240 if candidate['adapter'] == 'python_web_offline_v1' else (125 if candidate['adapter'] == 'php_mysql_v1' else 75)))
+                              timeout=710 if candidate['adapter'] == 'node_fullstack_offline_v1' else
+                              415 if candidate['adapter'] in ('node_vite_offline_v1', 'node_express_offline_v1') else
+                              (240 if candidate['adapter'] == 'python_web_offline_v1' else
+                               (125 if candidate['adapter'] == 'php_mysql_v1' else 75)))
             output_path = work / 'result.json'
             ssh.receive('result.json', output_path)
             guest = load_json(output_path, limit=64_000)
@@ -184,6 +202,16 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'notes': [x[:160] for x in guest.get('notes', [])[:5]
                           if isinstance(x, str)] if isinstance(guest.get('notes'), list) else [],
             }
+            if candidate['adapter'] == 'node_fullstack_offline_v1':
+                services = guest.get('service_results')
+                if isinstance(services, dict):
+                    result['guest_result']['service_results'] = {
+                        name: (services.get(name) if type(services.get(name)) is bool else
+                               services.get(name) if type(services.get(name)) is int
+                               and services[name] in (200, 502) else None)
+                        for name in ('frontend_http', 'backend_http', 'frontend_proxy_api_http',
+                                     'built_asset_http', 'sqlite_verified')}
+
             allowed_guest_errors = {
                 'PHP PDO connection adapter not recognized',
                 'No recognizable PDO connection',
@@ -229,6 +257,15 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'NODE_EXPRESS_ENTRYPOINT_UNSUPPORTED',
                 'NODE_EXPRESS_OFFLINE_DEPENDENCY_INSTALL_FAILED',
                 'NODE_EXPRESS_HTTP_PROBE_FAILED',
+                'NODE_FULLSTACK_INVALID_REQUEST', 'NODE_FULLSTACK_INVALID_SERVICE_ROOTS',
+                'NODE_FULLSTACK_UNSUPPORTED_MANIFEST',
+                'NODE_FULLSTACK_NODE_HASH_MISMATCH', 'NODE_FULLSTACK_NODE_VERSION_MISMATCH',
+                'NODE_FULLSTACK_CACHE_HASH_MISMATCH', 'NODE_FULLSTACK_CACHE_ARCHIVE_INVALID',
+                'NODE_FULLSTACK_OFFLINE_DEPENDENCY_INSTALL_FAILED',
+                'NODE_FULLSTACK_VITE_BUILD_FAILED', 'NODE_FULLSTACK_BUILD_OUTPUT_INVALID',
+                'NODE_FULLSTACK_BACKEND_NOT_READY', 'NODE_FULLSTACK_FRONTEND_NOT_READY',
+                'NODE_FULLSTACK_CROSS_SERVICE_PROBE_FAILED',
+                'NODE_FULLSTACK_SQLITE_CHECK_FAILED',
                 'PYTHON_WEB_INVALID_REQUEST',
                 'PYTHON_WEB_INVALID_PROJECT_ROOT',
                 'PYTHON_WEB_REQUIREMENTS_UNSUPPORTED',
@@ -249,7 +286,8 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 result['guest_error_code'] = reported if reported in allowed_guest_errors else 'UNCLASSIFIED_GUEST_FAILURE'
             if status == 'STARTUP_VERIFIED' and command.returncode == 0:
                 result.update(status='STARTUP_VERIFIED', execution='PERFORMED_IN_DISPOSABLE_VM',
-                              readiness=('HTTP_200_API_PROBE_PASSED' if candidate['adapter'] in ('python_web_offline_v1', 'node_express_offline_v1') else 'HTTP_200_HTML_PROBE_PASSED'))
+                              readiness=('HTTP_200_FULLSTACK_PROBE_PASSED' if candidate['adapter'] == 'node_fullstack_offline_v1' else
+                                         'HTTP_200_API_PROBE_PASSED' if candidate['adapter'] in ('python_web_offline_v1', 'node_express_offline_v1') else 'HTTP_200_HTML_PROBE_PASSED'))
             else:
                 result.update(status='STARTUP_FAILED', execution='ATTEMPTED_IN_DISPOSABLE_VM',
                               readiness='NOT_VERIFIED', reason='GUEST_ADAPTER_FAILED')

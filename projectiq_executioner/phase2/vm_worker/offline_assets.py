@@ -105,3 +105,34 @@ def approved_node_express_assets(config: Mapping, identity: str) -> dict:
         # Same official Node tarball, npm cache and integrity model as D1, but
         # make denial reasons clearly identify the Express profile.
         raise OfflineAssetError(str(exc).replace('NODE_VITE_', 'NODE_EXPRESS_')) from exc
+
+
+def approved_node_fullstack_assets(config: Mapping, identity: str) -> dict:
+    """D4 two-lockfile profile: reuse D1's archive checks with distinct hashes."""
+    profiles = config.get('node_fullstack_offline')
+    profile = profiles.get(identity) if isinstance(profiles, dict) else None
+    if not isinstance(profile, dict):
+        raise OfflineAssetError('NODE_FULLSTACK_OFFLINE_FIXTURE_ASSETS_NOT_APPROVED')
+    roots = profile.get('service_roots')
+    if not isinstance(roots, dict) or set(roots) != {'frontend', 'backend'}:
+        raise OfflineAssetError('NODE_FULLSTACK_INVALID_SERVICE_ROOTS')
+    for rel in roots.values():
+        if not (isinstance(rel, str) and rel and len(rel) <= 180
+                and re.fullmatch(r'[A-Za-z0-9_./-]+', rel)
+                and all(x not in ('', '.', '..') for x in rel.split('/'))):
+            raise OfflineAssetError('NODE_FULLSTACK_INVALID_SERVICE_ROOTS')
+    if roots['frontend'] == roots['backend']:
+        raise OfflineAssetError('NODE_FULLSTACK_INVALID_SERVICE_ROOTS')
+    for key in ('frontend_lockfile_sha256', 'backend_lockfile_sha256'):
+        if not isinstance(profile.get(key), str) or not _HEX64.fullmatch(profile[key]):
+            raise OfflineAssetError('NODE_FULLSTACK_LOCKFILE_SHA256_INVALID')
+    try:
+        result = approved_node_vite_assets(
+            {'node_vite_offline': {identity: {**profile,
+                'lockfile_sha256': profile['frontend_lockfile_sha256']}}}, identity)
+    except OfflineAssetError as exc:
+        raise OfflineAssetError(str(exc).replace('NODE_VITE_', 'NODE_FULLSTACK_')) from exc
+    result['service_roots'] = dict(roots)
+    result['frontend_lockfile_sha256'] = profile['frontend_lockfile_sha256'].lower()
+    result['backend_lockfile_sha256'] = profile['backend_lockfile_sha256'].lower()
+    return result

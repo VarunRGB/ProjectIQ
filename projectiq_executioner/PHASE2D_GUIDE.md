@@ -91,3 +91,15 @@ operator-approved Node tarball and SHA-pinned npm cache prepared in a separate
 authorized VM. The runtime VM stays offline and uses `npm ci --ignore-scripts`
 before starting the reviewed JavaScript entrypoint. See [PHASE2D_D3_GUIDE.md](PHASE2D_D3_GUIDE.md).
 This pilot has no multi-service support or production isolation attestation.
+
+## D4a reviewed React/Vite + Express + SQLite vertical slice
+
+`node_fullstack_offline_v1` extends the reviewed-fixture pilot to one evidenced
+Vite frontend + Express backend in distinct safe roots, sharing one disposable
+Ubuntu VM. The operator prepares a SHA-verified cache for both lockfiles in a
+separate explicitly network-authorized VM; the execution VM installs offline,
+builds Vite, starts Express first, and checks HTML, assets and a real proxied API
+request. Node's embedded SQLite supports the curated CRUD fixture; external
+DB services and general multi-service scheduling remain unsupported. See
+[PHASE2D_D4_GUIDE.md](PHASE2D_D4_GUIDE.md) for steps and acceptance gates.
+This is **D4a only**, not general D4 or production security attestation.

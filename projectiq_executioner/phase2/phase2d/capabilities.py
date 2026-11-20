@@ -43,7 +43,7 @@ def build_capability_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any
     expected = build_vm_plan(manifest, phase2a, phase2b)
     if not isinstance(phase2c, Mapping) or any(
         phase2c.get(k) != expected.get(k) for k in
-        ('source', 'adapter', 'status', 'probe_path', 'schema_path', 'project_root', 'python_framework', 'vm_limits')
+        ('source', 'adapter', 'status', 'probe_path', 'schema_path', 'project_root', 'python_framework', 'vm_limits', 'service_roots', 'backend_probe_path')
     ):
         raise VMPlanError('Phase 2C candidate differs from verified plan')
 
@@ -62,6 +62,8 @@ def build_capability_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any
             state = 'PHASE2D_PYTHON_SQLITE_EPHEMERAL_GUEST_ONLY'
         elif kind == 'database':
             state = 'PHASE2D_DB_RESOURCE_NOT_IMPLEMENTED'
+        elif pilot and expected['adapter'] == 'node_fullstack_offline_v1' and family in ('node_frontend', 'node'):
+            state = 'PHASE2D_FULLSTACK_OFFLINE_ASSETS_REQUIRED'
         elif pilot and family == 'node_frontend' and expected['adapter'] == 'node_vite_offline_v1':
             state = 'PHASE2D_NODE_VITE_OFFLINE_ASSETS_REQUIRED'
         elif pilot and family == 'node' and expected['adapter'] == 'node_express_offline_v1':
@@ -91,18 +93,19 @@ def build_capability_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any
         'source': expected['source'], 'execution': 'NOT_PERFORMED',
         'launch_authorization': 'DENIED_UNTIL_OPERATOR_APPROVAL_AND_RUNTIME_GATES',
         'status': ('PHASE2D_OFFLINE_NODE_ADAPTER_CONDITIONAL'
-                   if expected['adapter'] in ('node_vite_offline_v1', 'node_express_offline_v1') else
+                   if expected['adapter'] in ('node_vite_offline_v1', 'node_express_offline_v1', 'node_fullstack_offline_v1') else
                    'PHASE2D_OFFLINE_PYTHON_ADAPTER_CONDITIONAL'
                    if expected['adapter'] == 'python_web_offline_v1' else
                    'PHASE2C_PILOT_ADAPTER_AVAILABLE' if pilot else 'NEEDS_PHASE2D_IMPLEMENTATION'),
         'existing_pilot_adapter': (expected['adapter']
                                    if expected['adapter'] in ('static_html_v1', 'php_mysql_v1') else None),
-        'phase2d_adapter': (expected['adapter'] if expected['adapter'] in ('node_vite_offline_v1', 'node_express_offline_v1', 'python_web_offline_v1') else None),
+        'phase2d_adapter': (expected['adapter'] if expected['adapter'] in ('node_vite_offline_v1', 'node_express_offline_v1', 'python_web_offline_v1', 'node_fullstack_offline_v1') else None),
         'services': records, 'missing_profiles': outstanding,
         'execution_constraints': [
             'Only pinned operator-reviewed snapshots may execute in the Phase 2C pilot.',
             'No student-defined build, install, package, or README command runs on the host.',
             'Node/Vite execution requires operator-pinned official Linux Node.js and Linux npm cache archives.',
+            'D4 requires two independent matching lockfile hashes, an operator-approved combined cache, and a linked API route.',
             'Offline npm uses --ignore-scripts; only reviewed Vite build or fixed Express server entrypoints execute in the VM.',
             'Python 3.12 uses a SHA-pinned pip wheel and offline binary-only wheelhouse in an isolated target directory.',
             'Python pilot requires simple exact-version requirements and fixed Flask/FastAPI entrypoint conventions.',

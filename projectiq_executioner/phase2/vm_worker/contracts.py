@@ -124,6 +124,45 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
         else:
             manual_review.append('NODE_VITE_NEEDS_EVIDENCED_VITE_NPM_LOCK_AND_SAFE_ROOT')
     elif (len(backends) == 1 and backends[0]['family'] == 'node'
+          and len(frontends) == 1 and frontends[0]['family'] == 'node_frontend'
+          and not dbs and not others):
+        # D4a: one static Vite build + Express API, running concurrently in
+        # a single disposable VM. A SQLite DB may be used inside Express via
+        # Node's built-in node:sqlite, but no external database is launched.
+        backend_root, frontend_root = backends[0]['root'], frontends[0]['root']
+        be_prefix = '' if backend_root == '.' else backend_root + '/'
+        fe_prefix = '' if frontend_root == '.' else frontend_root + '/'
+        names = {t.get('name', '').lower() for t in manifest.get('technologies', [])
+                 if isinstance(t, dict) and isinstance(t.get('name'), str)}
+        setup = manifest.get('setup_files') or []
+        routes = manifest.get('routes') or []
+        declared = {r.get('path') for r in routes if isinstance(r, dict)
+                    and r.get('kind') == 'declared_http_route' and r.get('method') == 'GET'}
+        called = {r.get('path') for r in routes if isinstance(r, dict)
+                  and r.get('kind') == 'client_http_call' and r.get('method') == 'GET'}
+        internal_api = next((p for p in ('/api/sqlite-check', '/api/health')
+                             if p in declared and p in called), None)
+        health = next((p for p in ('/health', '/api/health') if p in declared), None)
+        if (backend_root != frontend_root and safe_path(backend_root) is not None
+                and safe_path(frontend_root) is not None
+                and 'express' in names and 'vite' in names
+                and isinstance(setup, list)
+                and all(prefix + filename in setup
+                        for prefix in (be_prefix, fe_prefix)
+                        for filename in ('package.json', 'package-lock.json'))
+                and backends[0]['name'] in frontends[0]['deps']
+                and not backends[0]['deps'] and internal_api and health):
+            adapter = 'node_fullstack_offline_v1'
+            expected_probe = internal_api
+            manual_review.extend([
+                'D4_TWO_SEPARATE_NPM_LOCKFILES_AND_SHARED_CACHE_REQUIRED',
+                'D4_NODE_RUNTIME_AND_NPM_CACHE_SHA256_REQUIRED',
+                'D4_BACKEND_FIRST_READINESS_AND_FRONTEND_PROXY_REQUIRED',
+                'D4_SINGLE_VM_NO_EXTERNAL_DB_OR_SERVICES',
+            ])
+        else:
+            manual_review.append('D4_REQUIRES_EVIDENCED_VITE_EXPRESS_SERVICE_GRAPH_AND_API_LINK')
+    elif (len(backends) == 1 and backends[0]['family'] == 'node'
           and not frontends and not dbs and not others):
         # D3: one reviewed Express API, no frontend, DB or external service.
         root = backends[0]['root']
@@ -195,6 +234,9 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
         'schema_path': schema,
         'project_root': (frontends[0]['root'] if adapter == 'node_vite_offline_v1' else
                          backends[0]['root'] if adapter in ('python_web_offline_v1', 'node_express_offline_v1') else None),
+        'service_roots': ({'frontend': frontends[0]['root'], 'backend': backends[0]['root']}
+                          if adapter == 'node_fullstack_offline_v1' else None),
+        'backend_probe_path': health if adapter == 'node_fullstack_offline_v1' else None,
         'python_framework': framework if adapter == 'python_web_offline_v1' else None,
         'guest_profile': 'ubuntu_template_prebaked_offline',
         'linux_guest_mode': 'single_vm_multiple_local_processes',
@@ -205,8 +247,8 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
             'docker_probe_ignored_on_vm_path': True,
         },
         'vm_limits': {
-            'vcpu': 2, 'ram_mib': 3072 if adapter in ('php_mysql_v1', 'node_vite_offline_v1', 'node_express_offline_v1') else (2048 if adapter == 'python_web_offline_v1' else 1024),
-            'wall_seconds': 480 if adapter in ('node_vite_offline_v1', 'node_express_offline_v1') else (300 if adapter == 'python_web_offline_v1' else (240 if adapter == 'php_mysql_v1' else 140)),
+            'vcpu': 2, 'ram_mib': 3584 if adapter == 'node_fullstack_offline_v1' else 3072 if adapter in ('php_mysql_v1', 'node_vite_offline_v1', 'node_express_offline_v1') else (2048 if adapter == 'python_web_offline_v1' else 1024),
+            'wall_seconds': 900 if adapter == 'node_fullstack_offline_v1' else 480 if adapter in ('node_vite_offline_v1', 'node_express_offline_v1') else (300 if adapter == 'python_web_offline_v1' else (240 if adapter == 'php_mysql_v1' else 140)),
             'max_snapshot_zip_bytes': 30_000_000,
             'max_output_bytes': 64_000,
         },
@@ -220,7 +262,7 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
         ],
         'limitations': [
             'VM image installation/baking and security acceptance remain operator tasks.',
-            'Static HTML, curated PHP/MySQL, offline Vite, Flask/FastAPI and conditional Express are implemented.',
+            'Static HTML, PHP/MySQL, Vite, Flask/FastAPI, Express, and conditional D4 full-stack are implemented.',
             'No Docker daemon is required; Phase 2B Docker probe statuses are legacy data only.',
             'Successful HTTP readiness proves startup only, not application correctness.',
         ],
