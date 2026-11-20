@@ -231,6 +231,52 @@ done
 '''
 
 
+# B3b Gate 2A: separate evaluation workload slice (NOT the Gate 1 probe).
+# The trusted VM controller owns systemd; projectiq_run has no user manager.
+APP_CGROUP_SLICE = 'projectiq-eval.slice'
+APP_CGROUP_MEMORY_BYTES = 2147483648
+APP_CGROUP_PIDS = 80
+APP_CGROUP_IO_BPS = 16777216
+APP_CGROUP_BOOTSTRAP_SCRIPT = r'''#!/bin/sh
+set -eu
+uid=$(/usr/bin/id -u projectiq)
+[ -n "$uid" ] || exit 1
+/bin/mkdir -p "/etc/systemd/system/user@${uid}.service.d"
+/bin/cat > "/etc/systemd/system/user@${uid}.service.d/90-projectiq-delegation.conf" <<EOF
+[Service]
+Delegate=cpu cpuset io memory pids
+IOAccounting=yes
+EOF
+/bin/mkdir -p /etc/systemd/user
+/bin/cat > /etc/systemd/user/projectiq-eval.slice <<EOF
+[Unit]
+Description=ProjectIQ bounded evaluation workload (trusted controller only)
+[Slice]
+MemoryAccounting=yes
+MemoryMax=2147483648
+TasksAccounting=yes
+TasksMax=80
+IOAccounting=yes
+IOWriteBandwidthMax=/srv/projectiq-workspace 16777216
+EOF
+/usr/bin/systemctl daemon-reload
+/usr/bin/loginctl enable-linger projectiq
+# SSH/PAM may have started an older user manager; refresh its delegation.
+/usr/bin/systemctl restart "user@${uid}.service"
+n=0
+until /usr/sbin/runuser -u projectiq -- /usr/bin/env \
+  "XDG_RUNTIME_DIR=/run/user/${uid}" \
+  "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${uid}/bus" \
+  /usr/bin/systemctl --user daemon-reload; do
+    n=$((n + 1))
+    [ "$n" -lt 15 ] || exit 1
+    sleep 1
+done
+# Readiness marker only; the guest independently checks kernel cgroup values.
+/usr/bin/touch /run/projectiq-eval-bootstrap.ready
+'''
+
+
 def _validate_workspace_mib(mib: int) -> int:
     if type(mib) is not int or not WORKSPACE_MIN_MIB <= mib <= WORKSPACE_MAX_MIB:
         raise WorkerFailure('Workspace disk budget must be an integer between 64 and 2048 MiB')
@@ -239,7 +285,7 @@ def _validate_workspace_mib(mib: int) -> int:
 
 def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_setup: bool = False,
                       mysql_bootstrap: bool = False, workspace_disk_mib: int = 0,
-                      cgroup_probe: bool = False) -> Path:
+                      cgroup_probe: bool = False, app_cgroup: bool = False) -> Path:
     """Generate a per-run cloud-init seed without executing anything from source.
 
     Dependency: ``pip install pycdlib`` on the operator host (not inside student
@@ -255,6 +301,8 @@ def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_s
         raise WorkerFailure('Cannot bootstrap application database while baking template')
     if cgroup_probe and (template_setup or mysql_bootstrap or not workspace_disk_mib):
         raise WorkerFailure('Cgroup probe requires a separate bounded workspace disk')
+    if app_cgroup and (template_setup or cgroup_probe or not workspace_disk_mib):
+        raise WorkerFailure('App cgroup requires a runtime workspace and no probe/template mode')
     if workspace_disk_mib:
         _validate_workspace_mib(workspace_disk_mib)
         if template_setup:
@@ -288,7 +336,7 @@ def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_s
             '    sudo: false\n'
         )
     bootstrap_tasks = []
-    if workspace_disk_mib or mysql_bootstrap or cgroup_probe:
+    if workspace_disk_mib or mysql_bootstrap or cgroup_probe or app_cgroup:
         data += 'write_files:\n'
     if workspace_disk_mib:
         encoded = base64.b64encode(WORKSPACE_BOOTSTRAP_SCRIPT.encode('utf-8')).decode('ascii')
@@ -310,6 +358,16 @@ def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_s
             f'    content: {encoded}\n'
         )
         bootstrap_tasks.append('/usr/local/sbin/projectiq-cgroup-probe-bootstrap')
+    if app_cgroup:
+        encoded = base64.b64encode(APP_CGROUP_BOOTSTRAP_SCRIPT.encode('utf-8')).decode('ascii')
+        data += (
+            '  - path: /usr/local/sbin/projectiq-eval-bootstrap\n'
+            '    owner: root:root\n'
+            "    permissions: '0700'\n"
+            '    encoding: b64\n'
+            f'    content: {encoded}\n'
+        )
+        bootstrap_tasks.append('/usr/local/sbin/projectiq-eval-bootstrap')
     if mysql_bootstrap:
         encoded = base64.b64encode(MYSQL_BOOTSTRAP_SCRIPT.encode('utf-8')).decode('ascii')
         data += (

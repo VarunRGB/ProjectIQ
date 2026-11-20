@@ -132,6 +132,22 @@ for limit, maximum in ((resource.RLIMIT_NPROC, 96),
     _soft, old_hard = resource.getrlimit(limit)
     target = maximum if old_hard == resource.RLIM_INFINITY else min(old_hard, maximum)
     resource.setrlimit(limit, (target, target))
+# A trusted marker is inserted only for reviewed runtime VMs. The program
+# cannot run if systemd-run placed its process outside the evaluation scope.
+if os.environ.get('PROJECTIQ_EVAL_REQUIRED') == '1':
+    try:
+        with open('/proc/self/cgroup', encoding='utf-8') as _f:
+            rows = [line.split(':', 2)[2].strip() for line in _f if line.startswith('0::')]
+        if len(rows) != 1:
+            sys.exit(112)
+        parts = rows[0].strip('/').split('/')
+        if (len(parts) != 6 or parts[-3] != 'projectiq.slice' or
+                parts[-2] != 'projectiq-eval.slice' or
+                not parts[-1].startswith('piq-app-') or
+                not parts[-1].endswith('.scope')):
+            sys.exit(112)
+    except (OSError, ValueError):
+        sys.exit(112)
 # No shell; the program and arguments originate from the trusted adapter.
 os.execvpe(sys.argv[1], sys.argv[1:], os.environ)
 '''
@@ -257,6 +273,66 @@ def _share_tree(path: Path, *, writable: bool) -> None:
             item.chmod((current | mode | (0o110 if current & 0o111 else 0)) & 0o777)
 
 
+# B3b Gate 2A: static guest-side copy of the operator-owned policy. The
+# separately copied guest agent does not import the host's qemu.py.
+APP_CGROUP_SLICE = 'projectiq-eval.slice'
+APP_CGROUP_MEMORY_BYTES = 2147483648
+APP_CGROUP_PIDS = 80
+APP_CGROUP_IO_BPS = 16777216
+_APP_CGROUP_ACTIVE = False
+
+
+def _evaluation_policy_matches(group: str, workspace: Path, *, uid: int,
+                               cgroup_root: Path = Path('/sys/fs/cgroup')) -> bool:
+    """Require exact user-manager slice and real kernel cgroup limits."""
+    parts = group.strip('/').split('/')
+    expected = ['user.slice', f'user-{uid}.slice', f'user@{uid}.service',
+                'projectiq.slice', APP_CGROUP_SLICE]
+    if parts != expected:
+        return False
+    try:
+        node = cgroup_root.joinpath(*parts)
+        if node.is_symlink() or node.joinpath('memory.max').read_text().strip() != str(APP_CGROUP_MEMORY_BYTES):
+            return False
+        if node.joinpath('pids.max').read_text().strip() != str(APP_CGROUP_PIDS):
+            return False
+        device = workspace.stat().st_dev
+        expected_dev = f'{os.major(device)}:{os.minor(device)}'
+        io_rows = [line.split() for line in node.joinpath('io.max').read_text().splitlines()]
+        if not any(row and row[0] == expected_dev and
+                   f'wbps={APP_CGROUP_IO_BPS}' in row[1:] for row in io_rows):
+            return False
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _verify_evaluation_cgroup(workspace: Path) -> None:
+    """Fail closed before any evaluation code if bootstrap/slice is missing."""
+    marker = Path('/run/projectiq-eval-bootstrap.ready')
+    deadline = time.monotonic() + 85
+    while not marker.is_file() and time.monotonic() < deadline:
+        time.sleep(1)
+    try:
+        st = marker.lstat()
+        if marker.is_symlink() or not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or st.st_mode & 0o022:
+            raise GuestFailure('APP_CGROUP_ENFORCEMENT_UNAVAILABLE')
+        uid = os.getuid()
+        env = dict(os.environ,
+                   XDG_RUNTIME_DIR=f'/run/user/{uid}',
+                   DBUS_SESSION_BUS_ADDRESS=f'unix:path=/run/user/{uid}/bus')
+        started = _trusted_process(['/usr/bin/systemctl', '--user', 'start', APP_CGROUP_SLICE],
+                                   timeout=15, env=env)
+        shown = _trusted_process(['/usr/bin/systemctl', '--user', 'show', '-P',
+                                  'ControlGroup', APP_CGROUP_SLICE], timeout=10, env=env)
+        if (started.returncode != 0 or shown.returncode != 0 or
+                not _evaluation_policy_matches(shown.stdout.decode('utf-8').strip(),
+                                                workspace, uid=uid)):
+            raise GuestFailure('APP_CGROUP_ENFORCEMENT_UNAVAILABLE')
+    except (OSError, UnicodeError) as exc:
+        raise GuestFailure('APP_CGROUP_ENFORCEMENT_UNAVAILABLE') from exc
+
+
 def _project_command(command: list[str], env: dict | None = None) -> list[str]:
     """Only project-owned subprocesses use sudo, exclusively AS APP_USER."""
     allowed = {'PATH', 'PORT', 'HOST', 'NODE_ENV', 'CI', 'PYTHONPATH',
@@ -278,9 +354,19 @@ def _project_command(command: list[str], env: dict | None = None) -> list[str]:
     # all descendants inherit the same kernel-enforced limits.
     if not command or any(not isinstance(arg, str) or '\x00' in arg for arg in command):
         raise GuestFailure('APP_RESOURCE_LAUNCH_INVALID_COMMAND')
-    return ['sudo', '-n', '-u', APP_USER, '--', '/usr/bin/env', '-i',
-            *[key + '=' + value for key, value in sorted(env_vars.items())],
-            '/usr/bin/python3', '-I', '-c', APP_LIMIT_LAUNCHER, *command]
+    if _APP_CGROUP_ACTIVE:
+        env_vars['PROJECTIQ_EVAL_REQUIRED'] = '1'
+    runas = ['sudo', '-n', '-u', APP_USER, '--', '/usr/bin/env', '-i',
+             *[key + '=' + value for key, value in sorted(env_vars.items())],
+             '/usr/bin/python3', '-I', '-c', APP_LIMIT_LAUNCHER, *command]
+    if not _APP_CGROUP_ACTIVE:
+        return runas  # Isolated cache-preparation VMs only; no evaluation source.
+    uid = os.getuid()
+    return ['/usr/bin/env', f'XDG_RUNTIME_DIR=/run/user/{uid}',
+            f'DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus',
+            '/usr/bin/systemd-run', '--user', '--scope', '--quiet',
+            '--slice=' + APP_CGROUP_SLICE, '--unit=piq-app-' + secrets.token_hex(8),
+            *(['/usr/bin/sudo'] + runas[1:])]
 
 
 def _trusted_process(args: list[str], *, input: bytes | None = None, timeout: int = 15,
@@ -1693,11 +1779,10 @@ def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765
         processes.append(process)
         _d4_wait_json(health, 8766)
         with (base_dir / 'd4_frontend.log').open('wb') as log:
-            process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()),
-                                        '--serve-d4-frontend', str(dist), str(port), '8766'],
-                                       stdin=subprocess.DEVNULL, stdout=log,
-                                       stderr=subprocess.STDOUT, cwd=base_dir,
-                                       start_new_session=True)
+            process = _project_popen(
+                [sys.executable, str(Path(__file__).resolve()),
+                 '--serve-d4-frontend', str(dist), str(port), '8766'],
+                cwd=base_dir, env={}, log=log)
         processes.append(process)
         status, kind = _probe('/index.html', port=port, deadline=30)
         if status != 200 or kind != 'HTML_RESPONSE_OK':
@@ -1724,6 +1809,7 @@ def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765
 
 
 def main() -> int:
+    global _APP_CGROUP_ACTIVE
     if len(sys.argv) == 5 and sys.argv[1] == '--serve-d4-frontend':
         _d4_frontend_serve(Path(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]))
         return 0
@@ -1736,6 +1822,12 @@ def main() -> int:
         # dependency preparation retains its separate explicit network policy.
         app_base = (_stage_bounded_workspace(meta, base=Path('/home/projectiq'))
                     if 'workspace_disk_mib' in meta else Path('/home/projectiq'))
+        if meta.get('operation') not in ('prepare_fullstack_cache',
+                                         'prepare_npm_cache', 'prepare_python_wheels'):
+            if meta.get('app_cgroup') is not True:
+                raise GuestFailure('APP_CGROUP_ENFORCEMENT_UNAVAILABLE')
+            _verify_evaluation_cgroup(app_base)
+            _APP_CGROUP_ACTIVE = True
         result = (prepare_fullstack_cache(request, base_dir=app_base) if meta.get('operation') == 'prepare_fullstack_cache'
                   else prepare_npm_cache(request, base_dir=app_base) if meta.get('operation') == 'prepare_npm_cache'
                   else prepare_python_wheelhouse(request, base_dir=app_base) if meta.get('operation') == 'prepare_python_wheels'

@@ -143,6 +143,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'project_root': candidate.get('project_root'),
                 'python_framework': candidate.get('python_framework'),
                 'workspace_disk_mib': workspace_mib,
+                'app_cgroup': True,
             }
             if node_assets is not None:
                 request.update({
@@ -167,7 +168,8 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             key, pubkey = make_ssh_key(config, work)
             seed = make_nocloud_iso(work, pubkey, 'projectiq-' + uuid.uuid4().hex,
                                     mysql_bootstrap=(candidate['adapter'] == 'php_mysql_v1'),
-                                    workspace_disk_mib=request['workspace_disk_mib'])
+                                    workspace_disk_mib=request['workspace_disk_mib'],
+                                    app_cgroup=True)
             port = _free_loopback_port()
             limits = candidate['vm_limits']
             worker = QemuWorker({**config, 'workspace_disk_mib': request['workspace_disk_mib']},
