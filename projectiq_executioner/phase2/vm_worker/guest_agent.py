@@ -333,6 +333,90 @@ def _verify_evaluation_cgroup(workspace: Path) -> None:
         raise GuestFailure('APP_CGROUP_ENFORCEMENT_UNAVAILABLE') from exc
 
 
+# B3b Gate 2A: independent, controller-side observation of live app server
+# processes. This does NOT yet prove short-lived npm/Vite/build processes or
+# daemonized MySQL are inside this slice. Never report more than observed.
+_APP_SERVER_PLACEMENTS: list[str] = []
+
+
+def _server_pid_in_scope(unit: str, command: list[str], *, controller_uid: int,
+                         app_uid: int, cgroup_root: Path = Path('/sys/fs/cgroup'),
+                         proc_root: Path = Path('/proc')) -> bool:
+    """Read Linux's actual task PID, UID, argv and unified cgroup.
+
+    Called by trusted projectiq controller, not projectiq_run; no student
+    writeable evidence files or user-controlled paths are accepted.
+    """
+    if (not isinstance(unit, str) or not re.fullmatch(r'piq-app-[0-9a-f]{16}', unit)
+            or not command or any(not isinstance(x, str) for x in command)):
+        return False
+    parts = ['user.slice', f'user-{controller_uid}.slice',
+             f'user@{controller_uid}.service', 'projectiq.slice',
+             APP_CGROUP_SLICE, unit + '.scope']
+    expected_group = '/' + '/'.join(parts)
+    try:
+        scope = cgroup_root.joinpath(*parts)
+        if scope.is_symlink() or not scope.is_dir():
+            return False
+        raw = (scope / 'cgroup.procs').read_text(encoding='ascii')
+        pids = raw.split()
+        if len(pids) > 128:
+            return False
+        for pid in pids:
+            if not pid.isascii() or not pid.isdecimal() or len(pid) > 10:
+                return False
+            task = proc_root / pid
+            try:
+                status = (task / 'status').read_text(encoding='utf-8')[:16000]
+                line = next((x for x in status.splitlines() if x.startswith('Uid:')), '')
+                uids = line.split()[1:]
+                if len(uids) != 4 or any(not n.isdecimal() for n in uids):
+                    continue
+                if int(uids[0]) != app_uid or int(uids[1]) != app_uid:
+                    continue
+                group_rows = [(x.split(':', 2)[2]) for x in
+                              (task / 'cgroup').read_text(encoding='utf-8').splitlines()
+                              if x.startswith('0::')]
+                if group_rows != [expected_group]:
+                    continue
+                arguments = (task / 'cmdline').read_bytes()[:8192].split(b'\x00')
+                arguments = [s for s in arguments if s]
+                wanted = [x.encode('utf-8') for x in command]
+                # Ignore transient sudo, systemd-run, and pre-exec Python.
+                # The intended entrypoint must actually have been exec'd.
+                if arguments == wanted:
+                    return True
+            except (OSError, UnicodeError, ValueError):
+                # A task may exit while we inspect it. Retry until deadline.
+                continue
+        return False
+    except (OSError, UnicodeError, ValueError):
+        return False
+
+
+def _verify_live_server_process(launch: list[str], command: list[str],
+                                proc: subprocess.Popen) -> None:
+    """Observe the real app UID's running server in its exact systemd scope."""
+    units = [part.split('=', 1)[1] for part in launch if part.startswith('--unit=')]
+    if len(units) != 1 or not re.fullmatch(r'piq-app-[0-9a-f]{16}', units[0]):
+        raise GuestFailure('APP_CGROUP_SERVER_PLACEMENT_NOT_VERIFIED')
+    try:
+        controller_uid = os.getuid()
+        app_uid = pwd.getpwnam(APP_USER).pw_uid
+        until = time.monotonic() + 15
+        while time.monotonic() < until:
+            if proc.poll() is not None:
+                break
+            if _server_pid_in_scope(units[0], command,
+                                    controller_uid=controller_uid, app_uid=app_uid):
+                _APP_SERVER_PLACEMENTS.append(units[0])
+                return
+            time.sleep(0.1)
+    except (OSError, KeyError, AttributeError) as exc:
+        raise GuestFailure('APP_CGROUP_SERVER_PLACEMENT_NOT_VERIFIED') from exc
+    raise GuestFailure('APP_CGROUP_SERVER_PLACEMENT_NOT_VERIFIED')
+
+
 def _project_command(command: list[str], env: dict | None = None) -> list[str]:
     """Only project-owned subprocesses use sudo, exclusively AS APP_USER."""
     allowed = {'PATH', 'PORT', 'HOST', 'NODE_ENV', 'CI', 'PYTHONPATH',
@@ -383,11 +467,21 @@ def _trusted_process(args: list[str], *, input: bytes | None = None, timeout: in
 
 def _project_popen(command: list[str], *, cwd: Path, env: dict, log) -> subprocess.Popen:
     try:
-        return subprocess.Popen(_project_command(command, env), stdin=subprocess.DEVNULL,
-                                stdout=log, stderr=subprocess.STDOUT, cwd=cwd,
-                                start_new_session=True)
+        launch = _project_command(command, env)
+        process = subprocess.Popen(launch, stdin=subprocess.DEVNULL,
+                                   stdout=log, stderr=subprocess.STDOUT, cwd=cwd,
+                                   start_new_session=True)
     except OSError as exc:
         raise GuestFailure('RUNTIME_PRIVILEGE_BOUNDARY_UNAVAILABLE') from exc
+    if _APP_CGROUP_ACTIVE:
+        try:
+            _verify_live_server_process(launch, command, process)
+        except GuestFailure:
+            # The controller must not continue an unverified server. Stop its
+            # whole process group, then the disposable VM supplies a backstop.
+            _d4_stop_process(process)
+            raise
+    return process
 
 
 def _php_pdo_rebind(checkout: Path) -> None:
@@ -1827,11 +1921,23 @@ def main() -> int:
             if meta.get('app_cgroup') is not True:
                 raise GuestFailure('APP_CGROUP_ENFORCEMENT_UNAVAILABLE')
             _verify_evaluation_cgroup(app_base)
+            _APP_SERVER_PLACEMENTS.clear()
             _APP_CGROUP_ACTIVE = True
         result = (prepare_fullstack_cache(request, base_dir=app_base) if meta.get('operation') == 'prepare_fullstack_cache'
                   else prepare_npm_cache(request, base_dir=app_base) if meta.get('operation') == 'prepare_npm_cache'
                   else prepare_python_wheelhouse(request, base_dir=app_base) if meta.get('operation') == 'prepare_python_wheels'
                   else run(request, base_dir=app_base))
+        if _APP_CGROUP_ACTIVE and result.get('status') == 'STARTUP_VERIFIED':
+            expected = 2 if meta.get('adapter') == 'node_fullstack_offline_v1' else 1
+            if (len(_APP_SERVER_PLACEMENTS) != expected or
+                    len(set(_APP_SERVER_PLACEMENTS)) != expected):
+                raise GuestFailure('APP_CGROUP_SERVER_PLACEMENT_NOT_VERIFIED')
+            # Controller-side evidence collected while real servers were alive.
+            # No PID or command line data is ever returned to the host.
+            result['cgroup_placement'] = {
+                'status': 'SERVER_PIDS_VERIFIED', 'server_count': expected,
+                'builds_verified': False, 'database_service_verified': False,
+            }
     except OSError as exc:
         if getattr(exc, 'errno', None) in (28, 122):
             result = {'status': 'STARTUP_FAILED', 'error_code': 'WORKSPACE_DISK_QUOTA_EXCEEDED'}

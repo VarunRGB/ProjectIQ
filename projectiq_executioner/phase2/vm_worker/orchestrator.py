@@ -215,6 +215,21 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'notes': [x[:160] for x in guest.get('notes', [])[:5]
                           if isinstance(x, str)] if isinstance(guest.get('notes'), list) else [],
             }
+            # Compact, typed, guest-controller-collected kernel observations.
+            # Startup alone is not accepted as evidence of process placement.
+            placement = guest.get('cgroup_placement')
+            expected_servers = 2 if candidate['adapter'] == 'node_fullstack_offline_v1' else 1
+            if (isinstance(placement, dict) and
+                    set(placement) == {'status', 'server_count', 'builds_verified',
+                                       'database_service_verified'} and
+                    placement.get('status') == 'SERVER_PIDS_VERIFIED' and
+                    type(placement.get('server_count')) is int and
+                    placement['server_count'] == expected_servers and
+                    placement.get('builds_verified') is False and
+                    placement.get('database_service_verified') is False):
+                result['guest_result']['cgroup_placement'] = placement
+            else:
+                result['guest_result']['cgroup_placement'] = {'status': 'NOT_VERIFIED'}
             if candidate['adapter'] == 'node_fullstack_offline_v1':
                 services = guest.get('service_results')
                 if isinstance(services, dict):
@@ -235,6 +250,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'MySQL disposable database bootstrap failed',
                 'MySQL trusted cloud-init bootstrap unavailable',
                 'RUNTIME_PRIVILEGE_BOUNDARY_UNAVAILABLE',
+                'APP_CGROUP_SERVER_PLACEMENT_NOT_VERIFIED',
                 'RUNTIME_SHARED_PATH_UNSUPPORTED',
                 'WORKSPACE_DISK_QUOTA_UNAVAILABLE',
                 'WORKSPACE_DISK_QUOTA_EXCEEDED',

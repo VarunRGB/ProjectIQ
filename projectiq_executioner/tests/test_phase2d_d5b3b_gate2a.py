@@ -110,13 +110,15 @@ class Gate2ATests(unittest.TestCase):
         with patch.object(guest, '_APP_CGROUP_ACTIVE', True), \
              patch.object(guest.os, 'getuid', return_value=1000, create=True), \
              patch.object(guest.subprocess, 'run') as runner, \
-             patch.object(guest.subprocess, 'Popen') as popen:
+             patch.object(guest.subprocess, 'Popen') as popen, \
+             patch.object(guest, '_verify_live_server_process') as observer:
             runner.return_value = SimpleNamespace(returncode=0, stdout=b'', stderr=b'')
             guest._trusted_process(['/usr/bin/python3','job.py'], project_code=True)
             guest._project_popen(['/usr/bin/php','-v'], cwd=Path('/tmp'), env={}, log=object())
         self.assertIn('--scope', runner.call_args.args[0])
         self.assertIn('--scope', popen.call_args.args[0])
         self.assertIn('start_new_session', popen.call_args.kwargs)
+        observer.assert_called_once()
         with patch.object(guest, '_APP_CGROUP_ACTIVE', False):
             self.assertEqual(guest._project_command(['/usr/bin/node','--version'])[:5],
                              ['sudo','-n','-u',guest.APP_USER,'--'])
