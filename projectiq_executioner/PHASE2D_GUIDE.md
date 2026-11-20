@@ -82,3 +82,12 @@ preparation in a separately authorized disposable VM, and offline wheel installa
 plus API readiness in the execution VM. See
 [PHASE2D_D2_GUIDE.md](PHASE2D_D2_GUIDE.md). D2's real Windows/WHPX
 integration results must be recorded separately; unit tests are not VM attestation.
+
+## D3 offline Express/Node API pilot (post-D2)
+
+`node_express_offline_v1` conditionally plans a single Express backend with a
+static evidenced GET health route, fixed JS entrypoint, npm v2/v3 lockfile,
+operator-approved Node tarball and SHA-pinned npm cache prepared in a separate
+authorized VM. The runtime VM stays offline and uses `npm ci --ignore-scripts`
+before starting the reviewed JavaScript entrypoint. See [PHASE2D_D3_GUIDE.md](PHASE2D_D3_GUIDE.md).
+This pilot has no multi-service support or production isolation attestation.

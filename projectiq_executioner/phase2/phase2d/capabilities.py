@@ -64,6 +64,8 @@ def build_capability_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any
             state = 'PHASE2D_DB_RESOURCE_NOT_IMPLEMENTED'
         elif pilot and family == 'node_frontend' and expected['adapter'] == 'node_vite_offline_v1':
             state = 'PHASE2D_NODE_VITE_OFFLINE_ASSETS_REQUIRED'
+        elif pilot and family == 'node' and expected['adapter'] == 'node_express_offline_v1':
+            state = 'PHASE2D_NODE_EXPRESS_OFFLINE_ASSETS_REQUIRED'
         elif pilot and family == 'python' and expected['adapter'] == 'python_web_offline_v1':
             state = 'PHASE2D_PYTHON_OFFLINE_WHEELHOUSE_REQUIRED'
         elif pilot and family in ('static_web', 'php'):
@@ -89,19 +91,19 @@ def build_capability_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any
         'source': expected['source'], 'execution': 'NOT_PERFORMED',
         'launch_authorization': 'DENIED_UNTIL_OPERATOR_APPROVAL_AND_RUNTIME_GATES',
         'status': ('PHASE2D_OFFLINE_NODE_ADAPTER_CONDITIONAL'
-                   if expected['adapter'] == 'node_vite_offline_v1' else
+                   if expected['adapter'] in ('node_vite_offline_v1', 'node_express_offline_v1') else
                    'PHASE2D_OFFLINE_PYTHON_ADAPTER_CONDITIONAL'
                    if expected['adapter'] == 'python_web_offline_v1' else
                    'PHASE2C_PILOT_ADAPTER_AVAILABLE' if pilot else 'NEEDS_PHASE2D_IMPLEMENTATION'),
         'existing_pilot_adapter': (expected['adapter']
                                    if expected['adapter'] in ('static_html_v1', 'php_mysql_v1') else None),
-        'phase2d_adapter': (expected['adapter'] if expected['adapter'] in ('node_vite_offline_v1', 'python_web_offline_v1') else None),
+        'phase2d_adapter': (expected['adapter'] if expected['adapter'] in ('node_vite_offline_v1', 'node_express_offline_v1', 'python_web_offline_v1') else None),
         'services': records, 'missing_profiles': outstanding,
         'execution_constraints': [
             'Only pinned operator-reviewed snapshots may execute in the Phase 2C pilot.',
             'No student-defined build, install, package, or README command runs on the host.',
             'Node/Vite execution requires operator-pinned official Linux Node.js and Linux npm cache archives.',
-            'Offline npm install uses --ignore-scripts, while Vite build runs reviewed code inside the disposable VM.',
+            'Offline npm uses --ignore-scripts; only reviewed Vite build or fixed Express server entrypoints execute in the VM.',
             'Python 3.12 uses a SHA-pinned pip wheel and offline binary-only wheelhouse in an isolated target directory.',
             'Python pilot requires simple exact-version requirements and fixed Flask/FastAPI entrypoint conventions.',
             'External cloud APIs and real secrets are not authorized or automatically contacted.',
@@ -110,6 +112,7 @@ def build_capability_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any
         'next_focus': [
             'node_spa_offline_dependency_support',
             'python_web_offline_dependency_support',
+            'node_express_offline_backend_support',
             'multi_service_readiness_and_teardown',
             'runtime_security_acceptance',
         ],

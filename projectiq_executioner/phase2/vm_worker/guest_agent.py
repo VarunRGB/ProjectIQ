@@ -321,6 +321,166 @@ def _check_vite_manifest(root: Path, expected_lock_sha: str) -> None:
 
 
 
+def _check_express_manifest(root: Path, expected_lock_sha: str) -> str:
+    """Verify supported Express/npm-lock project and choose a fixed JS entry.
+
+    No package.json scripts are executed. Other entrypoint layouts are a future
+    adapter capability, not permission to run a user-supplied command.
+    """
+    pkg, lock = root / 'package.json', root / 'package-lock.json'
+    if (not pkg.is_file() or pkg.stat().st_size > 150_000
+            or not lock.is_file() or lock.stat().st_size > 4_000_000
+            or (root / '.npmrc').exists() or (root / 'npm-shrinkwrap.json').exists()):
+        raise GuestFailure('NODE_EXPRESS_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+    if not isinstance(expected_lock_sha, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_lock_sha):
+        raise GuestFailure('NODE_EXPRESS_INVALID_REQUEST')
+    if _sha256(lock) != expected_lock_sha:
+        raise GuestFailure('NODE_EXPRESS_LOCKFILE_HASH_MISMATCH')
+    try:
+        package = json.loads(pkg.read_text('utf-8'))
+        locked = json.loads(lock.read_text('utf-8'))
+    except (UnicodeError, ValueError, OSError) as exc:
+        raise GuestFailure('NODE_EXPRESS_MANIFEST_OR_LOCKFILE_UNSUPPORTED') from exc
+    if (not isinstance(package, dict) or not isinstance(locked, dict)
+            or locked.get('lockfileVersion') not in (2, 3)
+            or not isinstance(locked.get('packages'), dict)
+            or not 0 < len(locked['packages']) <= 12000
+            or 'workspaces' in package
+            or package.get('type', 'commonjs') not in ('module', 'commonjs')):
+        raise GuestFailure('NODE_EXPRESS_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+    direct = package.get('dependencies') or {}
+    dev = package.get('devDependencies') or {}
+    if (not isinstance(direct, dict) or not isinstance(dev, dict)
+            or not isinstance(direct.get('express'), str)
+            or any(x in {**direct, **dev} for x in ('vite', 'next', 'nuxt'))):
+        raise GuestFailure('NODE_EXPRESS_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+    # Accept only ordinary registry semver specifications. Even with an
+    # apparently valid lockfile, do not let npm resolve URL/git/file/alias specs.
+    all_direct = {**direct, **dev}
+    version_spec = re.compile(r'^[~^]?[0-9]+\.[0-9]+\.[0-9]+(?:-[A-Za-z0-9.-]+)?$')
+    if (not all(isinstance(k, str) and isinstance(v, str)
+                and version_spec.fullmatch(v) for k, v in all_direct.items())
+            or not isinstance(locked['packages'].get(''), dict)
+            or locked['packages'][''].get('dependencies', {}) != direct
+            or locked['packages'][''].get('devDependencies', {}) != dev):
+        raise GuestFailure('NODE_EXPRESS_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+    for value in locked['packages'].values():
+        if not isinstance(value, dict) or value.get('link') is True:
+            raise GuestFailure('NODE_EXPRESS_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+        version, resolved = value.get('version'), value.get('resolved')
+        if isinstance(version, str) and version.startswith(('file:', 'link:', 'git:', 'git+', 'http:', 'https:')):
+            raise GuestFailure('NODE_EXPRESS_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+        if resolved is not None and (not isinstance(resolved, str) or
+                                     not resolved.startswith('https://registry.npmjs.org/')):
+            raise GuestFailure('NODE_EXPRESS_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+        if resolved and (not isinstance(value.get('integrity'), str)
+                         or not value['integrity'].startswith(('sha512-', 'sha384-', 'sha256-'))):
+            raise GuestFailure('NODE_EXPRESS_MANIFEST_OR_LOCKFILE_UNSUPPORTED')
+    candidates = ('server.js', 'app.js', 'index.js')
+    explicit = package.get('main')
+    if explicit is not None:
+        if not isinstance(explicit, str) or explicit not in candidates:
+            raise GuestFailure('NODE_EXPRESS_ENTRYPOINT_UNSUPPORTED')
+        chosen = explicit
+    else:
+        present = [name for name in candidates if (root / name).is_file()]
+        if len(present) != 1:
+            raise GuestFailure('NODE_EXPRESS_ENTRYPOINT_UNSUPPORTED')
+        chosen = present[0]
+    entry = root / chosen
+    if (not entry.is_file() or entry.is_symlink()
+            or not 0 < entry.stat().st_size <= 300_000):
+        raise GuestFailure('NODE_EXPRESS_ENTRYPOINT_UNSUPPORTED')
+    return chosen
+
+
+def _node_express_root(checkout: Path, req: dict) -> Path:
+    root_rel = req.get('project_root')
+    if not (root_rel == '.' or isinstance(root_rel, str)
+            and re.fullmatch(r'[A-Za-z0-9_./-]{1,180}', root_rel)
+            and all(s not in ('.', '..', '') for s in root_rel.split('/'))):
+        raise GuestFailure('NODE_EXPRESS_INVALID_PROJECT_ROOT')
+    root = checkout if root_rel == '.' else checkout.joinpath(*PurePosixPath(root_rel).parts)
+    if not root.is_dir() or (checkout / '.npmrc').exists():
+        raise GuestFailure('NODE_EXPRESS_INVALID_PROJECT_ROOT')
+    return root
+
+
+def _prepare_express(checkout: Path, base: Path, req: dict, *, port: int = 8765) -> tuple[list[str], dict, str]:
+    if req.get('adapter') != 'node_express_offline_v1':
+        raise GuestFailure('NODE_EXPRESS_INVALID_REQUEST')
+    root = _node_express_root(checkout, req)
+    keys = ('node_sha256', 'npm_cache_sha256', 'lockfile_sha256')
+    if any(not isinstance(req.get(k), str) or not re.fullmatch(r'[0-9a-f]{64}', req[k]) for k in keys):
+        raise GuestFailure('NODE_EXPRESS_INVALID_REQUEST')
+    version = req.get('node_version')
+    if not isinstance(version, str) or not re.fullmatch(r'v24\.[0-9]{1,3}\.[0-9]{1,3}', version):
+        raise GuestFailure('NODE_EXPRESS_INVALID_REQUEST')
+    entry = _check_express_manifest(root, req['lockfile_sha256'])
+    node_archive, cache_archive = base / 'node_runtime.tar.xz', base / 'npm_cache.zip'
+    if not node_archive.is_file() or not cache_archive.is_file():
+        raise GuestFailure('NODE_EXPRESS_INVALID_REQUEST')
+    if _sha256(node_archive) != req['node_sha256']:
+        raise GuestFailure('NODE_EXPRESS_NODE_HASH_MISMATCH')
+    if _sha256(cache_archive) != req['npm_cache_sha256']:
+        raise GuestFailure('NODE_EXPRESS_CACHE_HASH_MISMATCH')
+    runtime_dir = base / 'node_runtime'
+    runtime_dir.mkdir(mode=0o700)
+    node, npm = _node_tar_extract(node_archive, version, runtime_dir)
+    node_archive.unlink(missing_ok=True)
+    check = _trusted_process([str(node), '--version'], timeout=15)
+    if check.returncode or check.stdout.decode('utf-8', 'replace').strip() != version:
+        raise GuestFailure('NODE_EXPRESS_RUNTIME_VERSION_MISMATCH')
+    if not 0 < cache_archive.stat().st_size <= 170_000_000:
+        raise GuestFailure('NODE_EXPRESS_CACHE_HASH_MISMATCH')
+    try:
+        npm_cache = safe_extract(cache_archive, base / 'npm_cache', max_total=250_000_000)
+    except (GuestFailure, zipfile.BadZipFile) as exc:
+        raise GuestFailure('NODE_EXPRESS_CACHE_HASH_MISMATCH') from exc
+    cache_archive.unlink(missing_ok=True)
+    # Do not allow inherited npm / Node injection knobs or host credentials.
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith('NPM_CONFIG_')
+           and k.upper() not in ('NODE_OPTIONS', 'NODE_PATH')}
+    env['PATH'] = str(node.parent) + ':/usr/local/bin:/usr/bin:/bin'
+    env.update({'HOME': str(base), **_isolated_npm_config_paths(base),
+                'NPM_CONFIG_CACHE': str(npm_cache), 'NPM_CONFIG_OFFLINE': 'true',
+                'NPM_CONFIG_IGNORE_SCRIPTS': 'true', 'NPM_CONFIG_AUDIT': 'false',
+                'NPM_CONFIG_FUND': 'false', 'NPM_CONFIG_UPDATE_NOTIFIER': 'false',
+                'CI': 'true', 'PORT': str(port), 'HOST': '127.0.0.1',
+                'NODE_ENV': 'production'})
+    installed = _trusted_process([str(npm), 'ci', '--offline', '--ignore-scripts',
+                                  '--no-audit', '--no-fund', '--no-progress',
+                                  '--cache', str(npm_cache)], timeout=185, env=env, cwd=root)
+    if installed.returncode:
+        raise GuestFailure('NODE_EXPRESS_OFFLINE_DEPENDENCY_INSTALL_FAILED')
+    if not (root / 'node_modules' / 'express' / 'package.json').is_file():
+        raise GuestFailure('NODE_EXPRESS_OFFLINE_DEPENDENCY_INSTALL_FAILED')
+    return [str(node), str(root / entry)], env, f'Express offline npm ci completed with {version}; fixed entrypoint {entry}'
+
+
+def _probe_express(path: str, *, port: int = 8765) -> tuple[int, str]:
+    if path not in ('/health', '/api/health', '/'):
+        raise GuestFailure('NODE_EXPRESS_HTTP_PROBE_FAILED')
+    for _ in range(30):
+        try:
+            request = urllib.request.Request(
+                f'http://127.0.0.1:{port}{path}',
+                headers={'User-Agent': 'ProjectIQ-Express-Probe'})
+            with urllib.request.urlopen(request, timeout=2) as response:
+                data = response.read(65_536)
+                if response.status != 200 or not data:
+                    continue
+                # D3 API readiness requires JSON, but no invented business
+                # assertions or test-generated expected responses.
+                parsed = json.loads(data)
+                if isinstance(parsed, (dict, list)):
+                    return 200, 'HTTP_RESPONSE_OK'
+        except (OSError, urllib.error.URLError, ValueError):
+            pass
+        time.sleep(1)
+    raise GuestFailure('NODE_EXPRESS_HTTP_PROBE_FAILED')
+
+
 def _isolated_npm_config_paths(base: Path) -> dict[str, str]:
     """Give npm distinct, empty user/global config files outside the checkout.
 
@@ -381,7 +541,8 @@ def _prepare_vite(checkout: Path, base: Path, req: dict) -> tuple[Path, str]:
     except (GuestFailure, zipfile.BadZipFile) as exc:
         raise GuestFailure('NODE_VITE_CACHE_ARCHIVE_INVALID') from exc
     cache_archive.unlink(missing_ok=True)
-    env = {k: v for k, v in os.environ.items() if not k.upper().startswith('NPM_CONFIG_')}
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith('NPM_CONFIG_')
+           and k.upper() not in ('NODE_OPTIONS', 'NODE_PATH')}
     env['PATH'] = str(node.parent) + ':/usr/local/bin:/usr/bin:/bin'
     env.update({'HOME': str(base), **_isolated_npm_config_paths(base), 'NPM_CONFIG_CACHE': str(npm_cache),
                 'NPM_CONFIG_OFFLINE': 'true', 'NPM_CONFIG_IGNORE_SCRIPTS': 'true',
@@ -574,7 +735,7 @@ def prepare_npm_cache(request_path: Path, *, base_dir: Path = Path('/home/projec
     no real credentials, no root sudo, and only a reviewed pinned fixture.
     """
     req = json.loads(request_path.read_text('utf-8'))
-    if req.get('operation') != 'prepare_npm_cache' or req.get('adapter') != 'node_vite_offline_v1':
+    if req.get('operation') != 'prepare_npm_cache' or req.get('adapter') not in ('node_vite_offline_v1', 'node_express_offline_v1'):
         raise GuestFailure('NODE_VITE_INVALID_REQUEST')
     snapshot = base_dir / 'snapshot.zip'
     if not snapshot.is_file() or snapshot.stat().st_size > 30_000_000:
@@ -598,7 +759,10 @@ def prepare_npm_cache(request_path: Path, *, base_dir: Path = Path('/home/projec
     node_archive = base_dir / 'node_runtime.tar.xz'
     if not node_archive.is_file() or _sha256(node_archive) != node_sha:
         raise GuestFailure('NODE_VITE_NODE_HASH_MISMATCH')
-    _check_vite_manifest(root, lock_sha)
+    if req['adapter'] == 'node_express_offline_v1':
+        _check_express_manifest(root, lock_sha)
+    else:
+        _check_vite_manifest(root, lock_sha)
     runtime = base_dir / 'node_runtime'
     runtime.mkdir(mode=0o700)
     node, npm = _node_tar_extract(node_archive, version, runtime)
@@ -608,7 +772,8 @@ def prepare_npm_cache(request_path: Path, *, base_dir: Path = Path('/home/projec
         raise GuestFailure('NODE_VITE_RUNTIME_VERSION_MISMATCH')
     cache = base_dir / 'npm-cache'
     cache.mkdir(mode=0o700)
-    env = {k: v for k, v in os.environ.items() if not k.upper().startswith('NPM_CONFIG_')}
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith('NPM_CONFIG_')
+           and k.upper() not in ('NODE_OPTIONS', 'NODE_PATH')}
     env['PATH'] = str(node.parent) + ':/usr/local/bin:/usr/bin:/bin'
     env.update({'HOME': str(base_dir), **_isolated_npm_config_paths(base_dir), 'NPM_CONFIG_CACHE': str(cache),
                 'NPM_CONFIG_IGNORE_SCRIPTS': 'true', 'NPM_CONFIG_AUDIT': 'false',
@@ -619,6 +784,8 @@ def prepare_npm_cache(request_path: Path, *, base_dir: Path = Path('/home/projec
                             timeout=210, env=env, cwd=root)
     if proc.returncode:
         code = _npm_failure_with_debug_context(proc, cache)
+        if req['adapter'] == 'node_express_offline_v1':
+            code = code.replace('NODE_VITE_', 'NODE_EXPRESS_')
         # Only the specifically authorized preparation VM can return a short,
         # filtered, operator-only diagnostic. The normal report remains a code.
         if req.get('include_npm_diagnostic') is True:
@@ -666,7 +833,7 @@ def prepare_npm_cache(request_path: Path, *, base_dir: Path = Path('/home/projec
             zf.write(item, arcname='npm-cache/' + rel.as_posix())
     if count < 1 or archive.stat().st_size > 170_000_000:
         raise GuestFailure('NODE_VITE_CACHE_ARCHIVE_INVALID')
-    return {'status': 'CACHE_PREPARED', 'adapter': 'node_vite_offline_v1',
+    return {'status': 'CACHE_PREPARED', 'adapter': req['adapter'],
             'lockfile_sha256': lock_sha, 'npm_cache_sha256': _sha256(archive),
             'node_version': version, 'notes': ['Offline npm cache archived; no student scripts executed']}
 
@@ -981,10 +1148,10 @@ def _probe(url_path: str, port: int = 8765, deadline: int = 25) -> tuple[int, st
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
-    if adapter not in ('static_html_v1', 'php_mysql_v1', 'node_vite_offline_v1', 'python_web_offline_v1'):
+    if adapter not in ('static_html_v1', 'php_mysql_v1', 'node_vite_offline_v1', 'node_express_offline_v1', 'python_web_offline_v1'):
         raise GuestFailure('Unapproved guest adapter')
     path = req.get('probe_path')
-    if not isinstance(path, str) or not (path == '/' and adapter == 'python_web_offline_v1' or re.fullmatch(r'/[A-Za-z0-9_./-]{1,150}', path)) or '..' in path.split('/'):
+    if not isinstance(path, str) or not (path == '/' and adapter in ('python_web_offline_v1', 'node_express_offline_v1') or re.fullmatch(r'/[A-Za-z0-9_./-]{1,150}', path)) or '..' in path.split('/'):
         raise GuestFailure('Invalid readiness path')
     snapshot = base_dir / 'snapshot.zip'
     if not snapshot.is_file() or snapshot.stat().st_size > 30_000_000:
@@ -1000,6 +1167,9 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         notes.append(note)
         program = [sys.executable, '-m', 'http.server', str(port), '--bind', '127.0.0.1',
                    '--directory', str(dist)]
+    elif adapter == 'node_express_offline_v1':
+        program, env, note = _prepare_express(checkout, base_dir, req, port=port)
+        notes.append(note)
     elif adapter == 'python_web_offline_v1':
         program, env, note = _prepare_python_web(checkout, base_dir, req, port=port)
         notes.append(note)
@@ -1017,11 +1187,13 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
     with server_log.open('wb') as log:
         server = subprocess.Popen(program, stdin=subprocess.DEVNULL, stdout=log,
                                   stderr=subprocess.STDOUT, cwd=(_python_guest_root(checkout, req)
-                                  if adapter == 'python_web_offline_v1' else checkout),
+                                  if adapter == 'python_web_offline_v1' else
+                                  _node_express_root(checkout, req) if adapter == 'node_express_offline_v1' else checkout),
                                   env=env, start_new_session=True)
     try:
         status, detail = (_probe_python_web(path, req['python_framework'], port=port)
                           if adapter == 'python_web_offline_v1' else
+                          _probe_express(path, port=port) if adapter == 'node_express_offline_v1' else
                           _probe(path, port=port, deadline=35 if adapter in ('php_mysql_v1', 'node_vite_offline_v1') else 20))
         if adapter == 'node_vite_offline_v1':
             notes.append(_probe_vite_asset(dist, port))

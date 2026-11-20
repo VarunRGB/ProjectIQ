@@ -20,7 +20,7 @@ from pathlib import Path
 from ...analyzer import analyze_directory
 from ...github_client import GitHubClient, IngestionError
 from ...safe_archive import extract_snapshot, ArchiveError
-from ..vm_worker.guest_agent import _check_vite_manifest, GuestFailure
+from ..vm_worker.guest_agent import _check_vite_manifest, _check_express_manifest, GuestFailure
 from ..vm_worker.offline_assets import OfflineAssetError
 from ..vm_worker.orchestrator import load_config
 from ..vm_worker.qemu import (QemuWorker, SSHControl, WorkerFailure,
@@ -41,7 +41,10 @@ class CachePreparationError(ValueError):
 def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
                   node_tarball: Path, node_sha256: str, node_version: str,
                   output_dir: Path, allow_trusted_npm_network: bool = False,
-                  include_npm_diagnostic: bool = False) -> dict:
+                  include_npm_diagnostic: bool = False,
+                  adapter: str = 'node_vite_offline_v1') -> dict:
+    if adapter not in ('node_vite_offline_v1', 'node_express_offline_v1'):
+        raise CachePreparationError('Unsupported Node npm cache adapter')
     if not allow_trusted_npm_network:
         raise CachePreparationError('Explicit --allow-trusted-npm-network approval required')
     if not isinstance(commit_sha, str) or not _FULL_SHA.fullmatch(commit_sha):
@@ -67,8 +70,9 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
     output_dir = Path(output_dir).resolve()
     if output_dir.exists() and not output_dir.is_dir():
         raise CachePreparationError('Output path is not a directory')
-    cache_dest = output_dir / 'node-vite-npm-cache.zip'
-    profile_dest = output_dir / 'node_vite_profile.json'
+    express = adapter == 'node_express_offline_v1'
+    cache_dest = output_dir / ('node-express-npm-cache.zip' if express else 'node-vite-npm-cache.zip')
+    profile_dest = output_dir / ('node_express_profile.json' if express else 'node_vite_profile.json')
     if cache_dest.exists() or profile_dest.exists():
         raise CachePreparationError('Refusing to overwrite prepared offline cache or profile')
 
@@ -83,19 +87,19 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
         analyzed = analyze_directory(checkout, source)
         manifest = analyzed.to_dict()
         c, _ = plan_from_manifest(manifest, work / 'plan')
-        if c.get('adapter') != 'node_vite_offline_v1':
-            raise CachePreparationError('Repository is not a standalone Vite/npm-lock fixture')
+        if c.get('adapter') != adapter:
+            raise CachePreparationError('Repository does not match the selected Node/npm-lock adapter')
         root_path = checkout if c['project_root'] == '.' else checkout.joinpath(*c['project_root'].split('/'))
         lock = root_path / 'package-lock.json'
         if not lock.is_file():
             raise CachePreparationError('Approved fixture has no npm lockfile')
         lock_sha = sha256_file(lock)
         try:
-            _check_vite_manifest(root_path, lock_sha)
+            (_check_express_manifest if express else _check_vite_manifest)(root_path, lock_sha)
         except GuestFailure as exc:
-            raise CachePreparationError('Vite manifest/lockfile is not supported by offline pilot') from exc
+            raise CachePreparationError('Node manifest/lockfile or entrypoint is unsupported by offline pilot') from exc
         request = {
-            'operation': 'prepare_npm_cache', 'adapter': 'node_vite_offline_v1',
+            'operation': 'prepare_npm_cache', 'adapter': adapter,
             'project_root': c['project_root'], 'node_version': node_version,
             'include_npm_diagnostic': include_npm_diagnostic is True,
             'node_sha256': node_sha256.lower(), 'lockfile_sha256': lock_sha,
@@ -130,6 +134,7 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
             ssh.receive('result.json', result_path)
             guest = json.loads(result_path.read_text('utf-8'))
             if (command.returncode != 0 or guest.get('status') != 'CACHE_PREPARED'
+                    or guest.get('adapter') != adapter
                     or guest.get('node_version') != node_version
                     or guest.get('lockfile_sha256') != lock_sha
                     or not _HEX64.fullmatch(str(guest.get('npm_cache_sha256', '')))):
@@ -155,7 +160,10 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
                     'NODE_VITE_NODE_HASH_MISMATCH',
                 }
                 code = guest.get('error_code')
-                detail = code if isinstance(code, str) and code in approved_codes else 'UNCLASSIFIED_GUEST_FAILURE'
+                detail = (code if isinstance(code, str) and (code in approved_codes or
+                          (express and code.startswith('NODE_EXPRESS_') and
+                           code.replace('NODE_EXPRESS_', 'NODE_VITE_') in approved_codes))
+                          else 'UNCLASSIFIED_GUEST_FAILURE')
                 if include_npm_diagnostic:
                     hint = guest.get('npm_operator_hint')
                     # Redundant host-side character/length gate. The guest
@@ -190,7 +198,7 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
             'npm_cache_zip': str(cache_dest), 'npm_cache_sha256': calculated,
             'lockfile_sha256': lock_sha,
         }
-        profile_dest.write_text(json.dumps({'node_vite_offline': {identity: profile}}, indent=2) + '\n', 'utf-8')
+        profile_dest.write_text(json.dumps({('node_express_offline' if express else 'node_vite_offline'): {identity: profile}}, indent=2) + '\n', 'utf-8')
         return {
             'status': 'OFFLINE_CACHE_PREPARED_NOT_SANDBOX_ATTESTED', 'source': identity,
             'network': 'EXPLICITLY_AUTHORIZED_PREPARATION_VM_ONLY',
@@ -204,7 +212,7 @@ def prepare_cache(*, repo_url: str, commit_sha: str, vm_config: Path,
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description='D1: prepare Linux offline npm cache in an approved disposable networked VM')
+    parser = argparse.ArgumentParser(description='D1/D3: prepare Linux offline npm cache in an approved disposable networked VM')
     parser.add_argument('--repo', required=True)
     parser.add_argument('--ref', required=True)
     parser.add_argument('--vm-config', type=Path, required=True)
@@ -213,6 +221,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--node-version', default='v24.22.3')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--allow-trusted-npm-network', action='store_true')
+    parser.add_argument('--adapter', choices=('node_vite_offline_v1', 'node_express_offline_v1'),
+                        default='node_vite_offline_v1',
+                        help='Reviewed single-service Node adapter; default preserves D1 Vite behavior')
     parser.add_argument('--diagnose-npm', action='store_true',
                         help='Opt in to a bounded, redacted npm-error hint on preparation failures')
     args = parser.parse_args(argv)
@@ -222,7 +233,7 @@ def main(argv: list[str] | None = None) -> int:
             node_tarball=args.node_tarball, node_sha256=args.node_sha256,
             node_version=args.node_version, output_dir=args.out,
             allow_trusted_npm_network=args.allow_trusted_npm_network,
-            include_npm_diagnostic=args.diagnose_npm,
+            include_npm_diagnostic=args.diagnose_npm, adapter=args.adapter,
         )
     except (CachePreparationError, OfflineAssetError, WorkerFailure, IngestionError,
             ArchiveError, OSError, ValueError) as exc:

@@ -94,3 +94,14 @@ def approved_python_web_assets(config: Mapping, identity: str) -> dict:
     results['framework'] = profile['framework']
     results['python_version'] = '3.12'
     return results
+
+
+def approved_node_express_assets(config: Mapping, identity: str) -> dict:
+    """Validate D3 Express Node/npm assets without changing D1 profile semantics."""
+    try:
+        return approved_node_vite_assets(
+            {'node_vite_offline': config.get('node_express_offline')}, identity)
+    except OfflineAssetError as exc:
+        # Same official Node tarball, npm cache and integrity model as D1, but
+        # make denial reasons clearly identify the Express profile.
+        raise OfflineAssetError(str(exc).replace('NODE_VITE_', 'NODE_EXPRESS_')) from exc

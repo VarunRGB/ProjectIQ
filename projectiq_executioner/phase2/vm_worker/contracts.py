@@ -123,6 +123,34 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
             ])
         else:
             manual_review.append('NODE_VITE_NEEDS_EVIDENCED_VITE_NPM_LOCK_AND_SAFE_ROOT')
+    elif (len(backends) == 1 and backends[0]['family'] == 'node'
+          and not frontends and not dbs and not others):
+        # D3: one reviewed Express API, no frontend, DB or external service.
+        root = backends[0]['root']
+        prefix = '' if root == '.' else root + '/'
+        names = {t.get('name', '').lower() for t in manifest.get('technologies', [])
+                 if isinstance(t, dict) and isinstance(t.get('name'), str)}
+        setup = manifest.get('setup_files') or []
+        routes = manifest.get('routes') or []
+        # A known GET endpoint is an evidence-backed startup probe, not a
+        # guessed route or a test of API/business correctness.
+        get_routes = {r.get('path') for r in routes if isinstance(r, dict)
+                      and r.get('method') == 'GET'
+                      and r.get('kind') == 'declared_http_route'}
+        path = next((p for p in ('/health', '/api/health', '/') if p in get_routes), None)
+        if (safe_path(root) is not None and isinstance(setup, list)
+                and 'express' in names and prefix + 'package.json' in setup
+                and prefix + 'package-lock.json' in setup and path is not None):
+            adapter = 'node_express_offline_v1'
+            expected_probe = path
+            manual_review.extend([
+                'D3_NODE_RUNTIME_AND_NPM_CACHE_SHA256_REQUIRED',
+                'D3_LOCKFILE_AND_FIXED_ENTRYPOINT_REQUIRED',
+                'D3_NPM_CI_OFFLINE_IGNORE_SCRIPTS_IN_DISPOSABLE_VM_ONLY',
+                'D3_SINGLE_EXPRESS_SERVICE_NO_EXTERNAL_DEPENDENCIES',
+            ])
+        else:
+            manual_review.append('D3_EXPRESS_REQUIRES_LOCKFILE_AND_STATIC_GET_HEALTH_ROUTE')
     elif (len(backends) == 1 and backends[0]['family'] == 'python'
           and not frontends and not others
           and all(db['family'] == 'sqlite' for db in dbs) and len(dbs) <= 1):
@@ -166,7 +194,7 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
         'probe_path': expected_probe,
         'schema_path': schema,
         'project_root': (frontends[0]['root'] if adapter == 'node_vite_offline_v1' else
-                         backends[0]['root'] if adapter == 'python_web_offline_v1' else None),
+                         backends[0]['root'] if adapter in ('python_web_offline_v1', 'node_express_offline_v1') else None),
         'python_framework': framework if adapter == 'python_web_offline_v1' else None,
         'guest_profile': 'ubuntu_template_prebaked_offline',
         'linux_guest_mode': 'single_vm_multiple_local_processes',
@@ -177,8 +205,8 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
             'docker_probe_ignored_on_vm_path': True,
         },
         'vm_limits': {
-            'vcpu': 2, 'ram_mib': 3072 if adapter in ('php_mysql_v1', 'node_vite_offline_v1') else (2048 if adapter == 'python_web_offline_v1' else 1024),
-            'wall_seconds': 480 if adapter == 'node_vite_offline_v1' else (300 if adapter == 'python_web_offline_v1' else (240 if adapter == 'php_mysql_v1' else 140)),
+            'vcpu': 2, 'ram_mib': 3072 if adapter in ('php_mysql_v1', 'node_vite_offline_v1', 'node_express_offline_v1') else (2048 if adapter == 'python_web_offline_v1' else 1024),
+            'wall_seconds': 480 if adapter in ('node_vite_offline_v1', 'node_express_offline_v1') else (300 if adapter == 'python_web_offline_v1' else (240 if adapter == 'php_mysql_v1' else 140)),
             'max_snapshot_zip_bytes': 30_000_000,
             'max_output_bytes': 64_000,
         },
@@ -192,7 +220,7 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
         ],
         'limitations': [
             'VM image installation/baking and security acceptance remain operator tasks.',
-            'Static HTML, curated PHP/MySQL, offline single-service Vite, and conditional offline Flask/FastAPI are implemented.',
+            'Static HTML, curated PHP/MySQL, offline Vite, Flask/FastAPI and conditional Express are implemented.',
             'No Docker daemon is required; Phase 2B Docker probe statuses are legacy data only.',
             'Successful HTTP readiness proves startup only, not application correctness.',
         ],
