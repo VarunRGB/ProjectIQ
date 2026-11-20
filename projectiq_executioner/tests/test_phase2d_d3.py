@@ -462,7 +462,9 @@ class D3IntegratedGuestTests(unittest.TestCase):
             self.assertEqual(r['adapter'],'node_express_offline_v1')
             self.assertEqual(r['http_status'],200)
             self.assertEqual(spawn.call_args.kwargs['cwd'],checkout)
-            self.assertEqual(spawn.call_args.args[0][0],'/usr/bin/node')
+            self.assertEqual(spawn.call_args.args[0][0], 'sudo')
+            self.assertEqual(spawn.call_args.args[0][1:4], ['-n', '-u', 'projectiq_run'])
+            self.assertIn('/usr/bin/node', spawn.call_args.args[0])
             self.assertEqual(probe.call_args.args[0],'/health')
             prepare.assert_called_once()
 

@@ -264,7 +264,10 @@ class QemuSecurityContractTest(unittest.TestCase):
         fake = types.SimpleNamespace(PyCdlib=lambda: iso)
         with tempfile.TemporaryDirectory() as tmp, patch.dict(sys.modules, {'pycdlib': fake}):
             make_nocloud_iso(Path(tmp), 'ssh-ed25519 AAAATEST TEST', 'projectiq-123')
-            self.assertIn(b'NOPASSWD: /usr/bin/mysql', iso.data['user-data'])
+            self.assertNotIn(b'NOPASSWD: /usr/bin/mysql', iso.data['user-data'])
+            self.assertIn(b'ALL=(projectiq_run) NOPASSWD: ALL', iso.data['user-data'])
+            self.assertIn(b'name: projectiq_run', iso.data['user-data'])
+            self.assertIn(b'sudo: false', iso.data['user-data'])
             self.assertNotIn(b'NOPASSWD:ALL', iso.data['user-data'])
             iso2 = Iso()
             fake2 = types.SimpleNamespace(PyCdlib=lambda: iso2)
@@ -408,7 +411,16 @@ class OfflineGuestTest(unittest.TestCase):
             with socket.socket() as sock:
                 sock.bind(('127.0.0.1', 0))
                 port = sock.getsockname()[1]
-            res = run(base / 'request.json', base_dir=base, port=port)
+            # Local unit smoke deliberately avoids sudo; real VM launches use
+            # the separate projectiq_run identity and are tested independently.
+            import subprocess
+            def local_only(program, *, cwd, env, log):
+                return subprocess.Popen(program, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                                        stdout=log, stderr=subprocess.STDOUT,
+                                        start_new_session=True)
+            with patch('projectiq_executioner.phase2.vm_worker.guest_agent._project_popen',
+                       side_effect=local_only):
+                res = run(base / 'request.json', base_dir=base, port=port)
             self.assertEqual(res['status'], 'STARTUP_VERIFIED')
             self.assertEqual(res['http_status'], 200)
 
@@ -484,48 +496,69 @@ class OfflineGuestTest(unittest.TestCase):
                 with self.assertRaises(GuestFailure):
                     _check_sql(f)
 
-    def test_guest_mysql_runtime_waits_for_startup(self):
-        calls = []
-        def delayed_mysql(args, **kwargs):
-            calls.append(args)
-            if len(calls) < 3:
-                return SimpleNamespace(returncode=1, stdout=b'',
-                                       stderr=b"Can't connect to local MySQL server")
-            return SimpleNamespace(returncode=0, stdout=b'1\n', stderr=b'')
-        with patch('projectiq_executioner.phase2.vm_worker.guest_agent._trusted_process',
-                   side_effect=delayed_mysql), \
-             patch('projectiq_executioner.phase2.vm_worker.guest_agent.time.sleep'):
-            _wait_mysql_runtime_ready(seconds=45)
-        self.assertEqual(len(calls), 3)
-        self.assertEqual(calls[0][-2:], ['-e', 'SELECT 1;'])
+    def test_guest_mysql_waits_for_cloud_init_scoped_credentials(self):
+        # Simulate Linux UID/mode metadata: Windows has no os.geteuid(), and
+        # its chmod/stat do not represent full POSIX permission bits.
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / 'db.json'
+            file.write_text(json.dumps({'host': '127.0.0.1',
+                'database': 'projectiq_run', 'user': 'projectiq_app',
+                'password': 'a' * 48}), 'utf-8')
+            file.chmod(0o600)
+            simulated_stat = SimpleNamespace(st_uid=1001, st_mode=0o100600,
+                                             st_size=file.stat().st_size)
+            with patch('projectiq_executioner.phase2.vm_worker.guest_agent.os.geteuid',
+                       return_value=1001, create=True), \
+                 patch('projectiq_executioner.phase2.vm_worker.guest_agent.Path.stat',
+                       return_value=simulated_stat):
+                result = _wait_mysql_runtime_ready(seconds=1, credential_path=file)
+            self.assertEqual(result['database'], 'projectiq_run')
 
-    def test_guest_mysql_runtime_never_bypasses_sudo_restriction(self):
-        def denied(args, **kwargs):
-            return SimpleNamespace(returncode=1, stdout=b'',
-                                   stderr=b'sudo: a password is required')
-        with patch('projectiq_executioner.phase2.vm_worker.guest_agent._trusted_process',
-                   side_effect=denied), \
-             patch('projectiq_executioner.phase2.vm_worker.guest_agent.time.sleep') as sleep:
-            with self.assertRaisesRegex(GuestFailure, 'admin permission unavailable'):
-                _wait_mysql_runtime_ready(seconds=45)
-            sleep.assert_not_called()
+    def test_mysql_credential_permissions_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / 'db.json'
+            file.write_text(json.dumps({'host': '127.0.0.1',
+                'database': 'projectiq_run', 'user': 'projectiq_app',
+                'password': 'a' * 48}), 'utf-8')
+            file.chmod(0o644)
+            with patch('projectiq_executioner.phase2.vm_worker.guest_agent.time.sleep'):
+                with patch('projectiq_executioner.phase2.vm_worker.guest_agent.time.monotonic',
+                           side_effect=[100.0, 200.0]):
+                    with self.assertRaisesRegex(GuestFailure, 'cloud-init bootstrap'):
+                        _wait_mysql_runtime_ready(seconds=5, credential_path=file)
 
-    def test_guest_mysql_bootstrap_stage_errors_do_not_expose_passwords(self):
+    def test_php_import_never_uses_sudo_or_mysql_root(self):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             (base / 'schema.sql').write_text('CREATE TABLE users(id INT);', 'utf-8')
-            statements = []
-            def fake_process(args, **kwargs):
-                if args[-2:] == ['-e', 'SELECT 1;']:
-                    return SimpleNamespace(returncode=0, stdout=b'1\n', stderr=b'')
-                statements.append(args[-1])
-                return SimpleNamespace(returncode=1, stdout=b'', stderr=b'secret-info')
-            with patch('projectiq_executioner.phase2.vm_worker.guest_agent._trusted_process',
-                       side_effect=fake_process):
-                with self.assertRaisesRegex(GuestFailure, 'bootstrap failed at database') as exc:
-                    _provision_mysql(base, 'schema.sql')
-            self.assertEqual(len(statements), 1)
-            self.assertNotIn('secret-info', str(exc.exception))
+            (base / 'db').mkdir()
+            (base / 'db/db.php').write_text(
+                '<?php\n$host="h";\n$dbname="d";\n$user="u";\n$pass="p";\n'
+                '$pdo = new PDO("mysql:host=$host;dbname=$dbname",$user,$pass);', 'utf-8')
+            commands = []
+            def fake_proc(args, **kwargs):
+                commands.append((args, kwargs))
+                return SimpleNamespace(returncode=0, stdout=b'users\n', stderr=b'')
+            metadata = {'host': '127.0.0.1', 'database': 'projectiq_run',
+                        'user': 'projectiq_app', 'password': 'a'*48}
+            # Redirect only the Linux /tmp fixture credential file to the
+            # test's temporary directory; production remains Linux-only.
+            original_named_tempfile = tempfile.NamedTemporaryFile
+            def temporary_mysql_config(*args, **kwargs):
+                self.assertEqual(kwargs.get('dir'), '/tmp')
+                kwargs['dir'] = tmp
+                return original_named_tempfile(*args, **kwargs)
+            with patch('projectiq_executioner.phase2.vm_worker.guest_agent._wait_mysql_runtime_ready',
+                       return_value=metadata), \
+                 patch('projectiq_executioner.phase2.vm_worker.guest_agent._trusted_process',
+                       side_effect=fake_proc), \
+                 patch('projectiq_executioner.phase2.vm_worker.guest_agent.tempfile.NamedTemporaryFile',
+                       side_effect=temporary_mysql_config):
+                _provision_mysql(base, 'schema.sql')
+            self.assertFalse(list(base.glob('projectiq_mysql_*')))
+            self.assertTrue(commands)
+            self.assertTrue(all('sudo' not in str(cmd[0]) for cmd in commands))
+            self.assertTrue(commands[-1][1].get('project_code'))
 
     def test_generic_php_pdo_rewrite_only_guest_copy(self):
         with tempfile.TemporaryDirectory() as tmp:

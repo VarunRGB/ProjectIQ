@@ -25,6 +25,14 @@ from urllib.parse import quote
 import zipfile
 from pathlib import Path, PurePosixPath
 
+# Windows imports this module for unit tests only; the executable guest is Linux.
+try:
+    import grp
+    import pwd
+except ImportError:
+    grp = None
+    pwd = None
+
 
 class GuestFailure(RuntimeError):
     pass
@@ -104,13 +112,196 @@ def safe_extract(archive: Path, into: Path, *, max_total: int = 120_000_000) -> 
         return into
 
 
-def _trusted_process(args: list[str], *, input: bytes | None = None, timeout: int = 15,
-                     env: dict | None = None, cwd: Path | None = None) -> subprocess.CompletedProcess:
+APP_USER = 'projectiq_run'
+SHARED_GROUP = 'projectiq_exec'
+
+# D5b.3a: stable, stack-agnostic *per real UID* process-resource caps.
+# Executed AFTER sudo has dropped privileges to projectiq_run and BEFORE
+# any student dependency install, framework build or server entrypoint.
+# RLIMIT_NPROC counts Linux tasks for the real UID (not a per-service cgroup);
+# RLIMIT_NOFILE is per process. Memory, aggregate I/O and cgroup-wide PID
+# isolation remain explicitly unresolved until D5b.3b.
+APP_NPROC_HARD = 96
+APP_NOFILE_HARD = 512
+APP_LIMIT_LAUNCHER = r'''import os, resource, sys
+if sys.platform != 'linux' or os.geteuid() == 0 or len(sys.argv) < 2:
+    sys.exit(111)
+for limit, maximum in ((resource.RLIMIT_NPROC, 96),
+                       (resource.RLIMIT_NOFILE, 512),
+                       (resource.RLIMIT_CORE, 0)):
+    _soft, old_hard = resource.getrlimit(limit)
+    target = maximum if old_hard == resource.RLIM_INFINITY else min(old_hard, maximum)
+    resource.setrlimit(limit, (target, target))
+# No shell; the program and arguments originate from the trusted adapter.
+os.execvpe(sys.argv[1], sys.argv[1:], os.environ)
+'''
+
+
+
+# D5b.2: the only supported application work tree is a separate, bounded
+# ext4 disk. Root filesystem /tmp, root QCOW2 and host disk remain distinct
+# security gaps; never claim global guest disk confinement from this check.
+WORKSPACE_PATH = Path('/srv/projectiq-workspace')
+
+
+def _stage_bounded_workspace(request: dict, *, base: Path) -> Path:
+    """Fail closed unless the operator-provisioned workspace is truly mounted.
+
+    Runs as the trusted guest controller before project code is started. Moving
+    verified input archives may copy them across mounts. Only fixed filenames
+    are accepted and only the designated mount holds project/runtime writes.
+    """
+    mib = request.get('workspace_disk_mib')
+    if type(mib) is not int or not 64 <= mib <= 2048:
+        raise GuestFailure('WORKSPACE_DISK_QUOTA_UNAVAILABLE')
+    # SSH readiness can precede cloud-init runcmd. Wait only for the trusted
+    # root-owned mount step; never fall back to writing on the root filesystem.
+    until = time.monotonic() + 85
+    while not os.path.ismount(WORKSPACE_PATH) and time.monotonic() < until:
+        time.sleep(1)
+    if not WORKSPACE_PATH.is_dir() or WORKSPACE_PATH.is_symlink() or not os.path.ismount(WORKSPACE_PATH):
+        raise GuestFailure('WORKSPACE_DISK_QUOTA_UNAVAILABLE')
     try:
-        return subprocess.run(args, input=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              timeout=timeout, check=False, env=env, cwd=cwd)
+        with Path('/proc/mounts').open(encoding='utf-8') as f:
+            rows = [row.split() for row in f if len(row.split()) >= 4]
+        matches = [parts for parts in rows if parts[1] == str(WORKSPACE_PATH)]
+        if (len(matches) != 1 or matches[0][2] != 'ext4'
+                or not {'rw', 'nosuid', 'nodev'}.issubset(set(matches[0][3].split(',')))):
+            raise GuestFailure('WORKSPACE_DISK_QUOTA_UNAVAILABLE')
+        stats = os.statvfs(WORKSPACE_PATH)
+        total = stats.f_blocks * stats.f_frsize
+        if not 48 * 1024**2 <= total <= mib * 1024**2:
+            raise GuestFailure('WORKSPACE_DISK_QUOTA_UNAVAILABLE')
+        if pwd is None or grp is None or WORKSPACE_PATH.stat().st_uid != os.geteuid() \
+                or WORKSPACE_PATH.stat().st_gid != grp.getgrnam(SHARED_GROUP).gr_gid:
+            raise GuestFailure('WORKSPACE_DISK_QUOTA_UNAVAILABLE')
+        for name in ('snapshot.zip', 'node_runtime.tar.xz', 'npm_cache.zip',
+                     'python_pip.whl', 'python_wheelhouse.zip'):
+            src = base / name
+            if src.exists():
+                if not src.is_file() or src.is_symlink():
+                    raise GuestFailure('WORKSPACE_DISK_QUOTA_UNAVAILABLE')
+                shutil.move(str(src), str(WORKSPACE_PATH / name))
+        for name in ('app_home', 'tmp'):
+            path = WORKSPACE_PATH / name
+            path.mkdir(mode=0o2770, exist_ok=False)
+            _share_tree(path, writable=True)
+        os.environ['PROJECTIQ_QUOTA_HOME'] = str(WORKSPACE_PATH / 'app_home')
+        os.environ['PROJECTIQ_QUOTA_TMP'] = str(WORKSPACE_PATH / 'tmp')
+        return WORKSPACE_PATH
+    except GuestFailure:
+        raise
+    except (OSError, KeyError) as exc:
+        if getattr(exc, 'errno', None) == 28:
+            raise GuestFailure('WORKSPACE_DISK_QUOTA_EXCEEDED') from exc
+        raise GuestFailure('WORKSPACE_DISK_QUOTA_UNAVAILABLE') from exc
+
+
+
+def _verify_execution_identity(base: Path) -> None:
+    """Fail closed if cloud-init did not provision the separate unprivileged UID."""
+    if pwd is None or grp is None or not hasattr(os, 'geteuid') or os.geteuid() == 0:
+        raise GuestFailure('RUNTIME_PRIVILEGE_BOUNDARY_UNAVAILABLE')
+    try:
+        controller = pwd.getpwnam('projectiq')
+        student = pwd.getpwnam(APP_USER)
+        group = grp.getgrnam(SHARED_GROUP)
+    except KeyError as exc:
+        raise GuestFailure('RUNTIME_PRIVILEGE_BOUNDARY_UNAVAILABLE') from exc
+    if (controller.pw_uid != os.geteuid() or student.pw_uid in (0, controller.pw_uid)
+            or controller.pw_uid not in (os.geteuid(),) or
+            'projectiq' not in group.gr_mem or APP_USER not in group.gr_mem):
+        raise GuestFailure('RUNTIME_PRIVILEGE_BOUNDARY_UNAVAILABLE')
+    # This user can only execute commands AS the less-privileged app account.
+    runner = _trusted_process(['sudo', '-n', '-u', APP_USER, '/usr/bin/id', '-u'], timeout=7)
+    root = _trusted_process(['sudo', '-n', '-u', 'root', '/usr/bin/id', '-u'], timeout=7)
+    student_root = _trusted_process(['sudo', '-n', '-u', APP_USER, '/usr/bin/sudo', '-n',
+                                     '-u', 'root', '/usr/bin/id', '-u'], timeout=7)
+    if (runner.returncode or runner.stdout.strip() != str(student.pw_uid).encode()
+            or root.returncode == 0 or student_root.returncode == 0):
+        raise GuestFailure('RUNTIME_PRIVILEGE_BOUNDARY_UNAVAILABLE')
+    # Permit traversal of exact shared paths, but never make private files writable.
+    base.chmod(0o711)
+
+
+def _share_tree(path: Path, *, writable: bool) -> None:
+    """Allow the app UID access ONLY to an explicitly selected scratch tree.
+
+    Source ZIP extraction already denies symlinks. Pinned runtime archives may
+    include symlinks, which must never be followed when adjusting permissions.
+    Windows only imports this module for UNIT TESTS. _verify_execution_identity
+    rejects non-POSIX guests before running any application.
+    """
+    if sys.platform != 'linux' or pwd.getpwuid(os.geteuid()).pw_name != 'projectiq':
+        return
+    try:
+        gid = grp.getgrnam(SHARED_GROUP).gr_gid
+    except KeyError as exc:
+        raise GuestFailure('RUNTIME_PRIVILEGE_BOUNDARY_UNAVAILABLE') from exc
+    items = [path] + sorted(path.rglob('*')) if path.is_dir() else [path]
+    for item in items:
+        if item.is_symlink():
+            continue
+        if not item.is_file() and not item.is_dir():
+            raise GuestFailure('RUNTIME_SHARED_PATH_UNSUPPORTED')
+        if item.stat().st_uid != os.geteuid():
+            # Do not manipulate objects owned by the app once its code has run.
+            continue
+        os.chown(item, -1, gid)
+        current = item.stat().st_mode & 0o777
+        if item.is_dir():
+            item.chmod((current | (0o2770 if writable else 0o2750)) & 0o7777)
+        else:
+            mode = 0o660 if writable else 0o640
+            # Honor existing execute bits (Node runtime needs them).
+            item.chmod((current | mode | (0o110 if current & 0o111 else 0)) & 0o777)
+
+
+def _project_command(command: list[str], env: dict | None = None) -> list[str]:
+    """Only project-owned subprocesses use sudo, exclusively AS APP_USER."""
+    allowed = {'PATH', 'PORT', 'HOST', 'NODE_ENV', 'CI', 'PYTHONPATH',
+               'PYTHONUNBUFFERED', 'PYTHONNOUSERSITE', 'PYTHONDONTWRITEBYTECODE',
+               'PIP_CONFIG_FILE', 'PIP_DISABLE_PIP_VERSION_CHECK', 'LC_ALL',
+               'PROJECTIQ_PDO_CONNECTOR'}
+    env_vars = {'HOME': os.environ.get('PROJECTIQ_QUOTA_HOME', '/home/' + APP_USER),
+                'PATH': '/usr/local/bin:/usr/bin:/bin'}
+    if 'PROJECTIQ_QUOTA_TMP' in os.environ:
+        env_vars['TMPDIR'] = os.environ['PROJECTIQ_QUOTA_TMP']
+        env_vars['TMP'] = os.environ['PROJECTIQ_QUOTA_TMP']
+        env_vars['TEMP'] = os.environ['PROJECTIQ_QUOTA_TMP']
+    for k, v in (env or {}).items():
+        if k in allowed or k.startswith(('NPM_CONFIG_', 'PROJECTIQ_DB_')):
+            if isinstance(v, str) and '\x00' not in v and '\n' not in k and '=' not in k:
+                env_vars[k] = v
+    # The resource launcher itself runs as APP_USER and cannot raise its hard
+    # ceilings. It execs the adapter's approved command without a shell, so
+    # all descendants inherit the same kernel-enforced limits.
+    if not command or any(not isinstance(arg, str) or '\x00' in arg for arg in command):
+        raise GuestFailure('APP_RESOURCE_LAUNCH_INVALID_COMMAND')
+    return ['sudo', '-n', '-u', APP_USER, '--', '/usr/bin/env', '-i',
+            *[key + '=' + value for key, value in sorted(env_vars.items())],
+            '/usr/bin/python3', '-I', '-c', APP_LIMIT_LAUNCHER, *command]
+
+
+def _trusted_process(args: list[str], *, input: bytes | None = None, timeout: int = 15,
+                     env: dict | None = None, cwd: Path | None = None,
+                     project_code: bool = False) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(_project_command(args, env) if project_code else args,
+                              input=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              timeout=timeout, check=False,
+                              env=None if project_code else env, cwd=cwd)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise GuestFailure('Trusted guest tool missing or timed out') from exc
+
+
+def _project_popen(command: list[str], *, cwd: Path, env: dict, log) -> subprocess.Popen:
+    try:
+        return subprocess.Popen(_project_command(command, env), stdin=subprocess.DEVNULL,
+                                stdout=log, stderr=subprocess.STDOUT, cwd=cwd,
+                                start_new_session=True)
+    except OSError as exc:
+        raise GuestFailure('RUNTIME_PRIVILEGE_BOUNDARY_UNAVAILABLE') from exc
 
 
 def _php_pdo_rebind(checkout: Path) -> None:
@@ -155,92 +346,72 @@ def _check_sql(path: Path) -> bytes:
     return decoded.encode('utf-8')
 
 
-def _wait_mysql_runtime_ready(*, seconds: int = 45) -> None:
-    """Wait for the sealed guest's MySQL socket and local admin access.
+def _wait_mysql_runtime_ready(*, seconds: int = 75,
+                              credential_path: Path = Path('/home/projectiq/.projectiq_mysql_credentials.json')) -> dict:
+    """Wait for the ROOT-owned, cloud-init bootstrap to publish scoped DB creds.
 
-    SSH/cloud-init can become ready before mysqld on a cold single-vCPU VM.
-    The runtime account is permitted to invoke ONLY /usr/bin/mysql via sudo;
-    do not start services or expand its sudo permissions here.
+    No sudo MySQL command can execute from the controller or application user.
+    This file is written atomically with permission 0600 by trusted cloud-init.
     """
-    if seconds <= 0:
-        raise GuestFailure('Invalid MySQL readiness window')
     deadline = time.monotonic() + seconds
-    while True:
-        result = _trusted_process(['sudo', '-n', '/usr/bin/mysql', '--batch',
-                                   '--skip-column-names', '-e', 'SELECT 1;'], timeout=10)
-        if result.returncode == 0 and result.stdout.strip() == b'1':
-            return
-        # Distinguish missing runtime privilege from a service that is still
-        # starting, without returning shell output or credentials to the host.
-        stderr = result.stderr.decode('utf-8', errors='replace').lower()
-        if ('not in the sudoers' in stderr or 'not allowed to execute' in stderr
-                or 'a password is required' in stderr):
-            raise GuestFailure('MySQL guest admin permission unavailable')
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise GuestFailure('MySQL service not ready before bootstrap')
-        time.sleep(min(2, remaining))
+    while time.monotonic() < deadline:
+        try:
+            st = credential_path.stat()
+            if st.st_uid == os.geteuid() and st.st_mode & 0o077 == 0 and st.st_size < 512:
+                meta = json.loads(credential_path.read_text('utf-8'))
+                if (meta.get('host') == '127.0.0.1' and meta.get('database') == 'projectiq_run'
+                        and meta.get('user') == 'projectiq_app'
+                        and re.fullmatch(r'[0-9a-f]{48}', meta.get('password', ''))):
+                    return meta
+        except (OSError, ValueError, TypeError):
+            pass
+        time.sleep(1)
+    raise GuestFailure('MySQL trusted cloud-init bootstrap unavailable')
 
 
 def _provision_mysql(checkout: Path, schema_relpath: str) -> tuple[dict, str]:
-    # This privileged step is allowed only INSIDE the disposable guest image.
-    # Database credentials are generated per VM and never returned to the host.
+    """Import a reviewed dump using a disposable DATABASE-SCOPED user only."""
     sql_path = checkout.joinpath(*PurePosixPath(schema_relpath).parts)
     sql_data = _check_sql(sql_path)
-    # Readiness was verified in the trusted template baker, but each fresh
-    # disposable boot must wait for MySQL independently.
-    _wait_mysql_runtime_ready()
-    passwd = secrets.token_urlsafe(27)
-    dbname = 'projectiq_run'
-    username = 'projectiq_app'
-    # Report which trusted administrative step fails, never its SQL text:
-    # CREATE USER contains a per-VM password that must stay guest-private.
-    admin_steps = (
-        ('database', 'CREATE DATABASE `projectiq_run` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;'),
-        ('local_user', f"CREATE USER '{username}'@'localhost' IDENTIFIED BY '{passwd}';"),
-        ('loopback_user', f"CREATE USER '{username}'@'127.0.0.1' IDENTIFIED BY '{passwd}';"),
-        ('local_grant', f"GRANT ALL ON `{dbname}`.* TO '{username}'@'localhost';"),
-        ('loopback_grant', f"GRANT ALL ON `{dbname}`.* TO '{username}'@'127.0.0.1';"),
-    )
-    for stage, statement in admin_steps:
-        resp = _trusted_process(['sudo', '-n', '/usr/bin/mysql', '--batch',
-                                 '--skip-column-names', '-e', statement])
-        if resp.returncode:
-            raise GuestFailure(f'MySQL bootstrap failed at {stage}')
+    meta = _wait_mysql_runtime_ready()
+    dbname = meta['database']
     env = dict(os.environ)
-    env.update({'PROJECTIQ_DB_HOST': '127.0.0.1', 'PROJECTIQ_DB_NAME': dbname,
-                'PROJECTIQ_DB_USER': username, 'PROJECTIQ_DB_PASSWORD': passwd})
-    with tempfile.NamedTemporaryFile(mode='w', prefix='projectiq_mysql_', delete=False, dir='/tmp') as cfg:
-        cfg.write('[client]\nuser=' + username + '\npassword=' + passwd + '\nhost=127.0.0.1\n')
+    env.update({'PROJECTIQ_DB_HOST': meta['host'], 'PROJECTIQ_DB_NAME': dbname,
+                'PROJECTIQ_DB_USER': meta['user'], 'PROJECTIQ_DB_PASSWORD': meta['password']})
+    with tempfile.NamedTemporaryFile(mode='w', prefix='projectiq_mysql_', delete=False,
+                                     dir='/tmp') as cfg:
+        cfg.write('[client]\nuser=' + meta['user'] + '\npassword=' + meta['password'] +
+                  '\nhost=127.0.0.1\n')
         config_path = Path(cfg.name)
     try:
         config_path.chmod(0o600)
+        # Controller owns the temporary config; database import is controller-
+        # managed but has ONLY database-scoped MySQL privileges, never root.
         imported = _trusted_process(['/usr/bin/mysql', f'--defaults-extra-file={config_path}',
                                      '--binary-mode', '--batch', '--database', dbname],
                                     input=sql_data, timeout=30)
         if imported.returncode:
             raise GuestFailure('Schema import failed (SQL compatibility or permissions)')
         tables = _trusted_process(['/usr/bin/mysql', f'--defaults-extra-file={config_path}',
-                                   '--batch', '--skip-column-names', '-D', dbname, '-e', 'SHOW TABLES;'])
+                                   '--batch', '--skip-column-names', '-D', dbname,
+                                   '-e', 'SHOW TABLES;'])
         count = len([x for x in tables.stdout.decode('utf-8', 'replace').splitlines() if x.strip()])
         if tables.returncode or count < 1:
             raise GuestFailure('SQL import produced no accessible tables')
     finally:
         config_path.unlink(missing_ok=True)
     _php_pdo_rebind(checkout)
-    # Verify the *actual PHP PDO connection* using test credentials, not merely
-    # that MySQL accepts a standalone CLI query. This runs only within the VM.
     check_env = dict(env)
     check_env['PROJECTIQ_PDO_CONNECTOR'] = str(checkout / 'db' / 'db.php')
+    # Execute student-controlled PHP connector AS the unprivileged APP_USER.
     php_check = _trusted_process([
         '/usr/bin/php', '-r',
         'require getenv("PROJECTIQ_PDO_CONNECTOR"); '
         'if (!isset($pdo) || (int)$pdo->query("SELECT 1")->fetchColumn() !== 1) exit(3);',
-    ], env=check_env, timeout=15)
+    ], env=check_env, timeout=15, project_code=True)
     if php_check.returncode:
         raise GuestFailure('PHP PDO failed to connect to disposable MySQL')
     return env, f'{count} SQL table(s) initialized; PHP PDO connectivity verified'
-
 
 
 def _sha256(path: Path) -> str:
@@ -428,6 +599,7 @@ def _prepare_express(checkout: Path, base: Path, req: dict, *, port: int = 8765)
     runtime_dir.mkdir(mode=0o700)
     node, npm = _node_tar_extract(node_archive, version, runtime_dir)
     node_archive.unlink(missing_ok=True)
+    _share_tree(runtime_dir, writable=False)
     check = _trusted_process([str(node), '--version'], timeout=15)
     if check.returncode or check.stdout.decode('utf-8', 'replace').strip() != version:
         raise GuestFailure('NODE_EXPRESS_RUNTIME_VERSION_MISMATCH')
@@ -438,6 +610,7 @@ def _prepare_express(checkout: Path, base: Path, req: dict, *, port: int = 8765)
     except (GuestFailure, zipfile.BadZipFile) as exc:
         raise GuestFailure('NODE_EXPRESS_CACHE_HASH_MISMATCH') from exc
     cache_archive.unlink(missing_ok=True)
+    _share_tree(npm_cache, writable=True)
     # Do not allow inherited npm / Node injection knobs or host credentials.
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith('NPM_CONFIG_')
            and k.upper() not in ('NODE_OPTIONS', 'NODE_PATH')}
@@ -450,7 +623,7 @@ def _prepare_express(checkout: Path, base: Path, req: dict, *, port: int = 8765)
                 'NODE_ENV': 'production'})
     installed = _trusted_process([str(npm), 'ci', '--offline', '--ignore-scripts',
                                   '--no-audit', '--no-fund', '--no-progress',
-                                  '--cache', str(npm_cache)], timeout=185, env=env, cwd=root)
+                                  '--cache', str(npm_cache)], timeout=185, env=env, cwd=root, project_code=True)
     if installed.returncode:
         raise GuestFailure('NODE_EXPRESS_OFFLINE_DEPENDENCY_INSTALL_FAILED')
     if not (root / 'node_modules' / 'express' / 'package.json').is_file():
@@ -499,6 +672,7 @@ def _isolated_npm_config_paths(base: Path) -> dict[str, str]:
             pass
         path.chmod(0o600)
         result[setting] = str(path)
+    _share_tree(config_dir, writable=True)
     return result
 
 
@@ -531,6 +705,7 @@ def _prepare_vite(checkout: Path, base: Path, req: dict) -> tuple[Path, str]:
     runtime_dir.mkdir(mode=0o700)
     node, npm = _node_tar_extract(node_archive, version, runtime_dir)
     node_archive.unlink(missing_ok=True)
+    _share_tree(runtime_dir, writable=False)
     node_version = _trusted_process([str(node), '--version'], timeout=15)
     if node_version.returncode or node_version.stdout.decode('utf-8', 'replace').strip() != version:
         raise GuestFailure('NODE_VITE_RUNTIME_VERSION_MISMATCH')
@@ -541,6 +716,7 @@ def _prepare_vite(checkout: Path, base: Path, req: dict) -> tuple[Path, str]:
     except (GuestFailure, zipfile.BadZipFile) as exc:
         raise GuestFailure('NODE_VITE_CACHE_ARCHIVE_INVALID') from exc
     cache_archive.unlink(missing_ok=True)
+    _share_tree(npm_cache, writable=True)
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith('NPM_CONFIG_')
            and k.upper() not in ('NODE_OPTIONS', 'NODE_PATH')}
     env['PATH'] = str(node.parent) + ':/usr/local/bin:/usr/bin:/bin'
@@ -550,7 +726,7 @@ def _prepare_vite(checkout: Path, base: Path, req: dict) -> tuple[Path, str]:
                 'NPM_CONFIG_UPDATE_NOTIFIER': 'false', 'CI': 'true'})
     installed = _trusted_process([str(npm), 'ci', '--offline', '--ignore-scripts',
                                   '--no-audit', '--no-fund', '--no-progress',
-                                  '--cache', str(npm_cache)], timeout=185, env=env, cwd=root)
+                                  '--cache', str(npm_cache)], timeout=185, env=env, cwd=root, project_code=True)
     if installed.returncode:
         raise GuestFailure('NODE_VITE_OFFLINE_DEPENDENCY_INSTALL_FAILED')
     vite = root / 'node_modules' / 'vite' / 'bin' / 'vite.js'
@@ -560,7 +736,7 @@ def _prepare_vite(checkout: Path, base: Path, req: dict) -> tuple[Path, str]:
     if dist.is_dir():
         shutil.rmtree(dist)
     built = _trusted_process([str(node), str(vite), 'build', '--outDir', 'dist'],
-                             timeout=125, env=env, cwd=root)
+                             timeout=125, env=env, cwd=root, project_code=True)
     if built.returncode:
         raise GuestFailure('NODE_VITE_BUILD_FAILED')
     index = dist / 'index.html'
@@ -741,6 +917,7 @@ def prepare_npm_cache(request_path: Path, *, base_dir: Path = Path('/home/projec
     if not snapshot.is_file() or snapshot.stat().st_size > 30_000_000:
         raise GuestFailure('Pinned snapshot missing or oversized')
     checkout = safe_extract(snapshot, base_dir / 'checkout')
+    _share_tree(checkout, writable=True)
     root_rel = req.get('project_root')
     if not (root_rel == '.' or isinstance(root_rel, str) and
             re.fullmatch('[A-Za-z0-9_./-]{1,180}', root_rel) and
@@ -772,6 +949,7 @@ def prepare_npm_cache(request_path: Path, *, base_dir: Path = Path('/home/projec
         raise GuestFailure('NODE_VITE_RUNTIME_VERSION_MISMATCH')
     cache = base_dir / 'npm-cache'
     cache.mkdir(mode=0o700)
+    _share_tree(cache, writable=True)
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith('NPM_CONFIG_')
            and k.upper() not in ('NODE_OPTIONS', 'NODE_PATH')}
     env['PATH'] = str(node.parent) + ':/usr/local/bin:/usr/bin:/bin'
@@ -781,7 +959,7 @@ def prepare_npm_cache(request_path: Path, *, base_dir: Path = Path('/home/projec
                 'NPM_CONFIG_REGISTRY': 'https://registry.npmjs.org/', 'CI': 'true'})
     proc = _trusted_process([str(npm), 'ci', '--ignore-scripts', '--no-audit',
                              '--no-fund', '--no-progress', '--cache', str(cache)],
-                            timeout=210, env=env, cwd=root)
+                            timeout=210, env=env, cwd=root, project_code=True)
     if proc.returncode:
         code = _npm_failure_with_debug_context(proc, cache)
         if req['adapter'] == 'node_express_offline_v1':
@@ -911,6 +1089,7 @@ def _python_pip_wheel(base: Path, req: dict) -> Path:
                 raise GuestFailure('PYTHON_WEB_PIP_BOOTSTRAP_INVALID')
     except zipfile.BadZipFile as exc:
         raise GuestFailure('PYTHON_WEB_PIP_BOOTSTRAP_INVALID') from exc
+    _share_tree(pip_file, writable=False)
     return pip_file
 
 
@@ -1002,6 +1181,7 @@ def prepare_python_wheelhouse(request_path: Path, *, base_dir: Path = Path('/hom
     if not snapshot.is_file() or snapshot.stat().st_size > 30_000_000:
         raise GuestFailure('Pinned snapshot missing or oversized')
     checkout = safe_extract(snapshot, base_dir / 'checkout')
+    _share_tree(checkout, writable=True)
     root = _python_guest_root(checkout, req)
     requirements = _check_python_requirements(root, req.get('requirements_sha256'),
                                              req['python_framework'])
@@ -1010,11 +1190,12 @@ def prepare_python_wheelhouse(request_path: Path, *, base_dir: Path = Path('/hom
     env = _verify_python_pip(base_dir, pip_file)
     wheels = base_dir / 'python-wheels'
     wheels.mkdir(mode=0o700)
+    _share_tree(wheels, writable=True)
     command = ['/usr/bin/python3', '-m', 'pip', '--isolated', 'download',
                '--only-binary=:all:', '--no-cache-dir', '--disable-pip-version-check',
                '--dest', str(wheels), '--index-url', 'https://pypi.org/simple',
                '-r', str(requirements)]
-    result = _trusted_process(command, timeout=210, env=env, cwd=base_dir)
+    result = _trusted_process(command, timeout=210, env=env, cwd=base_dir, project_code=True)
     if result.returncode:
         # Do not send package names, URLs, logs or requirement contents to host.
         raise GuestFailure('PYTHON_WEB_WHEEL_DOWNLOAD_FAILED')
@@ -1057,21 +1238,23 @@ def _prepare_python_web(checkout: Path, base_dir: Path, req: dict,
         raise GuestFailure('PYTHON_WEB_WHEELHOUSE_HASH_MISMATCH')
     wheels = base_dir / 'python-wheels'
     _unpack_python_wheelhouse(archive, wheels)
+    _share_tree(wheels, writable=False)
     archive.unlink(missing_ok=True)
     target = base_dir / 'python-site'
     target.mkdir(mode=0o700)
+    _share_tree(target, writable=True)
     cmd = ['/usr/bin/python3', '-m', 'pip', '--isolated', 'install',
            '--no-index', '--find-links', str(wheels), '--no-cache-dir',
            '--only-binary=:all:', '--no-compile', '--disable-pip-version-check',
            '--target', str(target), '-r', str(requirements)]
-    result = _trusted_process(cmd, timeout=150, env=env, cwd=base_dir)
+    result = _trusted_process(cmd, timeout=150, env=env, cwd=base_dir, project_code=True)
     if result.returncode:
         raise GuestFailure('PYTHON_WEB_OFFLINE_DEPENDENCY_INSTALL_FAILED')
     env = {**env, 'PYTHONPATH': str(target), 'PYTHONUNBUFFERED': '1'}
     check = _trusted_process(['/usr/bin/python3', '-c',
                               'import sqlite3; import flask' if framework == 'flask'
                               else 'import sqlite3; import fastapi, uvicorn'],
-                             timeout=15, env=env, cwd=base_dir)
+                             timeout=15, env=env, cwd=base_dir, project_code=True)
     if check.returncode:
         raise GuestFailure('PYTHON_WEB_IMPORT_OR_SQLITE_FAILED')
     if framework == 'flask':
@@ -1158,6 +1341,7 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         raise GuestFailure('Pinned snapshot missing or oversized')
     workspace = base_dir / 'checkout'
     checkout = safe_extract(snapshot, workspace)
+    _share_tree(checkout, writable=True)
     if adapter == 'node_fullstack_offline_v1':
         return run_fullstack(checkout, base_dir, req, port=port)
     if not (checkout / 'index.html').is_file() and adapter == 'static_html_v1':
@@ -1187,11 +1371,10 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
                    '--directory', str(checkout)]
     server_log = base_dir / 'server.log'
     with server_log.open('wb') as log:
-        server = subprocess.Popen(program, stdin=subprocess.DEVNULL, stdout=log,
-                                  stderr=subprocess.STDOUT, cwd=(_python_guest_root(checkout, req)
+        server = _project_popen(program, cwd=(_python_guest_root(checkout, req)
                                   if adapter == 'python_web_offline_v1' else
                                   _node_express_root(checkout, req) if adapter == 'node_express_offline_v1' else checkout),
-                                  env=env, start_new_session=True)
+                                  env=env, log=log)
     try:
         status, detail = (_probe_python_web(path, req['python_framework'], port=port)
                           if adapter == 'python_web_offline_v1' else
@@ -1292,7 +1475,7 @@ def _d4_npm_ci(npm: Path, cache: Path, env: dict, root: Path, *, online: bool) -
             '--no-progress', '--cache', str(cache)]
     if not online:
         args.insert(2, '--offline')
-    result = _trusted_process(args, timeout=230 if online else 185, env=env, cwd=root)
+    result = _trusted_process(args, timeout=230 if online else 185, env=env, cwd=root, project_code=True)
     if result.returncode:
         raise GuestFailure('NODE_FULLSTACK_CACHE_FETCH_FAILED' if online
                            else 'NODE_FULLSTACK_OFFLINE_DEPENDENCY_INSTALL_FAILED')
@@ -1311,6 +1494,7 @@ def prepare_fullstack_cache(request_path: Path, *, base_dir: Path = Path('/home/
     if not snapshot.is_file() or not 0 < snapshot.stat().st_size <= 30_000_000:
         raise GuestFailure('NODE_FULLSTACK_INVALID_REQUEST')
     checkout = safe_extract(snapshot, base_dir / 'checkout')
+    _share_tree(checkout, writable=True)
     frontend, backend = _d4_roots(checkout, req)
     _d4_verify_manifests(frontend, backend, req)
     if not tar.is_file() or _sha256(tar) != req['node_sha256']:
@@ -1319,11 +1503,13 @@ def prepare_fullstack_cache(request_path: Path, *, base_dir: Path = Path('/home/
     runtime.mkdir(mode=0o700)
     node, npm = _node_tar_extract(tar, version, runtime)
     tar.unlink(missing_ok=True)
+    _share_tree(runtime, writable=False)
     result = _trusted_process([str(node), '--version'], timeout=15)
     if result.returncode or result.stdout.decode('utf-8', 'replace').strip() != version:
         raise GuestFailure('NODE_FULLSTACK_NODE_VERSION_MISMATCH')
     cache = base_dir / 'npm-cache'
     cache.mkdir(mode=0o700)
+    _share_tree(cache, writable=True)
     env = _d4_node_env(base_dir, node, cache, online=True)
     # Shared content-addressed npm cache accumulates both dependency graphs.
     _d4_npm_ci(npm, cache, env, frontend, online=True)
@@ -1371,6 +1557,7 @@ def _d4_install_and_build(checkout: Path, base_dir: Path, req: dict) -> tuple[Pa
     runtime.mkdir(mode=0o700)
     node, npm = _node_tar_extract(tar, version, runtime)
     tar.unlink(missing_ok=True)
+    _share_tree(runtime, writable=False)
     ver = _trusted_process([str(node), '--version'], timeout=15)
     if ver.returncode or ver.stdout.decode('utf-8', 'replace').strip() != version:
         raise GuestFailure('NODE_FULLSTACK_NODE_VERSION_MISMATCH')
@@ -1381,6 +1568,7 @@ def _d4_install_and_build(checkout: Path, base_dir: Path, req: dict) -> tuple[Pa
     except (GuestFailure, zipfile.BadZipFile) as exc:
         raise GuestFailure('NODE_FULLSTACK_CACHE_ARCHIVE_INVALID') from exc
     cache_zip.unlink(missing_ok=True)
+    _share_tree(cache, writable=True)
     env = _d4_node_env(base_dir, node, cache, online=False)
     _d4_npm_ci(npm, cache, env, frontend, online=False)
     _d4_npm_ci(npm, cache, env, backend, online=False)
@@ -1395,7 +1583,7 @@ def _d4_install_and_build(checkout: Path, base_dir: Path, req: dict) -> tuple[Pa
             raise GuestFailure('NODE_FULLSTACK_VITE_BUILD_FAILED')
         shutil.rmtree(dist)
     built = _trusted_process([str(node), str(vite), 'build', '--outDir', 'dist'],
-                             timeout=150, env=env, cwd=frontend)
+                             timeout=150, env=env, cwd=frontend, project_code=True)
     if built.returncode:
         raise GuestFailure('NODE_FULLSTACK_VITE_BUILD_FAILED')
     index = dist / 'index.html'
@@ -1501,9 +1689,7 @@ def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765
     processes = []
     try:
         with (base_dir / 'd4_backend.log').open('wb') as log:
-            process = subprocess.Popen(program, stdin=subprocess.DEVNULL, stdout=log,
-                                       stderr=subprocess.STDOUT, cwd=backend,
-                                       env=env, start_new_session=True)
+            process = _project_popen(program, cwd=backend, env=env, log=log)
         processes.append(process)
         _d4_wait_json(health, 8766)
         with (base_dir / 'd4_frontend.log').open('wb') as log:
@@ -1543,12 +1729,22 @@ def main() -> int:
         return 0
     result = {'status': 'STARTUP_FAILED', 'error_code': 'UNKNOWN_FAILURE'}
     try:
+        _verify_execution_identity(Path('/home/projectiq'))
         request = Path('/home/projectiq/request.json')
         meta = json.loads(request.read_text('utf-8'))
-        result = (prepare_fullstack_cache(request) if meta.get('operation') == 'prepare_fullstack_cache'
-                  else prepare_npm_cache(request) if meta.get('operation') == 'prepare_npm_cache'
-                  else prepare_python_wheelhouse(request) if meta.get('operation') == 'prepare_python_wheels'
-                  else run(request))
+        # Only execution VMs receive a dedicated bounded disk. Trusted
+        # dependency preparation retains its separate explicit network policy.
+        app_base = (_stage_bounded_workspace(meta, base=Path('/home/projectiq'))
+                    if 'workspace_disk_mib' in meta else Path('/home/projectiq'))
+        result = (prepare_fullstack_cache(request, base_dir=app_base) if meta.get('operation') == 'prepare_fullstack_cache'
+                  else prepare_npm_cache(request, base_dir=app_base) if meta.get('operation') == 'prepare_npm_cache'
+                  else prepare_python_wheelhouse(request, base_dir=app_base) if meta.get('operation') == 'prepare_python_wheels'
+                  else run(request, base_dir=app_base))
+    except OSError as exc:
+        if getattr(exc, 'errno', None) in (28, 122):
+            result = {'status': 'STARTUP_FAILED', 'error_code': 'WORKSPACE_DISK_QUOTA_EXCEEDED'}
+        else:
+            result = {'status': 'STARTUP_FAILED', 'error_code': 'UNEXPECTED_GUEST_FAILURE'}
     except GuestFailure as exc:
         # Intentionally avoid returning source strings, SQL, credentials or tracebacks.
         result = {'status': 'STARTUP_FAILED', 'error_code': str(exc)[:120]}

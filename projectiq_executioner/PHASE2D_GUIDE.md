@@ -103,3 +103,13 @@ request. Node's embedded SQLite supports the curated CRUD fixture; external
 DB services and general multi-service scheduling remain unsupported. See
 [PHASE2D_D4_GUIDE.md](PHASE2D_D4_GUIDE.md) for steps and acceptance gates.
 This is **D4a only**, not general D4 or production security attestation.
+
+## D5a — adapter-independent clean-VM acceptance baseline (post-D4a)
+
+`phase2.vm_worker.d5_acceptance` provides opt-in static and clean-VM guest
+observations, with explicit `PASS` / `FAIL` / `NOT_VERIFIED` controls, cleanup
+reporting, known security gaps, and **no attestation or support for unreviewed
+student code**. The VM receives no student snapshot or dependency cache. See
+[PHASE2D_D5_GUIDE.md](PHASE2D_D5_GUIDE.md). D5a does **not** complete D5:
+actual disk/PID quotas, crash recovery, sudo privilege review, worker identity,
+adversarial isolation and independent acceptance remain required.

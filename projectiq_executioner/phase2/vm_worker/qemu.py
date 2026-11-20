@@ -5,6 +5,7 @@ network tests and VM boundaries. This is a development provider, not attestation
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import os
@@ -107,7 +108,123 @@ def make_ssh_key(config: dict, workdir: Path) -> tuple[Path, str]:
     return key, pub
 
 
-def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_setup: bool = False) -> Path:
+# This code is operator-owned and runs as root ONCE through cloud-init, before
+# any reviewed project archive is transferred. No project bytes or shell input
+# are embedded in the script. It provisions only a throwaway DB-scoped account.
+MYSQL_BOOTSTRAP_SCRIPT = r'''#!/bin/sh
+set -eu
+umask 077
+ready=0
+i=0
+while [ "$i" -lt 75 ]; do
+    if /usr/bin/mysql --batch --skip-column-names -e 'SELECT 1;' >/dev/null 2>&1; then
+        ready=1
+        break
+    fi
+    i=$((i + 1))
+    sleep 1
+done
+[ "$ready" = 1 ] || exit 1
+secret=$(/usr/bin/openssl rand -hex 24)
+[ "${#secret}" -eq 48 ] || exit 1
+/usr/bin/mysql --batch <<SQL
+CREATE DATABASE IF NOT EXISTS \`projectiq_run\` CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE USER IF NOT EXISTS 'projectiq_app'@'localhost' IDENTIFIED BY '$secret';
+CREATE USER IF NOT EXISTS 'projectiq_app'@'127.0.0.1' IDENTIFIED BY '$secret';
+GRANT ALL ON \`projectiq_run\`.* TO 'projectiq_app'@'localhost';
+GRANT ALL ON \`projectiq_run\`.* TO 'projectiq_app'@'127.0.0.1';
+SQL
+file=/home/projectiq/.projectiq_mysql_credentials.json
+printf '{"host":"127.0.0.1","database":"projectiq_run","user":"projectiq_app","password":"%s"}\n' "$secret" > "$file.tmp"
+/usr/bin/chown projectiq:projectiq "$file.tmp"
+/bin/chmod 0600 "$file.tmp"
+/bin/mv "$file.tmp" "$file"
+'''
+
+
+# Boot-time, operator-owned storage provisioning. The additional disk is an
+# ephemeral *raw image with a fixed virtual capacity*, NOT the QCOW2 root disk.
+# The script is fixed; neither project content nor runtime command arguments
+# can influence its device, filesystem or mount options.
+WORKSPACE_MOUNT = '/srv/projectiq-workspace'
+WORKSPACE_SERIAL = 'PIQWORK0001'
+WORKSPACE_DEFAULT_MIB = 1536
+WORKSPACE_MIN_MIB = 64
+WORKSPACE_MAX_MIB = 2048
+
+WORKSPACE_BOOTSTRAP_SCRIPT = r'''#!/bin/sh
+set -eu
+umask 077
+device=/dev/disk/by-id/virtio-PIQWORK0001
+ready=0
+n=0
+while [ "$n" -lt 80 ]; do
+    if [ -b "$device" ]; then ready=1; break; fi
+    n=$((n + 1))
+    sleep 1
+done
+[ "$ready" = 1 ] || exit 1
+# Never format the root device. The serial is attached to a fresh disposable
+# disk by the trusted QEMU launcher and does not come from student metadata.
+[ "$(readlink -f "$device")" != /dev/vda ] || exit 1
+/usr/sbin/mkfs.ext4 -F -q -m 0 "$device"
+/bin/mkdir -p /srv/projectiq-workspace
+/bin/mount -t ext4 -o rw,nosuid,nodev,noatime "$device" /srv/projectiq-workspace
+/usr/bin/chown projectiq:projectiq_exec /srv/projectiq-workspace
+/bin/chmod 2770 /srv/projectiq-workspace
+'''
+
+
+# D5b/B3b preflight: an operator-owned systemd user slice. The root-owned
+# bootstrap is installed ONLY in a clean VM before ANY reviewed source arrives.
+# The controller, not the student application user, owns the user manager;
+# neither user is granted root sudo. Exact kernel cgroup file values must be
+# checked in a real VM before this can be enabled for actual application runs.
+CGROUP_PROBE_SLICE = 'projectiq-probe.slice'
+CGROUP_PROBE_MEMORY_BYTES = 192 * 1024 * 1024
+CGROUP_PROBE_PIDS = 32
+CGROUP_PROBE_IO_BPS = 4 * 1024 * 1024
+CGROUP_BOOTSTRAP_SCRIPT = r'''#!/bin/sh
+set -eu
+uid=$(/usr/bin/id -u projectiq)
+[ -n "$uid" ] || exit 1
+# Only the trusted controller receives delegated cgroup management authority.
+# projectiq_run has neither a systemd user manager nor unit write permissions.
+/bin/mkdir -p "/etc/systemd/system/user@${uid}.service.d"
+/bin/cat > "/etc/systemd/system/user@${uid}.service.d/90-projectiq-delegation.conf" <<EOF
+[Service]
+Delegate=cpu cpuset io memory pids
+IOAccounting=yes
+EOF
+/bin/mkdir -p /etc/systemd/user
+/bin/cat > /etc/systemd/user/projectiq-probe.slice <<EOF
+[Unit]
+Description=ProjectIQ cgroup v2 acceptance slice (trusted probes only)
+[Slice]
+MemoryAccounting=yes
+MemoryMax=192M
+TasksAccounting=yes
+TasksMax=32
+IOAccounting=yes
+IOWriteBandwidthMax=/srv/projectiq-workspace 4M
+EOF
+/usr/bin/loginctl enable-linger projectiq
+/usr/bin/systemctl daemon-reload
+# A fresh image has no earlier privileged project session that would need
+# terminating; start the user manager AFTER installing its scoped drop-in.
+/usr/bin/systemctl start "user@${uid}.service"
+'''
+
+
+def _validate_workspace_mib(mib: int) -> int:
+    if type(mib) is not int or not WORKSPACE_MIN_MIB <= mib <= WORKSPACE_MAX_MIB:
+        raise WorkerFailure('Workspace disk budget must be an integer between 64 and 2048 MiB')
+    return mib
+
+
+def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_setup: bool = False,
+                      mysql_bootstrap: bool = False, workspace_disk_mib: int = 0,
+                      cgroup_probe: bool = False) -> Path:
     """Generate a per-run cloud-init seed without executing anything from source.
 
     Dependency: ``pip install pycdlib`` on the operator host (not inside student
@@ -119,21 +236,80 @@ def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_s
         raise WorkerFailure('The trusted controller requires pycdlib (pip install pycdlib)') from exc
     if not pubkey.startswith('ssh-ed25519 ') or not instance_id.replace('-', '').isalnum():
         raise WorkerFailure('Invalid generated NoCloud identity')
+    if template_setup and mysql_bootstrap:
+        raise WorkerFailure('Cannot bootstrap application database while baking template')
+    if cgroup_probe and (template_setup or mysql_bootstrap or not workspace_disk_mib):
+        raise WorkerFailure('Cgroup probe requires a separate bounded workspace disk')
+    if workspace_disk_mib:
+        _validate_workspace_mib(workspace_disk_mib)
+        if template_setup:
+            raise WorkerFailure('Workspace disk is not used during template baking')
     sudo_rule = ('ALL=(ALL) NOPASSWD:ALL' if template_setup
-                 else 'ALL=(ALL) NOPASSWD: /usr/bin/mysql')
+                 else 'ALL=(projectiq_run) NOPASSWD: ALL')
     data = (
         '#cloud-config\n'
         'ssh_pwauth: false\n'
         'disable_root: true\n'
         'ssh_deletekeys: true\n'
+        'groups: [projectiq_exec]\n' if not template_setup else
+        '#cloud-config\nssh_pwauth: false\ndisable_root: true\nssh_deletekeys: true\n'
+    )
+    data += (
         'users:\n'
         '  - name: projectiq\n'
         '    lock_passwd: true\n'
         '    shell: /bin/bash\n'
-        f'    sudo: ["{sudo_rule}"]\n'
+        + ('    groups: [projectiq_exec]\n' if not template_setup else '')
+        + f'    sudo: ["{sudo_rule}"]\n'
         '    ssh_authorized_keys:\n'
         f'      - {pubkey}\n'
-    ).encode('utf-8')
+    )
+    if not template_setup:
+        data += (
+            '  - name: projectiq_run\n'
+            '    lock_passwd: true\n'
+            '    shell: /usr/sbin/nologin\n'
+            '    groups: [projectiq_exec]\n'
+            '    sudo: false\n'
+        )
+    bootstrap_tasks = []
+    if workspace_disk_mib or mysql_bootstrap or cgroup_probe:
+        data += 'write_files:\n'
+    if workspace_disk_mib:
+        encoded = base64.b64encode(WORKSPACE_BOOTSTRAP_SCRIPT.encode('utf-8')).decode('ascii')
+        data += (
+            '  - path: /usr/local/sbin/projectiq-workspace-bootstrap\n'
+            '    owner: root:root\n'
+            "    permissions: '0700'\n"
+            '    encoding: b64\n'
+            f'    content: {encoded}\n'
+        )
+        bootstrap_tasks.append('/usr/local/sbin/projectiq-workspace-bootstrap')
+    if cgroup_probe:
+        encoded = base64.b64encode(CGROUP_BOOTSTRAP_SCRIPT.encode('utf-8')).decode('ascii')
+        data += (
+            '  - path: /usr/local/sbin/projectiq-cgroup-probe-bootstrap\n'
+            '    owner: root:root\n'
+            "    permissions: '0700'\n"
+            '    encoding: b64\n'
+            f'    content: {encoded}\n'
+        )
+        bootstrap_tasks.append('/usr/local/sbin/projectiq-cgroup-probe-bootstrap')
+    if mysql_bootstrap:
+        encoded = base64.b64encode(MYSQL_BOOTSTRAP_SCRIPT.encode('utf-8')).decode('ascii')
+        data += (
+            '  - path: /usr/local/sbin/projectiq-mysql-bootstrap\n'
+            '    owner: root:root\n'
+            "    permissions: '0700'\n"
+            '    encoding: b64\n'
+            f'    content: {encoded}\n'
+        )
+        bootstrap_tasks.append('/usr/local/sbin/projectiq-mysql-bootstrap')
+    if bootstrap_tasks:
+        data += 'runcmd:\n'
+        for task in bootstrap_tasks:
+            data += f'  - [ {task} ]\n'
+    data = data.encode('utf-8')
     metadata = f'instance-id: {instance_id}\nlocal-hostname: projectiq-worker\n'.encode('utf-8')
     iso_path = workdir / 'seed.iso'
     iso = pycdlib.PyCdlib()
@@ -152,7 +328,8 @@ def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_s
 class QemuWorker:
     def __init__(self, config: dict, workdir: Path, port: int, *, ram_mib: int = 1024, cpus: int = 2,
                  trusted_template_setup: bool = False,
-                 trusted_dependency_fetch: bool = False):
+                 trusted_dependency_fetch: bool = False,
+                 diagnostic_serial: bool = False):
         self.config = config
         self.workdir = Path(workdir)
         self.port = port
@@ -162,8 +339,31 @@ class QemuWorker:
         if trusted_template_setup and trusted_dependency_fetch:
             raise WorkerFailure('Trusted template baking and dependency fetch cannot share a VM mode')
         self.trusted_dependency_fetch = trusted_dependency_fetch
+        # Only explicit clean-VM probes opt in; normal project execution keeps
+        # the guest serial console disabled to avoid collecting project output.
+        self.diagnostic_serial = diagnostic_serial
+        # Network-authorized dependency preparation remains a separate trust
+        # mode. Do not attach an unused quota disk just because the operator's
+        # normal-runtime config contains workspace_disk_mib.
+        self.workspace_disk_mib = (0 if trusted_dependency_fetch
+                                   else config.get('workspace_disk_mib', 0))
+        if self.workspace_disk_mib:
+            _validate_workspace_mib(self.workspace_disk_mib)
+            if trusted_template_setup:
+                raise WorkerFailure('Template baking must not attach a workspace disk')
         self.proc: subprocess.Popen | None = None
         self._log = None
+
+    def network_spec(self) -> str:
+        """One shared network contract for every application adapter.
+
+        Networked modes are only for the explicitly trusted OS/dependency
+        preparation workers. D5 reads this SAME method as the VM launcher.
+        """
+        forward = 'hostfwd=tcp:127.0.0.1:' + str(self.port) + '-:22'
+        return ('user,id=net0,' + forward if
+                self.trusted_template_setup or self.trusted_dependency_fetch else
+                'user,id=net0,restrict=on,' + forward)
 
     def start(self, seed: Path) -> None:
         base = Path(self.config['base_image']).resolve()
@@ -173,6 +373,13 @@ class QemuWorker:
                            '-b', str(base), str(overlay)], timeout=30)
         if result.returncode != 0:
             raise WorkerFailure('Unable to create disposable QEMU disk overlay')
+        work_disk = None
+        if self.workspace_disk_mib:
+            work_disk = self.workdir / 'workspace.raw'
+            created = _bounded([img, 'create', '-f', 'raw', str(work_disk),
+                                f'{self.workspace_disk_mib}M'], timeout=30)
+            if created.returncode != 0:
+                raise WorkerFailure('Could not create bounded disposable workspace disk')
         if self.trusted_template_setup:
             resized = _bounded([img, 'resize', str(overlay), '12G'], timeout=35)
             if resized.returncode != 0:
@@ -185,22 +392,31 @@ class QemuWorker:
         if accelerator == 'kvm' and sys.platform != 'linux':
             raise WorkerFailure('KVM requires Linux')
         self._log = (self.workdir / 'qemu.log').open('wb')
-        netdev = ('user,id=net0,hostfwd=tcp:127.0.0.1:' + str(self.port) + '-:22'
-                  if self.trusted_template_setup or self.trusted_dependency_fetch else
-                  'user,id=net0,restrict=on,hostfwd=tcp:127.0.0.1:' + str(self.port) + '-:22')
+        netdev = self.network_spec()
         # Record the trusted template guest's serial console for sealing
         # diagnostics. Ordinary project execution does not expose a console.
         serial = ('file:' + (self.workdir / 'guest-serial.log').resolve().as_posix()
-                  if self.trusted_template_setup else 'none')
+                  if self.trusted_template_setup or self.diagnostic_serial else 'none')
+        # With a second disk present, explicitly mark the trusted Ubuntu root
+        # image as boot target #1. The new blank workspace disk must never be
+        # selected by PC BIOS/UEFI as the first boot device. Keep the known-
+        # working single-disk machine configuration unchanged.
+        root_drive = (['-drive', f'file={overlay},if=none,format=qcow2,id=bootdisk',
+                       '-device', 'virtio-blk-pci,drive=bootdisk,bootindex=1']
+                      if work_disk is not None else
+                      ['-drive', f'file={overlay},if=virtio,format=qcow2'])
         args = [
             _tool('qemu-system-x86_64', self.config.get('qemu_binary')),
             '-accel', accelerator, '-m', str(self.ram_mib), '-smp', str(self.cpus),
-            '-drive', f'file={overlay},if=virtio,format=qcow2',
+            *root_drive,
             '-drive', f'file={Path(seed).resolve()},media=cdrom,readonly=on',
             '-netdev', netdev,
             '-device', 'virtio-net-pci,netdev=net0',
             '-display', 'none', '-monitor', 'none', '-serial', serial, '-no-reboot',
         ]
+        if work_disk is not None:
+            args.extend(['-drive', f'file={work_disk},if=none,format=raw,id=workdisk',
+                         '-device', f'virtio-blk-pci,drive=workdisk,serial={WORKSPACE_SERIAL},bootindex=2'])
         fw = self.config.get('uefi_firmware')
         if fw:
             path = Path(str(fw)).resolve()

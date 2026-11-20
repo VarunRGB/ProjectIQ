@@ -109,6 +109,13 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
         _save(result, output)
         return result
 
+    # Apply the same operator-owned disk budget to every runtime adapter.
+    # Never accept a repository-provided budget or silently disable this gate.
+    workspace_mib = config.get('workspace_disk_mib', 1536)
+    if type(workspace_mib) is not int or not 64 <= workspace_mib <= 2048:
+        result['reason'] = 'INVALID_WORKSPACE_DISK_BUDGET'
+        _save(result, output)
+        return result
     parent = Path(work_root) if work_root is not None else Path(tempfile.gettempdir())
     parent.mkdir(parents=True, exist_ok=True)
     started_at = time.monotonic()
@@ -135,6 +142,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'schema_path': candidate.get('schema_path'),
                 'project_root': candidate.get('project_root'),
                 'python_framework': candidate.get('python_framework'),
+                'workspace_disk_mib': workspace_mib,
             }
             if node_assets is not None:
                 request.update({
@@ -157,10 +165,13 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 })
             (work / 'request.json').write_text(json.dumps(request), 'utf-8')
             key, pubkey = make_ssh_key(config, work)
-            seed = make_nocloud_iso(work, pubkey, 'projectiq-' + uuid.uuid4().hex)
+            seed = make_nocloud_iso(work, pubkey, 'projectiq-' + uuid.uuid4().hex,
+                                    mysql_bootstrap=(candidate['adapter'] == 'php_mysql_v1'),
+                                    workspace_disk_mib=request['workspace_disk_mib'])
             port = _free_loopback_port()
             limits = candidate['vm_limits']
-            worker = QemuWorker(config, work, port, ram_mib=limits['ram_mib'],
+            worker = QemuWorker({**config, 'workspace_disk_mib': request['workspace_disk_mib']},
+                                work, port, ram_mib=limits['ram_mib'],
                                 cpus=effective_vm_vcpus(config, limits['vcpu']))
             worker.start(seed)
             vm_started = True
@@ -220,6 +231,11 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'SQL binary content is not supported',
                 'SQL dump uses operations outside the pilot allowlist',
                 'MySQL disposable database bootstrap failed',
+                'MySQL trusted cloud-init bootstrap unavailable',
+                'RUNTIME_PRIVILEGE_BOUNDARY_UNAVAILABLE',
+                'RUNTIME_SHARED_PATH_UNSUPPORTED',
+                'WORKSPACE_DISK_QUOTA_UNAVAILABLE',
+                'WORKSPACE_DISK_QUOTA_EXCEEDED',
                 'MySQL guest admin permission unavailable',
                 'MySQL service not ready before bootstrap',
                 'MySQL bootstrap failed at database',
