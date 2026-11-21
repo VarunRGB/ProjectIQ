@@ -27,7 +27,14 @@ VALID_ARTIFACTS = frozenset({
     RECORD, RECORD + '.writing', LEASE, 'run.qcow2', 'workspace.raw',
     'seed.iso', 'controller_ed25519', 'controller_ed25519.pub',
     'qemu.log', 'known_hosts', 'known_hosts.old',
+    # D5c Gate 4: fixed host staging names used by the real reviewed-fixture runner.
+    'snapshot.zip', 'request.json', 'result.json',
+    'node_runtime.tar.xz', 'npm_cache.zip',
+    'python_pip.whl', 'python_wheelhouse.zip',
 })
+INSPECTION = 'inspection'
+MAX_INSPECTION_ENTRIES = 100_000
+MAX_INSPECTION_DEPTH = 48
 MAX_RECORD_BYTES = 1400
 
 
@@ -215,15 +222,64 @@ def exclusive_lease(folder: Path):
 
 def _children_verified(folder: Path) -> list[Path]:
     contents = list(folder.iterdir())
-    if len(contents) > len(VALID_ARTIFACTS):
+    if len(contents) > len(VALID_ARTIFACTS) + 1:
         raise RecoveryError('TOO_MANY_ARTIFACTS')
     for item in contents:
-        if item.name not in VALID_ARTIFACTS:
+        if item.name == INSPECTION:
+            _safe_type(item, directory=True)
+            _inspection_entries(item)  # Full bounded no-reparse preflight.
+        elif item.name in VALID_ARTIFACTS:
+            _safe_type(item, directory=False)
+        else:
             raise RecoveryError('UNKNOWN_ARTIFACT')
-        _safe_type(item, directory=False)
     if not ({RECORD, LEASE} <= {x.name for x in contents}):
         raise RecoveryError('MISSING_REQUIRED_ARTIFACT')
     return contents
+
+
+def _inspection_entries(directory: Path) -> list[Path]:
+    """Preflight all entries before deleting any: only real files/directories.
+
+    The inspected GitHub source has arbitrary filenames, but its sole owned
+    root is `inspection`. Unknown top-level names are still refused. Never
+    follow symlinks, Windows junctions/reparse points, or hardlinked files.
+    """
+    _safe_type(directory, directory=True)
+    seen: list[Path] = []
+    stack = [(directory, 0)]
+    while stack:
+        current, depth = stack.pop()
+        if depth > MAX_INSPECTION_DEPTH:
+            raise RecoveryError('INSPECTION_TREE_TOO_DEEP')
+        _safe_type(current, directory=True)
+        seen.append(current)
+        if len(seen) > MAX_INSPECTION_ENTRIES:
+            raise RecoveryError('INSPECTION_TREE_TOO_LARGE')
+        for child in current.iterdir():
+            info = child.lstat()
+            if stat.S_ISDIR(info.st_mode):
+                _safe_type(child, directory=True)
+                stack.append((child, depth + 1))
+            else:
+                _safe_type(child, directory=False)
+                seen.append(child)
+                if len(seen) > MAX_INSPECTION_ENTRIES:
+                    raise RecoveryError('INSPECTION_TREE_TOO_LARGE')
+    return seen
+
+
+def _remove_verified_inspection(directory: Path) -> None:
+    # Independently revalidate immediately before removal; if anything changes,
+    # refuse. This does not claim resistance to hostile same-user races/ACLs.
+    entries = _inspection_entries(directory)
+    files = [p for p in entries if not stat.S_ISDIR(p.lstat().st_mode)]
+    directories = [p for p in entries if stat.S_ISDIR(p.lstat().st_mode)]
+    for path in files:
+        _safe_type(path, directory=False)
+        path.unlink()
+    for path in sorted(directories, key=lambda p: len(p.parts), reverse=True):
+        _safe_type(path, directory=True)
+        path.rmdir()
 
 
 def windows_process_state(pid: int, born: int, image: str) -> str:
@@ -332,6 +388,9 @@ def recover_managed_root(root: Path, expected_image: str, *,
             # On Windows the lease file must be closed before removing it.
             # This run ID is immutable and cannot be acquired by a new worker.
             _children_verified(folder)
+            inspected = folder / INSPECTION
+            if inspected.exists() or inspected.is_symlink():
+                _remove_verified_inspection(inspected)
             for name in sorted(VALID_ARTIFACTS - {LEASE, RECORD}):
                 item = folder / name
                 try:

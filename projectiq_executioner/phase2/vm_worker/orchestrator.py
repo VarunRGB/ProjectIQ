@@ -6,7 +6,6 @@ Launch is explicitly restricted to operator-approved pinned fixture SHAs.
 from __future__ import annotations
 
 import json
-import tempfile
 import threading
 import time
 import uuid
@@ -21,6 +20,7 @@ from .offline_assets import (OfflineAssetError, approved_node_vite_assets,
                              approved_node_fullstack_assets)
 from .qemu import (QemuWorker, SSHControl, WorkerFailure, _free_loopback_port,
                    effective_vm_vcpus, make_nocloud_iso, make_ssh_key, verify_host_toolchain)
+from .d5c_runtime_workspace import ManagedRuntimeRun, RuntimeWorkspaceError
 
 
 def load_config(path: Path) -> dict:
@@ -116,16 +116,22 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
         result['reason'] = 'INVALID_WORKSPACE_DISK_BUDGET'
         _save(result, output)
         return result
-    parent = Path(work_root) if work_root is not None else Path(tempfile.gettempdir())
-    parent.mkdir(parents=True, exist_ok=True)
+    # D5c Gate 4: the real reviewed-fixture runner MUST use a registered,
+    # controller-leased workspace. A failed registry preflight cannot fall back
+    # to untracked TemporaryDirectory and cannot start a VM.
+    try:
+        runtime = ManagedRuntimeRun(config, work_root)
+        runtime.open()
+    except (RuntimeWorkspaceError, OSError, ValueError):
+        result.update(status='DENIED', reason='MANAGED_VM_RUNTIME_UNAVAILABLE')
+        _save(result, output)
+        return result
     started_at = time.monotonic()
     vm_started = False
     worker_stopped = False
     expired = threading.Event()
     watchdog = None
-    # TemporaryDirectory also removes SSH keys and any VM disk mutations.
-    with tempfile.TemporaryDirectory(prefix='projectiq_vm_', dir=parent) as temp:
-        work = Path(temp)
+    with runtime.hold() as work:
         worker = None
         try:
             source_record = RepositorySource(kind='github', repository=source['repository'],
@@ -175,8 +181,10 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             worker = QemuWorker({**config, 'workspace_disk_mib': request['workspace_disk_mib']},
                                 work, port, ram_mib=limits['ram_mib'],
                                 cpus=effective_vm_vcpus(config, limits['vcpu']))
+            runtime.mark_launching()
             worker.start(seed)
             vm_started = True
+            runtime.mark_launched(worker.proc)
             def expire():
                 if worker is not None and worker.proc is not None and worker.proc.poll() is None:
                     expired.set()
@@ -187,6 +195,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             result['execution'] = 'VM_BOOT_REQUESTED'
             ssh = SSHControl(config, work, port, key)
             ssh.wait_ssh(worker, seconds=85)
+            runtime.mark_booted()
             ssh.copy(archive, 'snapshot.zip')
             ssh.copy(Path(__file__).with_name('guest_agent.py'), 'guest_agent.py')
             ssh.copy(work / 'request.json', 'request.json')
@@ -359,11 +368,24 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             if worker is not None:
                 try:
                     worker.stop()
+                    if runtime._phase in ('LAUNCHED', 'BOOTED'):
+                        runtime.mark_stopped()
                     worker_stopped = True
                 except Exception:
                     worker_stopped = False
-            result['cleanup'] = ('VM_STOPPED_DISPOSABLE_STORAGE_REMOVED' if worker_stopped or not vm_started
-                                 else 'CLEANUP_FAILED_MANUAL_INSPECTION_REQUIRED')
             result['elapsed_seconds'] = round(time.monotonic() - started_at, 2)
+    # The lease has been released and the recovery engine has independently
+    # verified actual deletion; a successful worker.stop() alone is NOT cleanup.
+    cleaned = runtime.cleanup_verified and (worker_stopped or not vm_started)
+    result['cleanup'] = ('VM_STOPPED_DISPOSABLE_STORAGE_REMOVED' if cleaned
+                         else 'CLEANUP_FAILED_MANUAL_INSPECTION_REQUIRED')
+    if not cleaned:
+        result['status'] = 'CLEANUP_FAILED'
+        result['cleanup_failure_code'] = runtime.cleanup_reason[:100]
+        if runtime.folder is not None and runtime.folder.exists():
+            result['manual_review_workspace'] = str(runtime.folder)
+    result['managed_runtime'] = ('SIGNED_LEASED_WORKSPACE_REMOVED' if cleaned
+                                 else 'MANAGED_CLEANUP_NOT_VERIFIED')
+    result['managed_run_id'] = runtime.folder.name if runtime.folder is not None else None
     _save(result, output)
     return result
