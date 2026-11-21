@@ -191,9 +191,15 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
         else:
             manual_review.append('D3_EXPRESS_REQUIRES_LOCKFILE_AND_STATIC_GET_HEALTH_ROUTE')
     elif (len(backends) == 1 and backends[0]['family'] == 'python'
-          and not frontends and not others
+          and len(frontends) <= 1
+          and all(f['family'] == 'static_web'
+                  and f['root'] == backends[0]['root']
+                  and set(f['deps']).issubset({backends[0]['name']})
+                  for f in frontends)
+          and not others
           and all(db['family'] == 'sqlite' for db in dbs) and len(dbs) <= 1):
-        # D2: single-service Flask/FastAPI with optionally embedded SQLite.
+        # D2: one Flask/FastAPI runtime, optionally with SQLite and a cohosted
+        # static/template UI. A separately rooted frontend is not supported.
         # Runtime and wheelhouse approval remain separate, operator-only gates.
         root = backends[0]['root']
         prefix = '' if root == '.' else root + '/'
@@ -208,6 +214,9 @@ def build_vm_plan(manifest: Mapping[str, Any], phase2a: Mapping[str, Any],
             framework = frameworks.pop()
             adapter = 'python_web_offline_v1'
             expected_probe = '/openapi.json' if framework == 'fastapi' else '/'
+            if frontends:
+                manual_review.append(
+                    'D2_COHOSTED_STATIC_UI_SERVED_BY_PYTHON_BACKEND_ONLY')
             manual_review.extend([
                 'D2_PYTHON312_AND_PINNED_PIP_WHEEL_REQUIRED',
                 'D2_REQUIREMENTS_AND_OFFLINE_WHEELHOUSE_SHA256_REQUIRED',

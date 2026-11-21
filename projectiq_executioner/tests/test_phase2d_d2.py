@@ -118,6 +118,67 @@ class PythonPlanningTests(unittest.TestCase):
         self.assertIn('PHASE2D_PYTHON_SQLITE_EPHEMERAL_GUEST_ONLY',
                       [r['implementation_state'] for r in d['services']])
 
+    def test_flask_with_embedded_static_templates(self):
+        m = manifest('flask')
+        m['services'].append({
+            'name': 'frontend', 'kind': 'frontend',
+            'technology': 'HTML/JS frontend (inferred)',
+            'root': '.', 'depends_on': ['backend'],
+        })
+        _, _, c = plans(m)
+        self.assertEqual(c['adapter'], 'python_web_offline_v1')
+        self.assertEqual(c['project_root'], '.')
+        self.assertEqual(c['probe_path'], '/')
+        self.assertIn('D2_COHOSTED_STATIC_UI_SERVED_BY_PYTHON_BACKEND_ONLY',
+                      c['application_preparation']['review_items'])
+
+    def test_flask_with_templates_and_sqlite(self):
+        m = manifest('flask', sqlite=True)
+        m['services'].append({
+            'name': 'frontend', 'kind': 'frontend',
+            'technology': 'HTML/JS frontend (inferred)',
+            'root': '.', 'depends_on': ['backend'],
+        })
+        _, _, c = plans(m)
+        self.assertEqual(c['adapter'], 'python_web_offline_v1')
+        self.assertEqual(c['python_framework'], 'flask')
+
+    def test_separate_frontend_root_stays_unsupported(self):
+        m = manifest('flask')
+        m['services'].append({
+            'name': 'frontend', 'kind': 'frontend',
+            'technology': 'HTML/JS frontend (inferred)',
+            'root': 'client', 'depends_on': ['backend'],
+        })
+        self.assertEqual(plans(m)[2]['status'], 'NEEDS_ADAPTER')
+
+    def test_node_frontend_stays_unsupported(self):
+        m = manifest('flask')
+        m['services'].append({
+            'name': 'frontend', 'kind': 'frontend',
+            'technology': 'React', 'root': '.', 'depends_on': ['backend'],
+        })
+        self.assertEqual(plans(m)[2]['status'], 'NEEDS_ADAPTER')
+
+    def test_cohosted_frontend_cannot_depend_on_other_services(self):
+        m = manifest('flask', sqlite=True)
+        m['services'].append({
+            'name': 'frontend', 'kind': 'frontend',
+            'technology': 'HTML/JS frontend (inferred)',
+            'root': '.', 'depends_on': ['sqlite'],
+        })
+        self.assertEqual(plans(m)[2]['status'], 'NEEDS_ADAPTER')
+
+    def test_multiple_static_frontends_stay_unsupported(self):
+        m = manifest('flask')
+        for name in ('frontend1', 'frontend2'):
+            m['services'].append({
+                'name': name, 'kind': 'frontend',
+                'technology': 'HTML/JS frontend (inferred)',
+                'root': '.', 'depends_on': ['backend'],
+            })
+        self.assertEqual(plans(m)[2]['status'], 'NEEDS_ADAPTER')
+
     def test_unsupported_without_evidenced_framework(self):
         m = manifest()
         m['technologies'] = []
