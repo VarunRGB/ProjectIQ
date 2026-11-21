@@ -670,7 +670,10 @@ class SSHControl:
         return _bounded(cmd, timeout=timeout, input=input)
 
     def copy(self, local: Path, remote_filename: str, timeout: int = 60) -> None:
-        if remote_filename not in {'snapshot.zip', 'guest_agent.py', 'request.json', 'template_seal.sh'}:
+        if remote_filename not in {
+            'snapshot.zip', 'guest_agent.py', 'request.json', 'template_seal.sh',
+            'guest_http.py',
+        }:
             raise WorkerFailure('Unapproved destination filename')
         content = local.read_bytes()
         if len(content) > 30_000_000:

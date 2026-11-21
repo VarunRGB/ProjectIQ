@@ -44,7 +44,8 @@ def _save(report: dict, output: Path) -> None:
 
 
 def execute_vm_candidate(candidate: dict, config: dict, output: Path,
-                         *, reviewed_fixture: bool = False, work_root: Path | None = None) -> dict:
+                         *, reviewed_fixture: bool = False, work_root: Path | None = None,
+                         test_bundle: dict | None = None) -> dict:
     """Runs only approved source SHAs. Does not use Docker/Podman for any stage.
 
     'reviewed_fixture=True' signifies human approval of a particular pinned
@@ -65,6 +66,16 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
         result['reason'] = 'PINNED_FIXTURE_NOT_OPERATOR_APPROVED_OR_ADAPTER_MISSING'
         _save(result, output)
         return result
+    if test_bundle is not None:
+        # Operator-approved execution still rejects arbitrary guest instructions.
+        from ...phase4.guest_http import GuestTestError, validate_guest_bundle
+        try:
+            validate_guest_bundle(test_bundle, expected_source=source,
+                                  expected_adapter=candidate['adapter'])
+        except (GuestTestError, TypeError, ValueError, KeyError):
+            result['reason'] = 'PHASE4_TEST_BUNDLE_REJECTED'
+            _save(result, output)
+            return result
     # The Node/Vite branch is opt-in per exact repository SHA. Validate both
     # archives and their hashes before source download or VM startup.
     node_assets = None
@@ -151,6 +162,9 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'workspace_disk_mib': workspace_mib,
                 'app_cgroup': True,
             }
+            if test_bundle is not None:
+                request['phase4_source'] = source
+                request['phase4_test_bundle'] = test_bundle
             if node_assets is not None:
                 request.update({
                     'node_version': node_assets['node_version'],
@@ -199,6 +213,9 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             ssh.copy(archive, 'snapshot.zip')
             ssh.copy(Path(__file__).with_name('guest_agent.py'), 'guest_agent.py')
             ssh.copy(work / 'request.json', 'request.json')
+            if test_bundle is not None:
+                # Trusted runner, not code from the student checkout.
+                ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / 'guest_http.py', 'guest_http.py')
             if node_assets is not None:
                 ssh.copy_offline_asset(node_assets['node_tarball'], 'node_runtime.tar.xz')
                 ssh.copy_offline_asset(node_assets['npm_cache_zip'], 'npm_cache.zip')
@@ -224,6 +241,16 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'notes': [x[:160] for x in guest.get('notes', [])[:5]
                           if isinstance(x, str)] if isinstance(guest.get('notes'), list) else [],
             }
+            if test_bundle is not None:
+                from ...phase4.report_contracts import GuestReportError, validate_guest_report
+                try:
+                    validate_guest_report(test_bundle, guest.get('phase4_test_report'))
+                except (GuestReportError, TypeError, ValueError):
+                    result['phase4_status'] = 'INVALID_GUEST_REPORT'
+                else:
+                    result['phase4_status'] = 'VALIDATED'
+                    # This contract contains only bounded safe evidence fields.
+                    result['phase4_test_results'] = guest['phase4_test_report']
             # Compact, typed, guest-controller-collected kernel observations.
             # Startup alone is not accepted as evidence of process placement.
             placement = guest.get('cgroup_placement')
@@ -346,18 +373,24 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'PYTHON_WEB_ENTRYPOINT_UNSUPPORTED',
                 'PYTHON_WEB_IMPORT_OR_SQLITE_FAILED',
                 'PYTHON_WEB_HTTP_PROBE_FAILED',
+                'PHASE4_TRUSTED_TEST_DISPATCH_FAILED',
                 'UNEXPECTED_GUEST_FAILURE',
             }
             if status == 'STARTUP_FAILED':
                 reported = guest.get('error_code')
                 result['guest_error_code'] = reported if reported in allowed_guest_errors else 'UNCLASSIFIED_GUEST_FAILURE'
-            if status == 'STARTUP_VERIFIED' and command.returncode == 0:
+            if (status == 'STARTUP_VERIFIED' and command.returncode == 0
+                    and (test_bundle is None or result.get('phase4_status') == 'VALIDATED')):
                 result.update(status='STARTUP_VERIFIED', execution='PERFORMED_IN_DISPOSABLE_VM',
                               readiness=('HTTP_200_FULLSTACK_PROBE_PASSED' if candidate['adapter'] == 'node_fullstack_offline_v1' else
                                          'HTTP_200_API_PROBE_PASSED' if candidate['adapter'] in ('python_web_offline_v1', 'node_express_offline_v1') else 'HTTP_200_HTML_PROBE_PASSED'))
             else:
-                result.update(status='STARTUP_FAILED', execution='ATTEMPTED_IN_DISPOSABLE_VM',
-                              readiness='NOT_VERIFIED', reason='GUEST_ADAPTER_FAILED')
+                bad_test_report = (test_bundle is not None and status == 'STARTUP_VERIFIED'
+                                   and command.returncode == 0)
+                result.update(status='PHASE4_REPORT_INVALID' if bad_test_report else 'STARTUP_FAILED',
+                              execution='ATTEMPTED_IN_DISPOSABLE_VM', readiness='NOT_VERIFIED',
+                              reason=('GUEST_PHASE4_REPORT_NOT_VERIFIED' if bad_test_report
+                                      else 'GUEST_ADAPTER_FAILED'))
         except Exception as exc:
             # No user source text, token, database password or remote stderr in logs.
             result.update(status='WALL_TIME_LIMIT' if expired.is_set() else 'INFRASTRUCTURE_OR_ADAPTER_FAILURE',

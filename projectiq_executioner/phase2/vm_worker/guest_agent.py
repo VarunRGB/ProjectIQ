@@ -1839,6 +1839,20 @@ def _probe(url_path: str, port: int = 8765, deadline: int = 25) -> tuple[int, st
     raise GuestFailure('Application HTTP readiness not established: ' + last)
 
 
+def _run_phase4_on_live_app(req: dict, port: int) -> dict | None:
+    '''Execute trusted declarative checks before the server is stopped.'''
+    if 'phase4_test_bundle' not in req:
+        return None
+    try:
+        # The trusted controller copies this beside guest_agent.py, not checkout.
+        from guest_http import GuestTestError, run_guest_tests
+        return run_guest_tests(req['phase4_test_bundle'],
+                               expected_source=req['phase4_source'],
+                               expected_adapter=req['adapter'], port=port)
+    except (GuestTestError, ImportError, KeyError, TypeError, ValueError):
+        raise GuestFailure('PHASE4_TRUSTED_TEST_DISPATCH_FAILED') from None
+
+
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
@@ -1895,6 +1909,9 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
             notes.append(_probe_vite_asset(dist, port))
         result = {'status': 'STARTUP_VERIFIED', 'adapter': adapter, 'http_status': status,
                   'readiness_path': path, 'readiness': detail, 'notes': notes}
+        phase4 = _run_phase4_on_live_app(req, port)
+        if phase4 is not None:
+            result['phase4_test_report'] = phase4
     finally:
         server.terminate()
         try:
@@ -2222,7 +2239,7 @@ def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765
         sqlite_verified = (api == '/api/sqlite-check' and through_frontend.get('sqlite') is True)
         if api == '/api/sqlite-check' and not sqlite_verified:
             raise GuestFailure('NODE_FULLSTACK_SQLITE_CHECK_FAILED')
-        return {'status': 'STARTUP_VERIFIED', 'adapter': 'node_fullstack_offline_v1',
+        result = {'status': 'STARTUP_VERIFIED', 'adapter': 'node_fullstack_offline_v1',
                 'http_status': 200, 'readiness': 'HTTP_RESPONSE_OK', 'readiness_path': api,
                 'service_results': {'frontend_http': 200, 'backend_http': 200,
                                     'frontend_proxy_api_http': 200,
@@ -2230,6 +2247,10 @@ def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765
                 'notes': ['Two offline npm ci installs and Vite build completed',
                           'Express started before frontend; internal API proxy returned matching JSON',
                           'SQLite CRUD evidence requires operator-reviewed API fixture']}
+        phase4 = _run_phase4_on_live_app(req, port)
+        if phase4 is not None:
+            result['phase4_test_report'] = phase4
+        return result
     finally:
         for proc in reversed(processes):
             _d4_stop_process(proc)
