@@ -106,11 +106,14 @@ def _validate_json(value: Any, *, allow_fixture: bool) -> list[str]:
 
 
 def _resolved_target(path: str, method: str, request: Mapping[str, Any]) -> tuple[str, list[str]]:
-    if not isinstance(request, Mapping) or set(request) != {'path_params', 'query', 'json_body'}:
+    if (not isinstance(request, Mapping) or set(request) not in (
+            {'path_params', 'query', 'json_body'},
+            {'path_params', 'query', 'json_body', 'form_body'})):
         _fail('INVALID_REQUEST_SHAPE')
     params = request['path_params']
     query = request['query']
     body = request['json_body']
+    form = request.get('form_body')
     if not isinstance(params, dict) or len(params) > 12:
         _fail('INVALID_ROUTE_PARAMETERS')
     route_names = _ROUTE_PARAM.findall(path)
@@ -142,11 +145,32 @@ def _resolved_target(path: str, method: str, request: Mapping[str, Any]) -> tupl
         replaced += '?' + urlencode(params_for_encoding, doseq=False)
     if len(replaced) > 512 or not _SAFE_PATH.fullmatch(replaced):
         _fail('UNSAFE_HTTP_PATH')
-    if method in {'GET', 'DELETE'} and body is not None:
+    if body is not None and form is not None:
+        _fail('MULTIPLE_BODY_TYPES')
+    if form is not None:
+        if not isinstance(form, dict) or len(form) > 32:
+            _fail('INVALID_FORM_BODY')
+        for key, value in form.items():
+            if not isinstance(key, str) or not _SAFE_KEY.fullmatch(key):
+                _fail('INVALID_FORM_FIELD')
+            if isinstance(value, dict) and set(value) == {'$fixture_ref'}:
+                if not isinstance(value['$fixture_ref'], str) or not _SAFE_FIXTURE.fullmatch(value['$fixture_ref']):
+                    _fail('INVALID_FIXTURE_REFERENCE')
+            elif (not isinstance(value, str) or len(value) > 1024
+                  or _SENSITIVE_KEY.search(key)):
+                _fail('INVALID_FORM_VALUE_OR_SENSITIVE_LITERAL')
+        if len(canonical_bytes(form)) > MAX_JSON_BYTES:
+            _fail('FORM_BYTE_LIMIT')
+    if method in {'GET', 'DELETE'} and (body is not None or form is not None):
         _fail('REQUEST_BODY_NOT_ALLOWED_FOR_METHOD')
     fixture_refs = _validate_json(body, allow_fixture=True) if body is not None else []
     if body is not None and not isinstance(body, (dict, list)):
         _fail('BODY_MUST_BE_JSON_OBJECT_OR_ARRAY')
+    if form is not None:
+        fixture_refs = sorted(set(fixture_refs) | {v['$fixture_ref'] for v in form.values()
+                           if isinstance(v, dict) and set(v) == {'$fixture_ref'}})
+        if len(fixture_refs) > _MAX_FIXTURE_REFS:
+            _fail('TOO_MANY_FIXTURE_REFERENCES')
     return replaced, fixture_refs
 
 
@@ -212,7 +236,8 @@ def validate_oracle_catalog(catalog: Mapping[str, Any], phase3_plan: Mapping[str
             assertions.append({'kind': 'JSON_BODY_SUBSET_EQUALS', 'expected': subset})
         compiled.append({
             'id': identity, 'name': name, 'phase3_test_id': target_id,
-            'request': {'method': method, 'path': url, 'json_body': request['json_body']},
+            'request': {'method': method, 'path': url, 'json_body': request['json_body'],
+                        'form_body': request.get('form_body')},
             'assertions': assertions, 'fixture_refs': fixture_refs,
             'oracle_basis': 'OPERATOR_SUPPLIED_UNREVIEWED',
             'execution': 'NOT_PERFORMED',

@@ -672,7 +672,7 @@ class SSHControl:
     def copy(self, local: Path, remote_filename: str, timeout: int = 60) -> None:
         if remote_filename not in {
             'snapshot.zip', 'guest_agent.py', 'request.json', 'template_seal.sh',
-            'guest_http.py',
+            'guest_http.py', 'guest_api.py',
         }:
             raise WorkerFailure('Unapproved destination filename')
         content = local.read_bytes()

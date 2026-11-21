@@ -1853,6 +1853,19 @@ def _run_phase4_on_live_app(req: dict, port: int) -> dict | None:
         raise GuestFailure('PHASE4_TRUSTED_TEST_DISPATCH_FAILED') from None
 
 
+def _run_phase4c_on_live_app(req: dict, port: int) -> dict | None:
+    """Run separately approved API scenarios only in the live guest."""
+    if 'phase4c_api_bundle' not in req:
+        return None
+    try:
+        from guest_api import GuestApiError, run_api_tests
+        return run_api_tests(req['phase4c_api_bundle'],
+                             expected_source=req['phase4c_source'],
+                             expected_adapter=req['adapter'], port=port)
+    except (GuestApiError, ImportError, KeyError, TypeError, ValueError):
+        raise GuestFailure('PHASE4C_TRUSTED_API_DISPATCH_FAILED') from None
+
+
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
@@ -1912,6 +1925,9 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         phase4 = _run_phase4_on_live_app(req, port)
         if phase4 is not None:
             result['phase4_test_report'] = phase4
+        phase4c = _run_phase4c_on_live_app(req, port)
+        if phase4c is not None:
+            result['phase4c_api_report'] = phase4c
     finally:
         server.terminate()
         try:
@@ -2250,6 +2266,9 @@ def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765
         phase4 = _run_phase4_on_live_app(req, port)
         if phase4 is not None:
             result['phase4_test_report'] = phase4
+        phase4c = _run_phase4c_on_live_app(req, port)
+        if phase4c is not None:
+            result['phase4c_api_report'] = phase4c
         return result
     finally:
         for proc in reversed(processes):
