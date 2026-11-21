@@ -662,15 +662,39 @@ class SSHControl:
             raise WorkerFailure('Invalid or oversized VM report')
         local.write_bytes(result.stdout)
 
-    def wait_ssh(self, vm: QemuWorker, seconds: int = 80) -> None:
+    def wait_ssh(self, vm: QemuWorker, seconds: int = 80, *,
+                 cancel_requested=None) -> None:
+        """Bounded SSH readiness with optional trusted cooperative cancellation.
+
+        Existing callers without a cancellation callback retain their behavior.
+        A callback that raises (e.g. unreadable cancellation marker) propagates:
+        an I/O/permission error must never be mistaken for no cancellation.
+        Individual SSH attempts retain their existing six-second bound.
+        """
+        if cancel_requested is not None and not callable(cancel_requested):
+            raise WorkerFailure('Invalid trusted VM cancellation callback')
+
+        def check_cancel():
+            if cancel_requested is not None and cancel_requested():
+                raise WorkerFailure('Worker VM startup cancelled')
+
         end = time.monotonic() + seconds
         while time.monotonic() < end:
+            check_cancel()
             if vm.proc is None or vm.proc.poll() is not None:
                 raise WorkerFailure('Worker VM exited before SSH became ready')
             try:
                 if self.ssh('true', timeout=6).returncode == 0:
+                    check_cancel()
                     return
             except WorkerFailure:
                 pass
-            time.sleep(2)
+            check_cancel()
+            if cancel_requested is None:
+                time.sleep(2)
+            else:
+                for _ in range(10):
+                    check_cancel()
+                    time.sleep(0.2)
+        check_cancel()
         raise WorkerFailure('Worker VM SSH readiness timed out')
