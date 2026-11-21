@@ -11,7 +11,7 @@ import json
 import os
 from pathlib import Path
 
-from .d5c_orphan_registry import ID_PATTERN, ROOT_KEY, _root
+from .d5c_orphan_registry import ID_PATTERN, ROOT_KEY, ROOT_LEASE, _root
 from .d5c_runtime_workspace import ManagedRuntimeRun, RuntimeWorkspaceError
 from .orchestrator import load_config
 
@@ -105,7 +105,9 @@ def validate(summary: Path, config_path: Path) -> dict:
         if all_proven: report['checks']['real_runtime_signed_lease_registration']='PASS'
         if len(set(ids))==3: report['checks']['distinct_managed_run_ids']='PASS'
         if all_clean: report['checks']['actual_vm_storage_cleanup_verified']='PASS'
-        if {x.name for x in root.iterdir()}=={ROOT_KEY}:
+        # Gate 5 adds a permanent root lease; existing Gate 4 roots may still
+        # have only the root key until their first Gate 5 runtime operation.
+        if {x.name for x in root.iterdir()} in ({ROOT_KEY}, {ROOT_KEY, ROOT_LEASE}):
             report['checks']['no_leftover_managed_runs']='PASS'
         if all_claims:
             report['checks']['fullstack_build_claim_not_promoted']='PASS'

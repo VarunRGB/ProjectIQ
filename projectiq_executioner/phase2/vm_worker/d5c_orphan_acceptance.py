@@ -271,7 +271,7 @@ def run(config_path: Path, *, execute: bool = False, acknowledge: bool = False,
         # test owner; the recovery sweep itself MUST refuse to touch it.
         shutil.rmtree(tampered)
         unrelated.unlink()
-        if [p for p in managed.iterdir() if p.name != '.projectiq-d5c3-root-key']:
+        if {p.name for p in managed.iterdir()} != {'.projectiq-d5c3-root-key', '.lease'}:
             raise RecoveryError('MANAGED_ROOT_NOT_EMPTY')
         report['execution'] = 'INTERRUPTED_CONTROLLER_RECOVERED_FRESH_VM_BOOTED'
     except (OSError, ValueError, RecoveryError, subprocess.SubprocessError) as exc:

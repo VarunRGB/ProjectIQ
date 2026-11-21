@@ -76,10 +76,10 @@ class ManagedRuntimeRun:
             self.previous_sweep = registry.recover_managed_root(self.root, self.image)
             if any(x['status'] == 'MANUAL_REVIEW' for x in self.previous_sweep):
                 raise RuntimeWorkspaceError('UNRESOLVED_MANAGED_RUN_REQUIRES_REVIEW')
-            folder = registry.create_run(self.root)
+            # Registration and acquisition are atomic relative to all sweeps.
+            # Never let another controller observe a fresh, unleased VM run.
+            folder, lease = registry.create_leased_run(self.root)
             self.folder = folder
-            lease = registry.exclusive_lease(folder)
-            lease.__enter__()
             self._held = lease
             self._phase = 'PREPARING'
             return folder
@@ -130,25 +130,34 @@ class ManagedRuntimeRun:
         if self.folder is None:
             self.cleanup_reason = 'WORKSPACE_NOT_OPEN'
             return
-        if self._held is not None:
-            lease = self._held
-            self._held = None
-            try:
-                lease.__exit__(None, None, None)
-            except (OSError, ValueError, registry.RecoveryError):
-                self.cleanup_reason = 'LEASE_RELEASE_UNVERIFIED'
-                return
         try:
-            outcomes = registry.recover_managed_root(self.root, self.image)
-            entry = next((x for x in outcomes if x['run'] == self.folder.name), None)
-            if (entry and entry['status'] == 'RECOVERED'
-                    and not self.folder.exists()):
-                self.cleanup_verified = True
-                self.cleanup_reason = 'VERIFIED_REMOVED'
-            else:
-                self.cleanup_reason = entry['reason'] if entry else 'RUN_NOT_ACCOUNTED_FOR'
+            # Keep root ownership across per-run lease release AND deletion.
+            # Otherwise a peer could delete this run between those operations,
+            # giving the original controller a spurious cleanup failure.
+            with registry.managed_root_lease(self.root):
+                if self._held is not None:
+                    lease = self._held
+                    self._held = None
+                    lease.__exit__(None, None, None)
+                outcomes = registry._recover_managed_root_locked(self.root, self.image)
+                entry = next((x for x in outcomes if x['run'] == self.folder.name), None)
+                if (entry and entry['status'] == 'RECOVERED'
+                        and not self.folder.exists()):
+                    self.cleanup_verified = True
+                    self.cleanup_reason = 'VERIFIED_REMOVED'
+                else:
+                    self.cleanup_reason = entry['reason'] if entry else 'RUN_NOT_ACCOUNTED_FOR'
         except (OSError, ValueError, registry.RecoveryError) as exc:
-            self.cleanup_reason = type(exc).__name__
+            self.cleanup_reason = (str(exc) if isinstance(exc, registry.RecoveryError)
+                                   else type(exc).__name__)
+        finally:
+            if self._held is not None:
+                # Root-lock failure cannot leave a live run lease held forever.
+                lease, self._held = self._held, None
+                try:
+                    lease.__exit__(None, None, None)
+                except (OSError, ValueError, registry.RecoveryError):
+                    self.cleanup_reason = 'LEASE_RELEASE_UNVERIFIED'
 
     @contextmanager
     def hold(self):

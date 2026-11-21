@@ -31,12 +31,16 @@ class RegistryTests(unittest.TestCase):
 
     def test_live_controller_lock_cannot_be_swept(self):
         folder = registry.create_run(self.root)
+        real_lease = registry.exclusive_lease
+
         @contextmanager
-        def busy_lease(_):
-            raise registry.RecoveryError('ACTIVE_OR_UNREADABLE_LEASE')
-            yield  # valid context manager, never reached
-        # Windows file locks can behave differently when both handles are
-        # owned by one Python process. Cross-process locking is live-tested.
+        def busy_lease(path):
+            # Gate 5 adds a root lease; simulate contention only on the run.
+            if Path(path) == folder:
+                raise registry.RecoveryError('ACTIVE_OR_UNREADABLE_LEASE')
+            with real_lease(path):
+                yield
+        # Keep real root-lock behavior while testing the busy per-run lease.
         with patch.object(registry, 'exclusive_lease', busy_lease):
             result = registry.recover_managed_root(self.root, self.image)
             self.assertEqual(result[0]['status'], 'SKIPPED_ACTIVE')
