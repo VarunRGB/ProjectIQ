@@ -779,6 +779,79 @@ def _check_sql(path: Path) -> bytes:
     return decoded.encode('utf-8')
 
 
+def _verify_mysql_service_cgroup(*, cgroup_root: Path = Path('/sys/fs/cgroup'),
+                                 proc_root: Path = Path('/proc'),
+                                 mysql_data: Path = Path('/var/lib/mysql')) -> None:
+    """Fail closed on missing MySQL service limits before using DB credentials.
+
+    Trust is established from the live daemon UID, kernel membership, and
+    numeric cgroup-v2 files, not from systemd property names alone. The
+    operator-controlled clean VM bootstrap installs these ceilings before
+    publishing any credentials; this runtime check closes ordering gaps.
+    """
+    error = 'MYSQL_RESOURCE_ENFORCEMENT_UNAVAILABLE'
+    try:
+        if pwd is None:
+            raise ValueError('Linux identity database unavailable')
+        def systemd_value(property_name: str) -> str:
+            result = _trusted_process(['/usr/bin/systemctl', 'show', '-P',
+                                       property_name, 'mysql.service'], timeout=8)
+            if result.returncode != 0 or len(result.stdout) > 256:
+                raise ValueError('Systemd service property unavailable')
+            return result.stdout.decode('ascii', 'strict').strip()
+        if (systemd_value('ActiveState') != 'active' or
+                systemd_value('ControlGroup') != '/system.slice/mysql.service'):
+            raise ValueError('Untrusted MySQL unit state')
+        raw_pid = systemd_value('MainPID')
+        if not raw_pid.isascii() or not raw_pid.isdecimal() or not 1 < int(raw_pid) < 2**22:
+            raise ValueError('Untrusted MySQL daemon identity')
+        pid = int(raw_pid)
+        group = cgroup_root / 'system.slice' / 'mysql.service'
+        if group.is_symlink() or not group.is_dir():
+            raise ValueError('Missing MySQL kernel cgroup')
+        proc = proc_root / str(pid)
+        if (proc / 'cgroup').read_text('ascii').splitlines() != [
+                '0::/system.slice/mysql.service']:
+            raise ValueError('MySQL daemon outside system cgroup')
+        if raw_pid not in (group / 'cgroup.procs').read_text('ascii').split():
+            raise ValueError('MySQL daemon not in verified cgroup')
+        uid_rows = [row.split()[1:] for row in
+                    (proc / 'status').read_text('utf-8').splitlines()
+                    if row.startswith('Uid:')]
+        mysql_uid = pwd.getpwnam('mysql').pw_uid
+        if (mysql_uid in (0, os.getuid()) or len(uid_rows) != 1 or
+                len(uid_rows[0]) != 4 or
+                any(not x.isdecimal() or int(x) != mysql_uid for x in uid_rows[0])):
+            raise ValueError('MySQL daemon UID mismatch')
+        for filename, max_value in (('memory.max', 536870912), ('pids.max', 64)):
+            value = (group / filename).read_text('ascii').strip()
+            if not value.isascii() or not value.isdecimal() or not 0 < int(value) <= max_value:
+                raise ValueError('MySQL kernel cap unavailable')
+        disk = mysql_data.stat().st_dev
+        source = f'{os.major(disk)}:{os.minor(disk)}'
+        targets = {source}
+        # cgroup io.max may use the whole-disk major:minor for a filesystem
+        # on a partition. Accept it only when sysfs proves that parent.
+        try:
+            sysdev = Path('/sys/dev/block')
+            node = (sysdev / source).resolve(strict=True)
+            if node.is_relative_to(Path('/sys/devices')):
+                part = (node / 'partition').read_text('ascii').strip()
+                dev = (node.parent / 'dev').read_text('ascii').strip()
+                if (part.isascii() and part.isdecimal() and int(part) > 0 and
+                        re.fullmatch(r'[0-9]{1,5}:[0-9]{1,7}', dev)):
+                    targets.add(dev)
+        except (OSError, UnicodeError, ValueError, RuntimeError):
+            pass
+        rows = [line.split() for line in (group / 'io.max').read_text('ascii').splitlines()]
+        if not any(row and row[0] in targets and 'wbps=8388608' in row[1:]
+                   for row in rows):
+            raise ValueError('MySQL kernel IO write cap unavailable')
+    except (OSError, UnicodeError, ValueError, KeyError, AttributeError,
+            subprocess.TimeoutExpired) as exc:
+        raise GuestFailure(error) from exc
+
+
 def _wait_mysql_runtime_ready(*, seconds: int = 75,
                               credential_path: Path = Path('/home/projectiq/.projectiq_mysql_credentials.json')) -> dict:
     """Wait for the ROOT-owned, cloud-init bootstrap to publish scoped DB creds.
@@ -795,6 +868,7 @@ def _wait_mysql_runtime_ready(*, seconds: int = 75,
                 if (meta.get('host') == '127.0.0.1' and meta.get('database') == 'projectiq_run'
                         and meta.get('user') == 'projectiq_app'
                         and re.fullmatch(r'[0-9a-f]{48}', meta.get('password', ''))):
+                    _verify_mysql_service_cgroup()
                     return meta
         except (OSError, ValueError, TypeError):
             pass

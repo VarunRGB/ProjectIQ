@@ -507,6 +507,7 @@ class OfflineGuestTest(unittest.TestCase):
     def test_guest_mysql_waits_for_cloud_init_scoped_credentials(self):
         # Simulate Linux UID/mode metadata: Windows has no os.geteuid(), and
         # its chmod/stat do not represent full POSIX permission bits.
+        # The kernel check runs separately on Linux; never bypass it in production.
         with tempfile.TemporaryDirectory() as tmp:
             file = Path(tmp) / 'db.json'
             file.write_text(json.dumps({'host': '127.0.0.1',
@@ -518,9 +519,32 @@ class OfflineGuestTest(unittest.TestCase):
             with patch('projectiq_executioner.phase2.vm_worker.guest_agent.os.geteuid',
                        return_value=1001, create=True), \
                  patch('projectiq_executioner.phase2.vm_worker.guest_agent.Path.stat',
-                       return_value=simulated_stat):
+                       return_value=simulated_stat), \
+                 patch('projectiq_executioner.phase2.vm_worker.guest_agent._verify_mysql_service_cgroup') as verify:
                 result = _wait_mysql_runtime_ready(seconds=1, credential_path=file)
+            verify.assert_called_once_with()
             self.assertEqual(result['database'], 'projectiq_run')
+
+    def test_valid_mysql_credentials_still_fail_if_kernel_boundary_fails(self):
+        # Valid credentials must NOT override missing or failed kernel enforcement.
+        # This test uses a controlled failure rather than requiring Linux on Windows.
+        with tempfile.TemporaryDirectory() as tmp:
+            file = Path(tmp) / 'db.json'
+            file.write_text(json.dumps({'host': '127.0.0.1',
+                'database': 'projectiq_run', 'user': 'projectiq_app',
+                'password': 'a' * 48}), 'utf-8')
+            file.chmod(0o600)
+            simulated_stat = SimpleNamespace(st_uid=1001, st_mode=0o100600,
+                                             st_size=file.stat().st_size)
+            with patch('projectiq_executioner.phase2.vm_worker.guest_agent.os.geteuid',
+                       return_value=1001, create=True), \
+                 patch('projectiq_executioner.phase2.vm_worker.guest_agent.Path.stat',
+                       return_value=simulated_stat), \
+                 patch('projectiq_executioner.phase2.vm_worker.guest_agent._verify_mysql_service_cgroup',
+                       side_effect=GuestFailure('MYSQL_RESOURCE_ENFORCEMENT_UNAVAILABLE')) as verify:
+                with self.assertRaisesRegex(GuestFailure, 'MYSQL_RESOURCE_ENFORCEMENT_UNAVAILABLE'):
+                    _wait_mysql_runtime_ready(seconds=1, credential_path=file)
+            verify.assert_called_once_with()
 
     def test_mysql_credential_permissions_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:

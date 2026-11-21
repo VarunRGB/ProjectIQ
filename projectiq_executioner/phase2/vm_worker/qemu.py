@@ -114,6 +114,79 @@ def make_ssh_key(config: dict, workdir: Path) -> tuple[Path, str]:
 MYSQL_BOOTSTRAP_SCRIPT = r'''#!/bin/sh
 set -eu
 umask 077
+# Apply root-owned service limits before generating any application credentials.
+# A failed install, restart, or kernel check prevents the bootstrap from
+# publishing the DB-scoped user secret, so the PHP adapter cannot proceed.
+/bin/mkdir -p /etc/systemd/system/mysql.service.d
+/bin/cat > /etc/systemd/system/mysql.service.d/90-projectiq-d5d-limits.conf <<'MYSQL_LIMITS'
+[Service]
+MemoryAccounting=yes
+MemoryMax=536870912
+TasksAccounting=yes
+TasksMax=64
+IOAccounting=yes
+IOWriteBandwidthMax=/var/lib/mysql 8388608
+MYSQL_LIMITS
+/usr/bin/timeout 30 /usr/bin/systemctl daemon-reload
+/usr/bin/timeout 90 /usr/bin/systemctl restart mysql.service
+/usr/bin/python3 - <<'MYSQL_KERNEL_VERIFY'
+import os
+import pwd
+import re
+import subprocess
+from pathlib import Path
+
+def property_value(prop):
+    return subprocess.run(['/usr/bin/systemctl', 'show', '-P', prop, 'mysql.service'],
+                          check=True, capture_output=True, text=True, timeout=8).stdout.strip()
+
+def require(condition):
+    # Explicit check: `assert` can be disabled by Python optimization flags.
+    if not condition:
+        raise SystemExit(1)
+
+require(property_value('ActiveState') == 'active')
+require(property_value('ControlGroup') == '/system.slice/mysql.service')
+pid_text = property_value('MainPID')
+require(pid_text.isascii() and pid_text.isdecimal() and int(pid_text) > 1)
+pid = int(pid_text)
+cgroup = Path('/sys/fs/cgroup/system.slice/mysql.service')
+require(cgroup.is_dir() and not cgroup.is_symlink())
+require((Path('/proc') / str(pid) / 'cgroup').read_text('ascii').splitlines() == [
+    '0::/system.slice/mysql.service'])
+require(pid_text in (cgroup / 'cgroup.procs').read_text('ascii').split())
+status = (Path('/proc') / str(pid) / 'status').read_text('utf-8')
+uids = [line.split()[1:] for line in status.splitlines() if line.startswith('Uid:')]
+mysql_uid = pwd.getpwnam('mysql').pw_uid
+require(mysql_uid not in (0, os.getuid()))
+require(len(uids) == 1 and len(uids[0]) == 4)
+require(all(x.isdecimal() and int(x) == mysql_uid for x in uids[0]))
+
+def bounded(key, limit):
+    raw = (cgroup / key).read_text('ascii').strip()
+    return raw.isascii() and raw.isdecimal() and 0 < int(raw) <= limit
+
+require(bounded('memory.max', 536870912))
+require(bounded('pids.max', 64))
+rootdev = Path('/var/lib/mysql').stat().st_dev
+device = f'{os.major(rootdev)}:{os.minor(rootdev)}'
+targets = {device}
+# On a partition-backed root disk, the io.max key may be the whole disk.
+# Never accept a write cap on an unrelated device.
+try:
+    mapped = (Path('/sys/dev/block') / device).resolve(strict=True)
+    if mapped.is_relative_to(Path('/sys/devices')):
+        part = (mapped / 'partition').read_text('ascii').strip()
+        parent_dev = (mapped.parent / 'dev').read_text('ascii').strip()
+        if (part.isascii() and part.isdecimal() and int(part) > 0 and
+                re.fullmatch(r'[0-9]{1,5}:[0-9]{1,7}', parent_dev)):
+            targets.add(parent_dev)
+except (OSError, UnicodeError, ValueError, RuntimeError):
+    pass
+io_lines = [line.split() for line in (cgroup / 'io.max').read_text('ascii').splitlines()]
+require(any(row and row[0] in targets and 'wbps=8388608' in row[1:]
+            for row in io_lines))
+MYSQL_KERNEL_VERIFY
 ready=0
 i=0
 while [ "$i" -lt 75 ]; do
