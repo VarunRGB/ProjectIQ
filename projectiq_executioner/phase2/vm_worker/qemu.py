@@ -346,6 +346,9 @@ until /usr/sbin/runuser -u projectiq -- /usr/bin/env \
     [ "$n" -lt 15 ] || exit 1
     sleep 1
 done
+# Apply app-UID-only root-disk restriction before advertising readiness.
+# Missing or unsupported POSIX ACLs fail the root bootstrap closed.
+/usr/bin/python3 -I /usr/local/sbin/projectiq-storage-guard
 # Readiness marker only; the guest independently checks kernel cgroup values.
 /usr/bin/touch /run/projectiq-eval-bootstrap.ready
 '''
@@ -433,6 +436,17 @@ def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_s
         )
         bootstrap_tasks.append('/usr/local/sbin/projectiq-cgroup-probe-bootstrap')
     if app_cgroup:
+        guard_source = Path(__file__).with_name('d5d_storage_guard.py').read_bytes()
+        if not 0 < len(guard_source) <= 16000:
+            raise WorkerFailure('Trusted storage guard source exceeds bound')
+        guard_encoded = base64.b64encode(guard_source).decode('ascii')
+        data += (
+            '  - path: /usr/local/sbin/projectiq-storage-guard\n'
+            '    owner: root:root\n'
+            "    permissions: '0700'\n"
+            '    encoding: b64\n'
+            f'    content: {guard_encoded}\n'
+        )
         encoded = base64.b64encode(APP_CGROUP_BOOTSTRAP_SCRIPT.encode('utf-8')).decode('ascii')
         data += (
             '  - path: /usr/local/sbin/projectiq-eval-bootstrap\n'
