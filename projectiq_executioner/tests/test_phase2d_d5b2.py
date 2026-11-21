@@ -197,6 +197,8 @@ class D5B2Tests(unittest.TestCase):
             with patch.object(qemu, '_bounded', side_effect=cmd), \
                  patch.object(qemu, '_tool', side_effect=lambda t, p: t), \
                  patch.object(qemu.sys, 'platform', 'linux'), \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.ensure_controller_job'), \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.verify_child_in_job', return_value=True), \
                  patch.object(qemu.subprocess, 'Popen', FakePopen):
                 worker = qemu.QemuWorker({'base_image': str(base), 'accelerator': 'kvm',
                                           'workspace_disk_mib': 96}, Path(td), 41013)
@@ -228,6 +230,8 @@ class D5B2Tests(unittest.TestCase):
             with patch.object(qemu, '_bounded', side_effect=cmd), \
                  patch.object(qemu, '_tool', side_effect=lambda t, p: t), \
                  patch.object(qemu.sys, 'platform', 'linux'), \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.ensure_controller_job'), \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.verify_child_in_job', return_value=True), \
                  patch.object(qemu.subprocess, 'Popen', FakePopen):
                 worker = qemu.QemuWorker({'base_image': str(base), 'accelerator': 'kvm'},
                                           Path(td), 41014)

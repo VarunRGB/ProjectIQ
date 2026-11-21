@@ -465,6 +465,14 @@ class QemuWorker:
             raise WorkerFailure('WHPX requires Windows')
         if accelerator == 'kvm' and sys.platform != 'linux':
             raise WorkerFailure('KVM requires Linux')
+        # D5c: the controller itself joins the kill-on-close job *before*
+        # QEMU starts. All normal child launches inherit it atomically.
+        if os.name == 'nt':
+            from .d5c_windows_job import JobGuardError, ensure_controller_job
+            try:
+                ensure_controller_job()
+            except JobGuardError as exc:
+                raise WorkerFailure('Windows VM lifetime guard unavailable') from exc
         self._log = (self.workdir / 'qemu.log').open('wb')
         netdev = self.network_spec()
         # Record the trusted template guest's serial console for sealing
@@ -502,7 +510,28 @@ class QemuWorker:
             self.proc = subprocess.Popen(args, stdin=subprocess.DEVNULL,
                                          stdout=self._log, stderr=subprocess.STDOUT,
                                          cwd=str(self.workdir))
+            if os.name == 'nt':
+                from .d5c_windows_job import verify_child_in_job
+                if not verify_child_in_job(self.proc):
+                    # Never return a successful VM launch outside our lifetime job.
+                    try:
+                        self.proc.kill()
+                        self.proc.wait(timeout=8)
+                    except (OSError, subprocess.TimeoutExpired, AttributeError):
+                        # AttributeError is possible only for an invalid mocked
+                        # process; real Popen always exposes kill()/wait().
+                        pass
+                    finally:
+                        # Windows refuses to remove an open qemu.log. This
+                        # must also run when termination itself raises.
+                        if self._log is not None:
+                            self._log.close()
+                            self._log = None
+                    raise WorkerFailure('QEMU is not in the controller lifetime job')
         except OSError as exc:
+            if self._log is not None:
+                self._log.close()
+                self._log = None
             raise WorkerFailure('Could not launch the approved QEMU provider') from exc
 
     def stop(self) -> None:

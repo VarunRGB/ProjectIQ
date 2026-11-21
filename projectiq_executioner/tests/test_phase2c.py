@@ -188,6 +188,8 @@ class QemuSecurityContractTest(unittest.TestCase):
             mock_proc.poll.return_value = 0
             with patch('projectiq_executioner.phase2.vm_worker.qemu._tool', side_effect=lambda n, p: p or n), \
                  patch('projectiq_executioner.phase2.vm_worker.qemu._bounded') as fake_check, \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.ensure_controller_job'), \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.verify_child_in_job', return_value=True), \
                  patch('projectiq_executioner.phase2.vm_worker.qemu.subprocess.Popen', return_value=mock_proc) as fake_popen:
                 fake_check.return_value.returncode = 0
                 vm = QemuWorker(cfg, root, 47635, ram_mib=1024, cpus=2)
@@ -220,6 +222,8 @@ class QemuSecurityContractTest(unittest.TestCase):
                    'qemu_img_binary': 'qemu-img', 'accelerator': wrong_accelerator}
             with patch('projectiq_executioner.phase2.vm_worker.qemu._tool', side_effect=lambda n, p: p or n), \
                  patch('projectiq_executioner.phase2.vm_worker.qemu._bounded') as fake_check, \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.ensure_controller_job'), \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.verify_child_in_job', return_value=True), \
                  patch('projectiq_executioner.phase2.vm_worker.qemu.subprocess.Popen') as fake_popen:
                 fake_check.return_value.returncode = 0
                 worker = QemuWorker(cfg, root, 47635)
@@ -290,6 +294,8 @@ class QemuSecurityContractTest(unittest.TestCase):
             p.poll.return_value = 0
             with patch('projectiq_executioner.phase2.vm_worker.qemu._tool', side_effect=lambda n, v: v or n), \
                  patch('projectiq_executioner.phase2.vm_worker.qemu._bounded') as cmd, \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.ensure_controller_job'), \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.verify_child_in_job', return_value=True), \
                  patch('projectiq_executioner.phase2.vm_worker.qemu.subprocess.Popen', return_value=p) as launch:
                 cmd.return_value.returncode = 0
                 worker = QemuWorker(config, root, 50000, trusted_template_setup=True)
@@ -386,6 +392,8 @@ class TemplateSealContractTest(unittest.TestCase):
             with patch('projectiq_executioner.phase2.vm_worker.qemu.sys.platform', 'linux'), \
                  patch('projectiq_executioner.phase2.vm_worker.qemu._tool', side_effect=lambda n, p: p or n), \
                  patch('projectiq_executioner.phase2.vm_worker.qemu._bounded') as cmd, \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.ensure_controller_job'), \
+                 patch('projectiq_executioner.phase2.vm_worker.d5c_windows_job.verify_child_in_job', return_value=True), \
                  patch('projectiq_executioner.phase2.vm_worker.qemu.subprocess.Popen', return_value=fake_proc) as popen:
                 cmd.return_value.returncode = 0
                 vm = QemuWorker(cfg, root, 50505, trusted_template_setup=True)
