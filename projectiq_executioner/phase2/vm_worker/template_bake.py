@@ -109,6 +109,33 @@ def _mysql_guest_diagnostics(ssh: SSHControl) -> str:
     return '\n'.join(evidence)
 
 
+def _wait_mysql_available_without_sudo(ssh: SSHControl, *, seconds: int = 60) -> None:
+    """Sealed runtime check: MySQL availability without privileged SQL access.
+
+    During trusted setup, _wait_mysql_ready() already executes SELECT 1 as root.
+    After sealing, the runtime user intentionally has no unrestricted sudo.
+    mysqladmin ping exits 0 if the server is answering, even on Access denied;
+    this is an availability check, NOT a privilege or SQL query assertion.
+    """
+    if seconds <= 0:
+        raise WorkerFailure('MySQL readiness window must be positive')
+    deadline = time.monotonic() + seconds
+    while True:
+        try:
+            service = ssh.ssh('systemctl', 'is-active', '--quiet', 'mysql.service',
+                              timeout=10)
+            ping = ssh.ssh('/usr/bin/mysqladmin', '--no-defaults', '--protocol=TCP',
+                           '--host=127.0.0.1', '--connect-timeout=3', 'ping', timeout=10)
+            if service.returncode == 0 and ping.returncode == 0:
+                return
+        except (WorkerFailure, OSError):
+            pass
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise WorkerFailure('Sealed worker MySQL availability not verified without sudo')
+        time.sleep(min(2.0, remaining))
+
+
 def _wait_mysql_ready(ssh: SSHControl, *, seconds: int = 60) -> None:
     """Require a working local MySQL query before sealing or accepting a VM.
 
@@ -212,9 +239,19 @@ def _wait_qemu_shutdown(vm: QemuWorker, timeout: int = 150,
 
 
 def bake_template(source_image: Path, image_sha256: str, target: Path, config: dict,
-                  *, explicitly_allow_setup_network: bool = False) -> dict:
+                  *, explicitly_allow_setup_network: bool = False,
+                  chrome_deb: Path | None = None,
+                  chrome_sha256: str | None = None) -> dict:
     if not explicitly_allow_setup_network:
         raise WorkerFailure('Trusted-image setup network must be explicitly authorized')
+    if (chrome_deb is None) != (chrome_sha256 is None):
+        raise WorkerFailure('Both Chrome DEB and SHA256 are required together')
+    if chrome_deb is not None:
+        chrome_deb = Path(chrome_deb).resolve()
+        if (not chrome_deb.is_file() or chrome_deb.stat().st_size > 180_000_000
+                or not isinstance(chrome_sha256, str) or len(chrome_sha256) != 64
+                or sha256_file(chrome_deb) != chrome_sha256.lower()):
+            raise WorkerFailure('Operator Chrome package SHA256 mismatch')
     source_image = Path(source_image).resolve()
     target = Path(target).resolve()
     if not source_image.is_file() or sha256_file(source_image) != image_sha256.lower():
@@ -244,6 +281,13 @@ def bake_template(source_image: Path, image_sha256: str, target: Path, config: d
                 'apt-get', 'install', '-y', '--no-install-recommends',
                 'openssh-server', 'cloud-init', 'python3', 'php-cli',
                 'php-mysql', 'mysql-server', 'sudo', 'ca-certificates', timeout=300)
+            if chrome_deb is not None:
+                # Setup-only network and third-party package: never student-controlled.
+                ssh.copy_offline_asset(chrome_deb, 'chrome_stable_amd64.deb')
+                _ok(ssh, 'sudo', '-n', 'env', 'DEBIAN_FRONTEND=noninteractive',
+                    'apt-get', 'install', '-y', '--no-install-recommends',
+                    '/home/projectiq/chrome_stable_amd64.deb', timeout=360)
+                _ok(ssh, '/usr/bin/google-chrome-stable', '--version', timeout=20)
             _ok(ssh, 'sudo', '-n', 'systemctl', 'enable', 'mysql')
             _ok(ssh, 'sudo', '-n', 'systemctl', 'start', 'mysql')
             _ok(ssh, 'sudo', '-n', 'apt-get', 'clean', timeout=30)
@@ -292,9 +336,11 @@ def bake_template(source_image: Path, image_sha256: str, target: Path, config: d
                 check_ssh = SSHControl(config, validate_root, check_port, check_key)
                 check_ssh.wait_ssh(validation_vm, seconds=120)
                 _ok(check_ssh, 'python3', '--version')
+                if chrome_deb is not None:
+                    _ok(check_ssh, '/usr/bin/google-chrome-stable', '--version')
                 if b'pdo_mysql' not in _ok(check_ssh, 'php', '-m').lower():
                     raise WorkerFailure('Sealed worker PHP PDO validation failed')
-                _wait_mysql_ready(check_ssh, seconds=60)
+                _wait_mysql_available_without_sudo(check_ssh, seconds=60)
                 # Regression gate: the privileged bootstrap sudo ALL capability
                 # must NOT survive into the runtime image.
                 if check_ssh.ssh('sudo', '-n', '/usr/bin/id').returncode == 0:
@@ -317,6 +363,10 @@ def main() -> int:
     p.add_argument('--accelerator', choices=['whpx', 'kvm'])
     p.add_argument('--uefi-firmware', help='Optional UEFI firmware ROM path, if cloud image requires UEFI')
     p.add_argument('--uefi-sha256', help='Pin the SHA256 of --uefi-firmware')
+    p.add_argument('--chrome-deb', type=Path,
+                   help='Optional operator-reviewed SHA-pinned official Chrome DEB for browser template')
+    p.add_argument('--chrome-sha256',
+                   help='Expected SHA256 of the offline Chrome DEB; both chrome flags required')
     p.add_argument('--allow-trusted-template-network', action='store_true',
                    help='Explicitly allow internet ONLY while baking trusted OS packages')
     args = p.parse_args()
@@ -325,7 +375,9 @@ def main() -> int:
     try:
         report = bake_template(args.ubuntu_image, args.ubuntu_sha256,
                                args.out_template, config,
-                               explicitly_allow_setup_network=args.allow_trusted_template_network)
+                               explicitly_allow_setup_network=args.allow_trusted_template_network,
+                               chrome_deb=args.chrome_deb,
+                               chrome_sha256=args.chrome_sha256)
     except WorkerFailure as exc:
         p.error(str(exc))
     print(json.dumps(report, indent=2))

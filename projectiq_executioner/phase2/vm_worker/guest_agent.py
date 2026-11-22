@@ -37,6 +37,13 @@ except ImportError:
 class GuestFailure(RuntimeError):
     pass
 
+class BrowserTimeoutFailure(GuestFailure):
+    """Timeout data stays inside the guest; only fixed codes leave it."""
+
+    def __init__(self, code: str, stderr: bytes | None):
+        super().__init__(code)
+        self.browser_stderr = stderr[:16_384] if isinstance(stderr, bytes) else b''
+
 
 class NpmPreparationDiagnostic(GuestFailure):
     """Trusted preparation-only npm failure with optional sanitized context."""
@@ -126,7 +133,21 @@ APP_NOFILE_HARD = 512
 APP_LIMIT_LAUNCHER = r'''import os, resource, sys
 if sys.platform != 'linux' or os.geteuid() == 0 or len(sys.argv) < 2:
     sys.exit(111)
-for limit, maximum in ((resource.RLIMIT_NPROC, 96),
+# A browser-specific RLIMIT_NPROC exception does NOT change its cgroup cap.
+# This is set only by the trusted guest controller, never by the student app.
+_browser_requested = os.environ.get('PROJECTIQ_BROWSER_PROFILE') == '1'
+_browser_valid = (
+    len(sys.argv) >= 4
+    and sys.argv[1] == '/usr/bin/google-chrome-stable'
+    and '--headless=new' in sys.argv[2:]
+    and '--dump-dom' in sys.argv[2:]
+    and sys.argv[-1] in ('http://127.0.0.1:8765/index.html', 'data:text/html,%3C!doctype%20html%3E%3Chtml%3E%3Cbody%3E%3Ch1%3EPIQ4DC_SMOKE_OK%3C/h1%3E%3C/body%3E%3C/html%3E')
+    and not any(x == '--no-sandbox' or x.startswith('--user-data-dir=/tmp/')
+                for x in sys.argv[2:])
+)
+if _browser_requested and not _browser_valid:
+    sys.exit(114)
+for limit, maximum in ((resource.RLIMIT_NPROC, 192 if _browser_requested else 96),
                        (resource.RLIMIT_NOFILE, 512),
                        (resource.RLIMIT_CORE, 0)):
     _soft, old_hard = resource.getrlimit(limit)
@@ -187,6 +208,37 @@ if os.environ.get('PROJECTIQ_ATTEST_PAUSE') == '1':
         sys.exit(113)
     os.environ.pop('PROJECTIQ_ATTEST_PAUSE', None)
     os.environ.pop('PROJECTIQ_ATTEST_GATE', None)
+# 4D-C diagnostics: write one bounded, numeric pre-exec observation only for
+# the reviewed Chrome command. No raw logs, argv, environment, or source leave
+# the VM. This marker is observational and is NOT security attestation.
+if _browser_requested and _browser_valid:
+    try:
+        _ns, _nh = resource.getrlimit(resource.RLIMIT_NPROC)
+        with open('/proc/self/cgroup', 'r', encoding='ascii') as _cg_file:
+            _rows = [x.split(':', 2)[2].strip() for x in _cg_file
+                     if x.startswith('0::')]
+        _scope_max = '-'
+        _scope_current = '-'
+        if len(_rows) == 1 and _rows[0].startswith('/user.slice/'):
+            _cg_base = '/sys/fs/cgroup' + _rows[0]
+            for _filename, _label in (('pids.max', '_scope_max'),
+                                      ('pids.current', '_scope_current')):
+                try:
+                    with open(_cg_base + '/' + _filename, 'r', encoding='ascii') as _f:
+                        _raw = _f.read(32).strip()
+                    if _raw == 'max' or (_raw.isascii() and _raw.isdecimal()
+                                         and len(_raw) <= 10):
+                        if _label == '_scope_max':
+                            _scope_max = _raw
+                        else:
+                            _scope_current = _raw
+                except (OSError, UnicodeError, ValueError):
+                    pass
+        _line = ('PIQ4DC_LIMITS nproc=%d/%d scope=%s current=%s\n'
+                 % (_ns, _nh, _scope_max, _scope_current))
+        os.write(2, _line.encode('ascii'))
+    except (OSError, UnicodeError, ValueError, OverflowError):
+        pass
 # No shell; the program and arguments originate from the trusted adapter.
 os.execvpe(sys.argv[1], sys.argv[1:], os.environ)
 '''
@@ -327,7 +379,7 @@ def _share_tree(path: Path, *, writable: bool) -> None:
 # separately copied guest agent does not import the host's qemu.py.
 APP_CGROUP_SLICE = 'projectiq-eval.slice'
 APP_CGROUP_MEMORY_BYTES = 2147483648
-APP_CGROUP_PIDS = 80
+APP_CGROUP_PIDS = 128
 APP_CGROUP_IO_BPS = 16777216
 _APP_CGROUP_ACTIVE = False
 
@@ -651,14 +703,24 @@ def _build_handoff_report(adapter: str) -> dict:
             'pip_install': actual['pip_install']}
 
 
-def _project_command(command: list[str], env: dict | None = None, *, audit_preexec: bool = False) -> list[str]:
+def _project_command(command: list[str], env: dict | None = None, *, audit_preexec: bool = False,
+                     browser_profile: bool = False) -> list[str]:
     """Only project-owned subprocesses use sudo, exclusively AS APP_USER."""
+    if browser_profile and (not _APP_CGROUP_ACTIVE
+            or not isinstance(command, list)
+            or not command or command[0] != '/usr/bin/google-chrome-stable'
+            or '--headless=new' not in command or '--dump-dom' not in command
+            or command[-1] not in ('http://127.0.0.1:8765/index.html', 'data:text/html,%3C!doctype%20html%3E%3Chtml%3E%3Cbody%3E%3Ch1%3EPIQ4DC_SMOKE_OK%3C/h1%3E%3C/body%3E%3C/html%3E')
+            or '--no-sandbox' in command):
+        raise GuestFailure('BROWSER_PROFILE_REQUIRES_REVIEWED_CHROME_COMMAND')
     allowed = {'PATH', 'PORT', 'HOST', 'NODE_ENV', 'CI', 'PYTHONPATH',
                'PYTHONUNBUFFERED', 'PYTHONNOUSERSITE', 'PYTHONDONTWRITEBYTECODE',
                'PIP_CONFIG_FILE', 'PIP_DISABLE_PIP_VERSION_CHECK', 'LC_ALL',
                'PROJECTIQ_PDO_CONNECTOR'}
     env_vars = {'HOME': os.environ.get('PROJECTIQ_QUOTA_HOME', '/home/' + APP_USER),
                 'PATH': '/usr/local/bin:/usr/bin:/bin'}
+    if browser_profile:
+        env_vars['PROJECTIQ_BROWSER_PROFILE'] = '1'
     if 'PROJECTIQ_QUOTA_TMP' in os.environ:
         env_vars['TMPDIR'] = os.environ['PROJECTIQ_QUOTA_TMP']
         env_vars['TMP'] = os.environ['PROJECTIQ_QUOTA_TMP']
@@ -695,7 +757,10 @@ def _project_command(command: list[str], env: dict | None = None, *, audit_preex
 
 def _trusted_process(args: list[str], *, input: bytes | None = None, timeout: int = 15,
                      env: dict | None = None, cwd: Path | None = None,
-                     project_code: bool = False, audit_kind: str | None = None) -> subprocess.CompletedProcess:
+                     project_code: bool = False, audit_kind: str | None = None,
+                     browser_profile: bool = False) -> subprocess.CompletedProcess:
+    if browser_profile and (not project_code or audit_kind is not None):
+        raise GuestFailure('BROWSER_PROFILE_REQUIRES_PROJECT_CODE')
     if audit_kind is not None:
         if not project_code or audit_kind not in _BUILD_KINDS:
             raise GuestFailure('APP_CGROUP_BUILD_PLACEMENT_NOT_VERIFIED')
@@ -703,12 +768,26 @@ def _trusted_process(args: list[str], *, input: bytes | None = None, timeout: in
             return _audited_build_process(args, env=env, cwd=cwd, input=input,
                                           timeout=timeout, kind=audit_kind)
         # Only the dedicated cache-preparation VM runs without the eval slice.
+    launch = None
     try:
-        return subprocess.run(_project_command(args, env) if project_code else args,
+        launch = (_project_command(args, env, browser_profile=browser_profile)
+                  if project_code else args)
+        return subprocess.run(launch,
                               input=input, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               timeout=timeout, check=False,
                               env=None if project_code else env, cwd=cwd)
     except subprocess.TimeoutExpired as exc:
+        if browser_profile and _APP_CGROUP_ACTIVE and isinstance(launch, list):
+            # subprocess.run kills systemd-run, NOT necessarily Chrome's scope.
+            # Stop ONLY our exact, freshly generated browser unit. The disposable
+            # VM shutdown remains the backstop if systemd cannot stop it.
+            units = [x.partition('=')[2] for x in launch if x.startswith('--unit=')]
+            if len(units) == 1 and re.fullmatch(r'piq-app-[0-9a-f]{16}', units[0]):
+                _stop_build_scope(units[0], os.getuid())
+            has_output = isinstance(exc.stdout, bytes) and bool(exc.stdout.strip())
+            raise BrowserTimeoutFailure(
+                'BROWSER_COMMAND_TIMEOUT_WITH_OUTPUT' if has_output
+                else 'BROWSER_COMMAND_TIMEOUT', exc.stderr) from exc
         # Distinguish an unrelated trusted-tool timeout from the audited
         # stop/resume handshake. Do not include argv, logs or secrets.
         if _APP_CGROUP_ACTIVE:
@@ -1939,6 +2018,12 @@ def _run_phase4db_on_live_app(req: dict, port: int, env: dict):
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
+    if 'phase4dc_browser_bundle' in req and (
+            adapter != 'node_fullstack_offline_v1' or any(x in req for x in (
+                'phase4da_workflow_bundle', 'phase4d1_fixture_bundle',
+                'phase4d3_postcondition_bundle', 'phase4d2_auth_bundle',
+                'phase4c_api_bundle', 'phase4_test_bundle', 'phase4db_crud_bundle'))):
+        raise GuestFailure('PHASE4DC_TRUSTED_BROWSER_DISPATCH_FAILED')
     if 'phase4db_crud_bundle' in req and (
             adapter != 'php_mysql_v1' or any(x in req for x in (
                 'phase4da_workflow_bundle', 'phase4d1_fixture_bundle',
@@ -2337,6 +2422,20 @@ def _d4_stop_process(proc: subprocess.Popen) -> None:
         proc.wait(timeout=5)
 
 
+def _run_phase4dc_on_live_app(req: dict, base_dir: Path):
+    """Trusted headless browser within current full-stack VM; never on Windows."""
+    if 'phase4dc_browser_bundle' not in req:
+        return None
+    try:
+        from guest_browser_ui import BrowserUiError, run_browser_ui
+        return run_browser_ui(req['phase4dc_browser_bundle'],
+                              expected_source=req['phase4dc_source'],
+                              expected_adapter=req['adapter'],
+                              workspace=base_dir, trusted_process=_trusted_process)
+    except (BrowserUiError, ImportError, ValueError, KeyError, TypeError):
+        raise GuestFailure('PHASE4DC_TRUSTED_BROWSER_DISPATCH_FAILED') from None
+
+
 def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765) -> dict:
     if req.get('adapter') != 'node_fullstack_offline_v1' or port != 8765:
         raise GuestFailure('NODE_FULLSTACK_INVALID_REQUEST')
@@ -2385,6 +2484,9 @@ def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765
         phase4d2 = _run_phase4d2_on_live_app(req, port)
         if phase4d2 is not None:
             result['phase4d2_auth_report'] = phase4d2
+        phase4dc = _run_phase4dc_on_live_app(req, base_dir)
+        if phase4dc is not None:
+            result['phase4dc_browser_report'] = phase4dc
         return result
     finally:
         for proc in reversed(processes):

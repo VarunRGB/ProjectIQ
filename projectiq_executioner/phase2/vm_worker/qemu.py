@@ -309,7 +309,7 @@ done
 # The trusted VM controller owns systemd; projectiq_run has no user manager.
 APP_CGROUP_SLICE = 'projectiq-eval.slice'
 APP_CGROUP_MEMORY_BYTES = 2147483648
-APP_CGROUP_PIDS = 80
+APP_CGROUP_PIDS = 128
 APP_CGROUP_IO_BPS = 16777216
 APP_CGROUP_BOOTSTRAP_SCRIPT = r'''#!/bin/sh
 set -eu
@@ -329,7 +329,7 @@ Description=ProjectIQ bounded evaluation workload (trusted controller only)
 MemoryAccounting=yes
 MemoryMax=2147483648
 TasksAccounting=yes
-TasksMax=80
+TasksMax=128
 IOAccounting=yes
 IOWriteBandwidthMax=/srv/projectiq-workspace 16777216
 EOF
@@ -674,6 +674,7 @@ class SSHControl:
             'snapshot.zip', 'guest_agent.py', 'request.json', 'template_seal.sh',
             'guest_http.py', 'guest_api.py', 'guest_db_fixture.py',
             'guest_db_postconditions.py', 'guest_workflow.py', 'guest_crud.py',
+            'guest_browser_ui.py',
         }:
             raise WorkerFailure('Unapproved destination filename')
         content = local.read_bytes()
@@ -686,7 +687,8 @@ class SSHControl:
     def copy_offline_asset(self, local: Path, remote_filename: str, timeout: int = 150) -> None:
         """Transfer only operator-pinned artifacts; never mount a host directory."""
         limits = {'node_runtime.tar.xz': 65_000_000, 'npm_cache.zip': 170_000_000,
-                  'python_pip.whl': 5_000_000, 'python_wheelhouse.zip': 120_000_000}
+                  'python_pip.whl': 5_000_000, 'python_wheelhouse.zip': 120_000_000,
+                  'chrome_stable_amd64.deb': 180_000_000}
         limit = limits.get(remote_filename)
         if limit is None or not Path(local).is_file() or not 0 < Path(local).stat().st_size <= limit:
             raise WorkerFailure('Unapproved or oversized offline runtime asset')

@@ -50,7 +50,8 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                          auth_bundle: dict | None = None,
                          postcondition_bundle: dict | None = None,
                          workflow_bundle: dict | None = None,
-                         crud_bundle: dict | None = None) -> dict:
+                         crud_bundle: dict | None = None,
+                         browser_bundle: dict | None = None) -> dict:
     """Runs only approved source SHAs. Does not use Docker/Podman for any stage.
 
     'reviewed_fixture=True' signifies human approval of a particular pinned
@@ -72,10 +73,21 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
         _save(result, output)
         return result
     if sum(x is not None for x in (test_bundle, api_bundle, db_fixture_bundle, auth_bundle,
-                                    postcondition_bundle, workflow_bundle, crud_bundle)) > 1:
+                                    postcondition_bundle, workflow_bundle, crud_bundle,
+                                    browser_bundle)) > 1:
         result['reason'] = 'PHASE4_MULTIPLE_BUNDLE_MODES_DENIED'
         _save(result, output)
         return result
+    browser_guest_bundle = None
+    if browser_bundle is not None:
+        from ...phase4.browser_ui_contracts import (
+            BrowserReviewError, validate_reviewed_browser)
+        try:
+            browser_guest_bundle = validate_reviewed_browser(browser_bundle, candidate, config)
+        except (BrowserReviewError, TypeError, ValueError, KeyError):
+            result['reason'] = 'PHASE4DC_BROWSER_NOT_OPERATOR_APPROVED'
+            _save(result, output)
+            return result
     crud_guest_bundle = None
     if crud_bundle is not None:
         from ...phase4.crud_workflow_contracts import CrudReviewError, validate_reviewed_crud
@@ -253,6 +265,9 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 request['phase4d3_source'] = source
                 request['phase4d3_auth_bundle'] = postcondition_guest_bundle['auth']
                 request['phase4d3_postcondition_bundle'] = postcondition_guest_bundle['postconditions']
+            if browser_guest_bundle is not None:
+                request['phase4dc_source'] = source
+                request['phase4dc_browser_bundle'] = browser_guest_bundle
             if crud_guest_bundle is not None:
                 request['phase4db_source'] = source
                 request['phase4db_auth_bundle'] = crud_guest_bundle['auth']
@@ -321,6 +336,9 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             if postcondition_guest_bundle is not None:
                 ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / 'guest_db_postconditions.py',
                          'guest_db_postconditions.py')
+            if browser_guest_bundle is not None:
+                ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / 'guest_browser_ui.py',
+                         'guest_browser_ui.py')
             if crud_guest_bundle is not None:
                 ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / 'guest_api.py',
                          'guest_api.py')
@@ -409,6 +427,17 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                     result['phase4d3_status'] = 'VALIDATED'
                     result['phase4d3_auth_report'] = guest['phase4d3_auth_report']
                     result['phase4d3_postcondition_report'] = guest['phase4d3_postcondition_report']
+            if browser_guest_bundle is not None:
+                from ...phase4.guest_browser_ui import (
+                    BrowserUiError, validate_browser_ui_report)
+                try:
+                    validate_browser_ui_report(browser_guest_bundle,
+                                               guest.get('phase4dc_browser_report'))
+                except (BrowserUiError, KeyError, TypeError, ValueError):
+                    result['phase4dc_status'] = 'INVALID_GUEST_REPORT'
+                else:
+                    result['phase4dc_status'] = 'VALIDATED'
+                    result['phase4dc_browser_report'] = guest['phase4dc_browser_report']
             if crud_guest_bundle is not None:
                 from ...phase4.auth_report_contracts import AuthReportError, validate_auth_report
                 from ...phase4.guest_crud import CrudError, validate_crud_report
@@ -565,6 +594,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'PHASE4D3_TRUSTED_DB_PROBE_FAILED',
                 'PHASE4DA_TRUSTED_DEPENDENT_DISPATCH_FAILED',
                 'PHASE4DB_TRUSTED_CRUD_DISPATCH_FAILED',
+                'PHASE4DC_TRUSTED_BROWSER_DISPATCH_FAILED',
                 'UNEXPECTED_GUEST_FAILURE',
             }
             if status == 'STARTUP_FAILED':
@@ -577,14 +607,16 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                     and (auth_guest_bundle is None or result.get('phase4d2_status') == 'VALIDATED')
                     and (postcondition_guest_bundle is None or result.get('phase4d3_status') == 'VALIDATED')
                     and (dependent_guest_bundle is None or result.get('phase4da_status') == 'VALIDATED')
-                    and (crud_guest_bundle is None or result.get('phase4db_status') == 'VALIDATED')):
+                    and (crud_guest_bundle is None or result.get('phase4db_status') == 'VALIDATED')
+                    and (browser_guest_bundle is None or result.get('phase4dc_status') == 'VALIDATED')):
                 result.update(status='STARTUP_VERIFIED', execution='PERFORMED_IN_DISPOSABLE_VM',
                               readiness=('HTTP_200_FULLSTACK_PROBE_PASSED' if candidate['adapter'] == 'node_fullstack_offline_v1' else
                                          'HTTP_200_API_PROBE_PASSED' if candidate['adapter'] in ('python_web_offline_v1', 'node_express_offline_v1') else 'HTTP_200_HTML_PROBE_PASSED'))
             else:
                 bad_test_report = ((test_bundle is not None or api_bundle is not None or db_fixture_bundle is not None
                                     or auth_guest_bundle is not None or postcondition_guest_bundle is not None
-                                    or dependent_guest_bundle is not None or crud_guest_bundle is not None)
+                                    or dependent_guest_bundle is not None or crud_guest_bundle is not None
+                                    or browser_guest_bundle is not None)
                                    and status == 'STARTUP_VERIFIED' and command.returncode == 0)
                 result.update(status='PHASE4_REPORT_INVALID' if bad_test_report else 'STARTUP_FAILED',
                               execution='ATTEMPTED_IN_DISPOSABLE_VM', readiness='NOT_VERIFIED',
