@@ -1869,6 +1869,8 @@ def _run_phase4c_on_live_app(req: dict, port: int) -> dict | None:
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
+    if 'phase4d1_fixture_bundle' in req and adapter != 'php_mysql_v1':
+        raise GuestFailure('DATABASE_FIXTURE_SEEDING_NOT_VERIFIED')
     if adapter not in ('static_html_v1', 'php_mysql_v1', 'node_vite_offline_v1', 'node_express_offline_v1', 'python_web_offline_v1', 'node_fullstack_offline_v1'):
         raise GuestFailure('Unapproved guest adapter')
     path = req.get('probe_path')
@@ -1886,6 +1888,7 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         raise GuestFailure('Static site has no index.html')
     env = dict(os.environ)
     notes = []
+    db_fixture_report = None
     if adapter == 'node_vite_offline_v1':
         dist, note = _prepare_vite(checkout, base_dir, req)
         notes.append(note)
@@ -1902,6 +1905,15 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         if not isinstance(schema_path, str) or not re.fullmatch(r'[A-Za-z0-9_./-]{1,180}', schema_path) or '..' in schema_path.split('/'):
             raise GuestFailure('Invalid schema path')
         env, note = _provision_mysql(checkout, schema_path)
+        if 'phase4d1_fixture_bundle' in req:
+            try:
+                from guest_db_fixture import DbFixtureError, seed_mysql_fixture
+                db_fixture_report = seed_mysql_fixture(
+                    req['phase4d1_fixture_bundle'],
+                    expected_source=req['phase4d1_source'],
+                    expected_adapter=adapter, env=env, trusted_process=_trusted_process)
+            except (DbFixtureError, ImportError, TypeError, ValueError, KeyError):
+                raise GuestFailure('DATABASE_FIXTURE_SEEDING_NOT_VERIFIED') from None
         notes.append(note)
         program = ['/usr/bin/php', '-S', '127.0.0.1:' + str(port), '-t', str(checkout)]
     else:
@@ -1922,6 +1934,8 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
             notes.append(_probe_vite_asset(dist, port))
         result = {'status': 'STARTUP_VERIFIED', 'adapter': adapter, 'http_status': status,
                   'readiness_path': path, 'readiness': detail, 'notes': notes}
+        if db_fixture_report is not None:
+            result['phase4d1_fixture_report'] = db_fixture_report
         phase4 = _run_phase4_on_live_app(req, port)
         if phase4 is not None:
             result['phase4_test_report'] = phase4
