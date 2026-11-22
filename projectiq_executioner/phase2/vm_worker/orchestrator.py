@@ -48,7 +48,8 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                          test_bundle: dict | None = None, api_bundle: dict | None = None,
                          db_fixture_bundle: dict | None = None,
                          auth_bundle: dict | None = None,
-                         postcondition_bundle: dict | None = None) -> dict:
+                         postcondition_bundle: dict | None = None,
+                         workflow_bundle: dict | None = None) -> dict:
     """Runs only approved source SHAs. Does not use Docker/Podman for any stage.
 
     'reviewed_fixture=True' signifies human approval of a particular pinned
@@ -70,10 +71,21 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
         _save(result, output)
         return result
     if sum(x is not None for x in (test_bundle, api_bundle, db_fixture_bundle, auth_bundle,
-                                    postcondition_bundle)) > 1:
+                                    postcondition_bundle, workflow_bundle)) > 1:
         result['reason'] = 'PHASE4_MULTIPLE_BUNDLE_MODES_DENIED'
         _save(result, output)
         return result
+    dependent_guest_bundle = None
+    if workflow_bundle is not None:
+        from ...phase4.dependent_workflow_contracts import (
+            DependentWorkflowReviewError, validate_reviewed_dependent_workflow)
+        try:
+            dependent_guest_bundle = validate_reviewed_dependent_workflow(
+                workflow_bundle, candidate, config)
+        except (DependentWorkflowReviewError, TypeError, ValueError, KeyError):
+            result['reason'] = 'PHASE4DA_DEPENDENT_WORKFLOW_NOT_APPROVED'
+            _save(result, output)
+            return result
     postcondition_guest_bundle = None
     if postcondition_bundle is not None:
         from ...phase4.db_postcondition_contracts import (
@@ -231,6 +243,11 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 request['phase4d3_source'] = source
                 request['phase4d3_auth_bundle'] = postcondition_guest_bundle['auth']
                 request['phase4d3_postcondition_bundle'] = postcondition_guest_bundle['postconditions']
+            if dependent_guest_bundle is not None:
+                request['phase4d1_source'] = source
+                request['phase4d1_fixture_bundle'] = dependent_guest_bundle['fixture']
+                request['phase4da_source'] = source
+                request['phase4da_workflow_bundle'] = dependent_guest_bundle['workflow']
             if node_assets is not None:
                 request.update({
                     'node_version': node_assets['node_version'],
@@ -290,6 +307,11 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             if postcondition_guest_bundle is not None:
                 ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / 'guest_db_postconditions.py',
                          'guest_db_postconditions.py')
+            if dependent_guest_bundle is not None:
+                ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / 'guest_db_fixture.py',
+                         'guest_db_fixture.py')
+                ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / 'guest_workflow.py',
+                         'guest_workflow.py')
             if node_assets is not None:
                 ssh.copy_offline_asset(node_assets['node_tarball'], 'node_runtime.tar.xz')
                 ssh.copy_offline_asset(node_assets['npm_cache_zip'], 'npm_cache.zip')
@@ -368,6 +390,21 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                     result['phase4d3_status'] = 'VALIDATED'
                     result['phase4d3_auth_report'] = guest['phase4d3_auth_report']
                     result['phase4d3_postcondition_report'] = guest['phase4d3_postcondition_report']
+            if dependent_guest_bundle is not None:
+                from ...phase4.db_fixture_contracts import FixtureReviewError, validate_fixture_report
+                from ...phase4.guest_workflow import (
+                    DependentWorkflowError, validate_guest_workflow_report)
+                try:
+                    validate_fixture_report(dependent_guest_bundle['fixture'],
+                                            guest.get('phase4d1_fixture_report'))
+                    validate_guest_workflow_report(dependent_guest_bundle['workflow'],
+                                                   guest.get('phase4da_workflow_report'))
+                except (FixtureReviewError, DependentWorkflowError, TypeError, ValueError, KeyError):
+                    result['phase4da_status'] = 'INVALID_GUEST_REPORT'
+                else:
+                    result['phase4da_status'] = 'VALIDATED'
+                    result['phase4da_fixture_report'] = guest['phase4d1_fixture_report']
+                    result['phase4da_workflow_report'] = guest['phase4da_workflow_report']
             # Compact, typed, guest-controller-collected kernel observations.
             # Startup alone is not accepted as evidence of process placement.
             placement = guest.get('cgroup_placement')
@@ -495,6 +532,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'DATABASE_FIXTURE_SEEDING_NOT_VERIFIED',
                 'PHASE4D2_TRUSTED_AUTH_DISPATCH_FAILED',
                 'PHASE4D3_TRUSTED_DB_PROBE_FAILED',
+                'PHASE4DA_TRUSTED_DEPENDENT_DISPATCH_FAILED',
                 'UNEXPECTED_GUEST_FAILURE',
             }
             if status == 'STARTUP_FAILED':
@@ -505,13 +543,15 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                     and (api_bundle is None or result.get('phase4c_status') == 'VALIDATED')
                     and (db_fixture_bundle is None or result.get('phase4d1_status') == 'VALIDATED')
                     and (auth_guest_bundle is None or result.get('phase4d2_status') == 'VALIDATED')
-                    and (postcondition_guest_bundle is None or result.get('phase4d3_status') == 'VALIDATED')):
+                    and (postcondition_guest_bundle is None or result.get('phase4d3_status') == 'VALIDATED')
+                    and (dependent_guest_bundle is None or result.get('phase4da_status') == 'VALIDATED')):
                 result.update(status='STARTUP_VERIFIED', execution='PERFORMED_IN_DISPOSABLE_VM',
                               readiness=('HTTP_200_FULLSTACK_PROBE_PASSED' if candidate['adapter'] == 'node_fullstack_offline_v1' else
                                          'HTTP_200_API_PROBE_PASSED' if candidate['adapter'] in ('python_web_offline_v1', 'node_express_offline_v1') else 'HTTP_200_HTML_PROBE_PASSED'))
             else:
                 bad_test_report = ((test_bundle is not None or api_bundle is not None or db_fixture_bundle is not None
-                                    or auth_guest_bundle is not None or postcondition_guest_bundle is not None)
+                                    or auth_guest_bundle is not None or postcondition_guest_bundle is not None
+                                    or dependent_guest_bundle is not None)
                                    and status == 'STARTUP_VERIFIED' and command.returncode == 0)
                 result.update(status='PHASE4_REPORT_INVALID' if bad_test_report else 'STARTUP_FAILED',
                               execution='ATTEMPTED_IN_DISPOSABLE_VM', readiness='NOT_VERIFIED',

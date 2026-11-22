@@ -1900,9 +1900,29 @@ def _run_phase4d3_on_live_app(req: dict, port: int, env: dict) -> tuple[dict, di
         raise GuestFailure('PHASE4D3_TRUSTED_DB_PROBE_FAILED') from None
 
 
+def _run_phase4da_on_live_app(req: dict, port: int) -> dict | None:
+    """Execute reviewed dependent HTTP steps with live response-to-request ID."""
+    if 'phase4da_workflow_bundle' not in req:
+        return None
+    try:
+        from guest_workflow import DependentWorkflowError, run_dependent_workflow
+        return run_dependent_workflow(
+            req['phase4da_workflow_bundle'], expected_source=req['phase4da_source'],
+            expected_adapter=req['adapter'], port=port)
+    except (DependentWorkflowError, ImportError, TypeError, ValueError, KeyError):
+        raise GuestFailure('PHASE4DA_TRUSTED_DEPENDENT_DISPATCH_FAILED') from None
+
+
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
+    if 'phase4da_workflow_bundle' in req and (
+            adapter != 'php_mysql_v1'
+            or 'phase4d1_fixture_bundle' not in req
+            or any(x in req for x in ('phase4d3_postcondition_bundle',
+                                       'phase4d2_auth_bundle', 'phase4c_api_bundle',
+                                       'phase4_test_bundle'))):
+        raise GuestFailure('PHASE4DA_TRUSTED_DEPENDENT_DISPATCH_FAILED')
     if 'phase4d1_fixture_bundle' in req and adapter != 'php_mysql_v1':
         raise GuestFailure('DATABASE_FIXTURE_SEEDING_NOT_VERIFIED')
     if 'phase4d3_postcondition_bundle' in req and (
@@ -1981,6 +2001,8 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         phase4c = _run_phase4c_on_live_app(req, port)
         if phase4c is not None:
             result['phase4c_api_report'] = phase4c
+        if 'phase4da_workflow_bundle' in req:
+            result['phase4da_workflow_report'] = _run_phase4da_on_live_app(req, port)
         if 'phase4d3_postcondition_bundle' in req:
             d3_reports = _run_phase4d3_on_live_app(req, port, env)
             result['phase4d3_auth_report'], result['phase4d3_postcondition_report'] = d3_reports
