@@ -432,13 +432,15 @@ def _auth_checks(status, raw, assertions, *, has_session_cookie=None):
 
 def run_auth_flow(bundle, *, expected_source, expected_adapter,
                   port: int = 8765, timeout_s: float = 3.0,
-                  postcondition_observer=None):
+                  postcondition_observer=None, authenticated_callback=None):
     """Fixed four-step authentication contrast; all secrets stay inside guest."""
     import secrets
     validate_auth_guest_bundle(bundle, expected_source=expected_source,
                                expected_adapter=expected_adapter)
     if postcondition_observer is not None and not callable(postcondition_observer):
         _reject('INVALID_POSTCONDITION_OBSERVER')
+    if authenticated_callback is not None and not callable(authenticated_callback):
+        _reject('INVALID_AUTHENTICATED_CALLBACK')
     if type(port) is not int or not 1 <= port <= 65535 or type(timeout_s) not in (int, float) or not 0 < timeout_s <= 5:
         _reject('INVALID_AUTH_TRANSPORT_LIMITS')
     # Unique per-VM credentials, never emitted in reports or exceptions.
@@ -496,6 +498,10 @@ def run_auth_flow(bundle, *, expected_source, expected_adapter,
                 postcondition_observer('AFTER', generated['email'])
         elif name == 'LOGIN':
             logged_in = outcome == 'PASS' and session_cookie is not None
+    if (authenticated_callback is not None and session_cookie is not None
+            and len(results) == 4 and all(row['result'] == 'PASS' for row in results)):
+        # Secret session and email stay inside the trusted Linux guest callback.
+        authenticated_callback(session_cookie, generated['email'])
     counts = Counter(item['result'] for item in results)
     return {
         'schema_version': '0.1', 'phase': 4, 'stage': 'guest_reviewed_auth_flow',

@@ -1913,9 +1913,38 @@ def _run_phase4da_on_live_app(req: dict, port: int) -> dict | None:
         raise GuestFailure('PHASE4DA_TRUSTED_DEPENDENT_DISPATCH_FAILED') from None
 
 
+def _run_phase4db_on_live_app(req: dict, port: int, env: dict):
+    """Reuse reviewed D2 authentication and deliver session only to guest CRUD."""
+    if 'phase4db_crud_bundle' not in req:
+        return None
+    try:
+        from guest_api import GuestApiError, run_auth_flow
+        from guest_crud import CrudError, run_crud_flow, inconclusive_crud_report
+        results = []
+        def after_login(cookie, email):
+            results.append(run_crud_flow(
+                req['phase4db_crud_bundle'], expected_source=req['phase4db_source'],
+                expected_adapter=req['adapter'], cookie=cookie, email=email,
+                env=env, trusted_process=_trusted_process, port=port))
+        auth_report = run_auth_flow(
+            req['phase4db_auth_bundle'], expected_source=req['phase4db_source'],
+            expected_adapter=req['adapter'], port=port,
+            authenticated_callback=after_login)
+        crud_report = results[0] if len(results) == 1 else inconclusive_crud_report(req['phase4db_crud_bundle'])
+        return auth_report, crud_report
+    except (GuestApiError, CrudError, ImportError, ValueError, TypeError, KeyError):
+        raise GuestFailure('PHASE4DB_TRUSTED_CRUD_DISPATCH_FAILED') from None
+
+
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
+    if 'phase4db_crud_bundle' in req and (
+            adapter != 'php_mysql_v1' or any(x in req for x in (
+                'phase4da_workflow_bundle', 'phase4d1_fixture_bundle',
+                'phase4d3_postcondition_bundle', 'phase4d2_auth_bundle',
+                'phase4c_api_bundle', 'phase4_test_bundle'))):
+        raise GuestFailure('PHASE4DB_TRUSTED_CRUD_DISPATCH_FAILED')
     if 'phase4da_workflow_bundle' in req and (
             adapter != 'php_mysql_v1'
             or 'phase4d1_fixture_bundle' not in req
@@ -2003,6 +2032,8 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
             result['phase4c_api_report'] = phase4c
         if 'phase4da_workflow_bundle' in req:
             result['phase4da_workflow_report'] = _run_phase4da_on_live_app(req, port)
+        if 'phase4db_crud_bundle' in req:
+            result['phase4db_auth_report'], result['phase4db_crud_report'] = _run_phase4db_on_live_app(req, port, env)
         if 'phase4d3_postcondition_bundle' in req:
             d3_reports = _run_phase4d3_on_live_app(req, port, env)
             result['phase4d3_auth_report'], result['phase4d3_postcondition_report'] = d3_reports
