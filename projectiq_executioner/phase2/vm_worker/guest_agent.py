@@ -1866,6 +1866,19 @@ def _run_phase4c_on_live_app(req: dict, port: int) -> dict | None:
         raise GuestFailure('PHASE4C_TRUSTED_API_DISPATCH_FAILED') from None
 
 
+def _run_phase4d2_on_live_app(req: dict, port: int) -> dict | None:
+    """Fixed reviewed registration/login/session contrast, never on host."""
+    if 'phase4d2_auth_bundle' not in req:
+        return None
+    try:
+        from guest_api import GuestApiError, run_auth_flow
+        return run_auth_flow(req['phase4d2_auth_bundle'],
+                             expected_source=req['phase4d2_source'],
+                             expected_adapter=req['adapter'], port=port)
+    except (GuestApiError, ImportError, KeyError, TypeError, ValueError):
+        raise GuestFailure('PHASE4D2_TRUSTED_AUTH_DISPATCH_FAILED') from None
+
+
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
@@ -1942,6 +1955,9 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         phase4c = _run_phase4c_on_live_app(req, port)
         if phase4c is not None:
             result['phase4c_api_report'] = phase4c
+        phase4d2 = _run_phase4d2_on_live_app(req, port)
+        if phase4d2 is not None:
+            result['phase4d2_auth_report'] = phase4d2
     finally:
         server.terminate()
         try:
@@ -2283,6 +2299,9 @@ def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765
         phase4c = _run_phase4c_on_live_app(req, port)
         if phase4c is not None:
             result['phase4c_api_report'] = phase4c
+        phase4d2 = _run_phase4d2_on_live_app(req, port)
+        if phase4d2 is not None:
+            result['phase4d2_auth_report'] = phase4d2
         return result
     finally:
         for proc in reversed(processes):
