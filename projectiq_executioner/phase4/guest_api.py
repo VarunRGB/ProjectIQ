@@ -431,11 +431,14 @@ def _auth_checks(status, raw, assertions, *, has_session_cookie=None):
 
 
 def run_auth_flow(bundle, *, expected_source, expected_adapter,
-                  port: int = 8765, timeout_s: float = 3.0):
+                  port: int = 8765, timeout_s: float = 3.0,
+                  postcondition_observer=None):
     """Fixed four-step authentication contrast; all secrets stay inside guest."""
     import secrets
     validate_auth_guest_bundle(bundle, expected_source=expected_source,
                                expected_adapter=expected_adapter)
+    if postcondition_observer is not None and not callable(postcondition_observer):
+        _reject('INVALID_POSTCONDITION_OBSERVER')
     if type(port) is not int or not 1 <= port <= 65535 or type(timeout_s) not in (int, float) or not 0 < timeout_s <= 5:
         _reject('INVALID_AUTH_TRANSPORT_LIMITS')
     # Unique per-VM credentials, never emitted in reports or exceptions.
@@ -454,6 +457,8 @@ def run_auth_flow(bundle, *, expected_source, expected_adapter,
             results.append({'step': name, 'result': 'INCONCLUSIVE', 'http_status': None,
                             'assertions': [], 'issue_code': 'PREREQUISITE_NOT_SATISFIED'})
             continue
+        if name == 'REGISTRATION' and postcondition_observer is not None:
+            postcondition_observer('BEFORE', generated['email'])
         if name in ('REGISTRATION', 'LOGIN'):
             kind = spec['body_kind']
             body = {k: (generated[v['$generated']] if '$generated' in v else v['$literal'])
@@ -487,6 +492,8 @@ def run_auth_flow(bundle, *, expected_source, expected_adapter,
             unauth_ok = outcome == 'PASS'
         elif name == 'REGISTRATION':
             registered = outcome == 'PASS'
+            if registered and postcondition_observer is not None:
+                postcondition_observer('AFTER', generated['email'])
         elif name == 'LOGIN':
             logged_in = outcome == 'PASS' and session_cookie is not None
     counts = Counter(item['result'] for item in results)

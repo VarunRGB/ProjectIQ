@@ -1879,11 +1879,37 @@ def _run_phase4d2_on_live_app(req: dict, port: int) -> dict | None:
         raise GuestFailure('PHASE4D2_TRUSTED_AUTH_DISPATCH_FAILED') from None
 
 
+def _run_phase4d3_on_live_app(req: dict, port: int, env: dict) -> tuple[dict, dict] | None:
+    """Run D2 once with two independent read-only DB observations."""
+    if 'phase4d3_postcondition_bundle' not in req:
+        return None
+    try:
+        from guest_api import GuestApiError, run_auth_flow
+        from guest_db_postconditions import (DbPostconditionError, make_observer,
+                                              build_guest_postcondition_report)
+        db_bundle = req['phase4d3_postcondition_bundle']
+        observer, observations = make_observer(
+            db_bundle, expected_source=req['phase4d3_source'],
+            expected_adapter=req['adapter'], env=env, trusted_process=_trusted_process)
+        auth_report = run_auth_flow(
+            req['phase4d3_auth_bundle'], expected_source=req['phase4d3_source'],
+            expected_adapter=req['adapter'], port=port, postcondition_observer=observer)
+        db_report = build_guest_postcondition_report(db_bundle, auth_report, observations)
+        return auth_report, db_report
+    except (DbPostconditionError, GuestApiError, ImportError, KeyError, TypeError, ValueError):
+        raise GuestFailure('PHASE4D3_TRUSTED_DB_PROBE_FAILED') from None
+
+
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
     if 'phase4d1_fixture_bundle' in req and adapter != 'php_mysql_v1':
         raise GuestFailure('DATABASE_FIXTURE_SEEDING_NOT_VERIFIED')
+    if 'phase4d3_postcondition_bundle' in req and (
+            adapter != 'php_mysql_v1' or any(x in req for x in (
+                'phase4d1_fixture_bundle', 'phase4c_api_bundle', 'phase4d2_auth_bundle',
+                'phase4_test_bundle'))):
+        raise GuestFailure('PHASE4D3_TRUSTED_DB_PROBE_FAILED')
     if adapter not in ('static_html_v1', 'php_mysql_v1', 'node_vite_offline_v1', 'node_express_offline_v1', 'python_web_offline_v1', 'node_fullstack_offline_v1'):
         raise GuestFailure('Unapproved guest adapter')
     path = req.get('probe_path')
@@ -1955,9 +1981,13 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         phase4c = _run_phase4c_on_live_app(req, port)
         if phase4c is not None:
             result['phase4c_api_report'] = phase4c
-        phase4d2 = _run_phase4d2_on_live_app(req, port)
-        if phase4d2 is not None:
-            result['phase4d2_auth_report'] = phase4d2
+        if 'phase4d3_postcondition_bundle' in req:
+            d3_reports = _run_phase4d3_on_live_app(req, port, env)
+            result['phase4d3_auth_report'], result['phase4d3_postcondition_report'] = d3_reports
+        else:
+            phase4d2 = _run_phase4d2_on_live_app(req, port)
+            if phase4d2 is not None:
+                result['phase4d2_auth_report'] = phase4d2
     finally:
         server.terminate()
         try:
