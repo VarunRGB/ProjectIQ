@@ -41,8 +41,11 @@ def validate_guest_browser_bundle(bundle: Any, *, expected_source: dict | None =
             'page_path', 'checks', 'browser_binary'}
             or bundle['schema_version'] != SCHEMA
             or bundle['adapter'] != expected_adapter
-            or bundle['adapter'] != 'node_fullstack_offline_v1'
-            or bundle['page_path'] != '/index.html'
+            or bundle['adapter'] not in ('node_fullstack_offline_v1', 'php_mysql_v1')
+            or (bundle['adapter'] == 'node_fullstack_offline_v1' and
+                bundle['page_path'] != '/index.html')
+            or (bundle['adapter'] == 'php_mysql_v1' and
+                bundle['page_path'] != '/public/login.html')
             or bundle['browser_binary'] not in _BROWSER_PATHS
             or not isinstance(bundle['catalog_sha256'], str)
             or not _SHA64.fullmatch(bundle['catalog_sha256'])):
@@ -65,6 +68,10 @@ def validate_guest_browser_bundle(bundle: Any, *, expected_source: dict | None =
                 or not _TEXT.fullmatch(check['exact_text'])):
             _deny('INVALID_BROWSER_UI_CHECK')
         seen.add(check['tag'])
+    if bundle['adapter'] == 'php_mysql_v1' and checks != [
+            {'tag': 'h2', 'exact_text': 'Login'},
+            {'tag': 'button', 'exact_text': 'Login'}]:
+        _deny('BROWSER_PHP_LOGIN_CATALOG_REQUIRED')
 
 
 class _RenderedElements(HTMLParser):
@@ -1601,6 +1608,10 @@ def run_browser_ui(bundle: dict, *, expected_source: dict, expected_adapter: str
     """
     validate_guest_browser_bundle(bundle, expected_source=expected_source,
                                   expected_adapter=expected_adapter)
+    # The existing CDP helper is pinned to React /index.html.
+    # PHP uses one bounded direct Chrome capture until reviewed CDP support exists.
+    if bundle['adapter'] == 'php_mysql_v1' and cdp_mode:
+        _deny('BROWSER_PHP_CDP_MODE_UNSUPPORTED')
     browser = Path(bundle['browser_binary'])
     if not (browser.is_file() and os.access(browser, os.X_OK)):
         return _empty(bundle)
@@ -1624,7 +1635,7 @@ def run_browser_ui(bundle: dict, *, expected_source: dict, expected_adapter: str
            '--disable-extensions', '--no-first-run', '--no-default-browser-check',
            '--no-proxy-server', '--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1',
            '--timeout=20000', '--user-data-dir=' + str(profile),
-           '--dump-dom', 'http://127.0.0.1:8765/index.html']
+           '--dump-dom', 'http://127.0.0.1:8765' + bundle['page_path']]
     pids_before = _pid_limit_events()
     snapshot_before = _pid_snapshot()
     try:
@@ -1655,6 +1666,9 @@ def run_browser_ui(bundle: dict, *, expected_source: dict, expected_adapter: str
     if len(proc.stdout) > MAX_DOM:
         return _empty(bundle, issue='BROWSER_DOM_TOO_LARGE')
     if not proc.stdout or (cdp_mode and _p4dc_pending_backend_dom(proc.stdout, bundle['checks'])):
+        if bundle['adapter'] == 'php_mysql_v1':
+            # No accidental React /index.html fallback on a PHP page.
+            return _empty(bundle, issue='BROWSER_EMPTY_STDOUT_DUMP_DOM')
         if cdp_mode:
             # `--dump-dom` occasionally returns exit=0 and zero HTML after an
             # HTTP navigation. CDP uses a *private* pipe, not an exposed port,
@@ -1718,7 +1732,8 @@ def run_browser_ui(bundle: dict, *, expected_source: dict, expected_adapter: str
     report = _empty(bundle, status='PASS' if passed else 'FAIL',
                     issue=None if passed else 'RENDERED_DOM_DID_NOT_MATCH')
     report['checks'] = matches
-    if not passed:
+    if not passed and bundle['adapter'] == 'node_fullstack_offline_v1':
+        # These existing fingerprint labels are specific to the React pilot.
         report['page_fingerprint'] = _dom_fingerprint(doc)
         if (not report['page_fingerprint']['title_expected'] and
                 not report['page_fingerprint']['root_present']):

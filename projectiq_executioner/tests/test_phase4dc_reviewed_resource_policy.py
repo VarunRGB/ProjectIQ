@@ -54,10 +54,37 @@ class BrowserResourcePolicy(unittest.TestCase):
         self.assertIn('expected_pids=requested_pids',self.g)
 
     def test_07_guest_rejects_invalid_resource_claims(self):
-        self.assertIn('type(requested_pids) is not int',self.g)
-        self.assertIn('requested_pids not in (128, 384)',self.g)
-        self.assertIn("meta.get('adapter') != 'node_fullstack_offline_v1'",self.g)
-        self.assertIn("'phase4dc_browser_bundle' not in meta",self.g)
+        # The original test asserted the old Node-only guard as a source string.
+        # Verify the new dual-adapter guard using real controlled inputs.
+        from projectiq_executioner.phase2.vm_worker import guest_agent
+        choose = guest_agent._reviewed_browser_pids_for_request
+        src = {'kind': 'github', 'repository': 'Example/Pinned', 'commit_sha': 'a' * 40}
+        def request(adapter, page, checks):
+            return {'adapter': adapter, 'phase4dc_browser_resource_pids': 384,
+                    'phase4dc_source': dict(src),
+                    'phase4dc_browser_bundle': {
+                        'schema_version': '0.1', 'adapter': adapter,
+                        'source': dict(src), 'page_path': page, 'checks': checks}}
+        node = request('node_fullstack_offline_v1', '/index.html', [
+            {'tag': 'h1', 'exact_text': 'ProjectIQ D4 pilot'},
+            {'tag': 'p', 'exact_text': 'SQLite verified'}])
+        php = request('php_mysql_v1', '/public/login.html', [
+            {'tag': 'h2', 'exact_text': 'Login'},
+            {'tag': 'button', 'exact_text': 'Login'}])
+        self.assertEqual(choose({'adapter': 'php_mysql_v1'}), 128)
+        self.assertEqual(choose(node), 384)
+        self.assertEqual(choose(php), 384)
+        for bad in (
+            {**php, 'phase4dc_browser_resource_pids': True},
+            {**php, 'phase4dc_browser_resource_pids': 512},
+            {**php, 'phase4dc_source': {**src, 'commit_sha': 'b' * 40}},
+            {**php, 'phase4dc_browser_bundle': None},
+            request('static_html_v1', '/public/login.html', php['phase4dc_browser_bundle']['checks']),
+            request('php_mysql_v1', '/auth/login.php', php['phase4dc_browser_bundle']['checks']),
+        ):
+            with self.subTest(bad=repr(bad)[:70]):
+                with self.assertRaises(guest_agent.GuestFailure):
+                    choose(bad)
 
     def test_08_nonbrowser_nproc_unchanged(self):
         self.assertIn('if _browser_requested else 96',self.g)

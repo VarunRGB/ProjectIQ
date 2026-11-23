@@ -1,4 +1,4 @@
-"""4D-C: reviewed React DOM rendering with a real in-VM Chrome/Chromium."""
+"""4D-C: reviewed DOM rendering with a real in-VM Chrome/Chromium."""
 from __future__ import annotations
 import argparse
 import json
@@ -54,7 +54,7 @@ def run(*, plan, catalog, candidate, config, output_dir: Path,
               'cleanup': 'NOT_STARTED', 'security_attestation': _ATTEST,
               'issue_code': 'BROWSER_VM_NOT_VERIFIED', 'checks': None,
               'limitations': [
-                  'Browser pilot verifies rendered DOM text and React fetch, not clicks/forms.',
+                  'Browser pilot verifies reviewed rendered DOM text. FullStack React async status is checked separately; PHP login checks do not prove authentication or test clicks/forms.',
                   'Browser must be installed in the separately sealed and SHA-pinned Ubuntu base.',
                   'Not attested for untrusted student execution; no app-wide UI coverage.'
               ], 'artifacts': {'review': 'd4c_review.json',

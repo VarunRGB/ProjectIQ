@@ -35,14 +35,23 @@ def compile_reviewed_browser(plan: Mapping, catalog: Mapping,
             or candidate.get('schema_version') != '0.3'
             or candidate.get('status') != 'CANDIDATE_NEEDS_VM_VERIFICATION'
             or candidate.get('worker_provider') != 'qemu_qcow2_v1'
-            or candidate.get('adapter') != 'node_fullstack_offline_v1'
-            or plan.get('execution_context', {}).get('adapter') != 'node_fullstack_offline_v1'
-            or candidate.get('service_roots') != {'frontend': 'frontend', 'backend': 'backend'}):
+            or candidate.get('adapter') not in ('node_fullstack_offline_v1', 'php_mysql_v1')
+            or plan.get('execution_context', {}).get('adapter') != candidate.get('adapter')
+            or (candidate.get('adapter') == 'node_fullstack_offline_v1' and
+                candidate.get('service_roots') != {'frontend': 'frontend', 'backend': 'backend'})):
         _deny('BROWSER_REVIEWED_FULLSTACK_CANDIDATE_REQUIRED')
     if (not isinstance(catalog, Mapping) or set(catalog) != {
             'schema_version', 'source', 'page_path', 'checks'}
             or catalog['schema_version'] != '0.1' or catalog['source'] != source):
         _deny('INVALID_BROWSER_REVIEW_CATALOG')
+    # First PHP browser pilot: only the real MiniCollab login surface.
+    # Catalog changes must be separately reviewed and SHA-approved.
+    if candidate['adapter'] == 'php_mysql_v1' and (
+            catalog['page_path'] != '/public/login.html' or
+            catalog['checks'] != [
+                {'tag': 'h2', 'exact_text': 'Login'},
+                {'tag': 'button', 'exact_text': 'Login'}]):
+        _deny('BROWSER_PHP_LOGIN_CATALOG_REQUIRED')
     if not isinstance(config, Mapping):
         _deny('INVALID_BROWSER_POLICY')
     identity = source['repository'] + '@' + source['commit_sha']

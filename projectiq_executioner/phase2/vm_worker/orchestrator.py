@@ -612,6 +612,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'PHASE4DA_TRUSTED_DEPENDENT_DISPATCH_FAILED',
                 'PHASE4DB_TRUSTED_CRUD_DISPATCH_FAILED',
                 'PHASE4DC_TRUSTED_BROWSER_DISPATCH_FAILED',
+                'REVIEWED_BROWSER_RESOURCE_POLICY_DENIED',
                 'UNEXPECTED_GUEST_FAILURE',
             }
             if status == 'STARTUP_FAILED':

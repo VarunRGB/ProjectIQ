@@ -142,7 +142,9 @@ _browser_valid = (
     and sys.argv[1] == '/usr/bin/google-chrome-stable'
     and '--headless=new' in sys.argv[2:]
     and '--dump-dom' in sys.argv[2:]
-    and sys.argv[-1] in ('http://127.0.0.1:8765/index.html', 'data:text/html,%3C!doctype%20html%3E%3Chtml%3E%3Cbody%3E%3Ch1%3EPIQ4DC_SMOKE_OK%3C/h1%3E%3C/body%3E%3C/html%3E')
+    and sys.argv[-1] in ('http://127.0.0.1:8765/index.html',
+                          'http://127.0.0.1:8765/public/login.html',
+                          'data:text/html,%3C!doctype%20html%3E%3Chtml%3E%3Cbody%3E%3Ch1%3EPIQ4DC_SMOKE_OK%3C/h1%3E%3C/body%3E%3C/html%3E')
     and not any(x == '--no-sandbox' or x.startswith('--user-data-dir=/tmp/')
                 for x in sys.argv[2:])
 )
@@ -728,7 +730,9 @@ def _project_command(command: list[str], env: dict | None = None, *, audit_preex
     direct_chrome = (isinstance(command, list) and bool(command)
             and command[0] == '/usr/bin/google-chrome-stable'
             and '--headless=new' in command and '--dump-dom' in command
-            and command[-1] in ('http://127.0.0.1:8765/index.html', 'data:text/html,%3C!doctype%20html%3E%3Chtml%3E%3Cbody%3E%3Ch1%3EPIQ4DC_SMOKE_OK%3C/h1%3E%3C/body%3E%3C/html%3E')
+            and command[-1] in ('http://127.0.0.1:8765/index.html',
+                                   'http://127.0.0.1:8765/public/login.html',
+                                   'data:text/html,%3C!doctype%20html%3E%3Chtml%3E%3Cbody%3E%3Ch1%3EPIQ4DC_SMOKE_OK%3C/h1%3E%3C/body%3E%3C/html%3E')
             and '--no-sandbox' not in command)
     if browser_profile and not (cdp_helper or direct_chrome):
         raise GuestFailure('BROWSER_PROFILE_REQUIRES_REVIEWED_CHROME_COMMAND')
@@ -2040,7 +2044,8 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
     if 'phase4dc_browser_bundle' in req and (
-            adapter != 'node_fullstack_offline_v1' or any(x in req for x in (
+            adapter not in ('node_fullstack_offline_v1', 'php_mysql_v1')
+            or any(x in req for x in (
                 'phase4da_workflow_bundle', 'phase4d1_fixture_bundle',
                 'phase4d3_postcondition_bundle', 'phase4d2_auth_bundle',
                 'phase4c_api_bundle', 'phase4_test_bundle', 'phase4db_crud_bundle'))):
@@ -2147,6 +2152,9 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
             phase4d2 = _run_phase4d2_on_live_app(req, port)
             if phase4d2 is not None:
                 result['phase4d2_auth_report'] = phase4d2
+        phase4dc = _run_phase4dc_on_live_app(req, base_dir)
+        if phase4dc is not None:
+            result['phase4dc_browser_report'] = phase4dc
     finally:
         server.terminate()
         try:
@@ -2948,7 +2956,7 @@ def _run_phase4dc_on_live_app(req: dict, base_dir: Path):
                               expected_source=req['phase4dc_source'],
                               expected_adapter=req['adapter'],
                               workspace=base_dir, trusted_process=_trusted_process,
-                              cdp_mode=True)
+                               cdp_mode=(req['adapter'] == 'node_fullstack_offline_v1'))
         if browser_report.get('status') == 'INCONCLUSIVE':
             browser_report['server_trace'] = _phase4dc_http_difference(
                 before, _phase4dc_http_snapshot(base_dir))
@@ -3020,6 +3028,45 @@ def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765
             _d4_stop_process(proc)
 
 
+def _reviewed_browser_pids_for_request(meta: dict) -> int:
+    """Guest-side defense in depth for the host-reviewed browser resource profile.
+
+    Standard execution remains 128 tasks. The 384-task request is accepted
+    only with a matching source-bound, adapter-specific browser bundle. The
+    host remains responsible for pinned snapshot/catalog approval and the
+    kernel checks remain in _verify_evaluation_cgroup.
+    """
+    if not isinstance(meta, dict):
+        raise GuestFailure('REVIEWED_BROWSER_RESOURCE_POLICY_DENIED')
+    pids = meta.get('phase4dc_browser_resource_pids', 128)
+    if type(pids) is not int or pids not in (128, 384):
+        raise GuestFailure('REVIEWED_BROWSER_RESOURCE_POLICY_DENIED')
+    if pids == 128:
+        return 128
+    adapter = meta.get('adapter')
+    browser = meta.get('phase4dc_browser_bundle')
+    source = meta.get('phase4dc_source')
+    if (adapter not in ('node_fullstack_offline_v1', 'php_mysql_v1')
+            or not isinstance(browser, dict)
+            or not isinstance(source, dict)
+            or browser.get('adapter') != adapter
+            or browser.get('source') != source
+            or browser.get('schema_version') != '0.1'):
+        raise GuestFailure('REVIEWED_BROWSER_RESOURCE_POLICY_DENIED')
+    if adapter == 'node_fullstack_offline_v1':
+        if browser.get('page_path') != '/index.html':
+            raise GuestFailure('REVIEWED_BROWSER_RESOURCE_POLICY_DENIED')
+    else:
+        # The only PHP pilot approved for the enlarged profile is MiniCollab
+        # login: no arbitrary paths, browser actions, or weakened assertions.
+        if (browser.get('page_path') != '/public/login.html'
+                or browser.get('checks') != [
+                    {'tag': 'h2', 'exact_text': 'Login'},
+                    {'tag': 'button', 'exact_text': 'Login'}]):
+            raise GuestFailure('REVIEWED_BROWSER_RESOURCE_POLICY_DENIED')
+    return 384
+
+
 def main() -> int:
     global _APP_CGROUP_ACTIVE, _REVIEWED_BROWSER_RESOURCE_ACTIVE
     if len(sys.argv) == 5 and sys.argv[1] == '--serve-d4-frontend':
@@ -3038,13 +3085,7 @@ def main() -> int:
                                          'prepare_npm_cache', 'prepare_python_wheels'):
             if meta.get('app_cgroup') is not True:
                 raise GuestFailure('APP_CGROUP_ENFORCEMENT_UNAVAILABLE')
-            requested_pids = meta.get('phase4dc_browser_resource_pids', 128)
-            if (type(requested_pids) is not int or requested_pids not in (128, 384)
-                    or (requested_pids == 384 and
-                        (meta.get('adapter') != 'node_fullstack_offline_v1' or
-                         'phase4dc_browser_bundle' not in meta or
-                         'phase4dc_source' not in meta))):
-                raise GuestFailure('REVIEWED_BROWSER_RESOURCE_POLICY_DENIED')
+            requested_pids = _reviewed_browser_pids_for_request(meta)
             _verify_evaluation_cgroup(app_base, expected_pids=requested_pids)
             _REVIEWED_BROWSER_RESOURCE_ACTIVE = (requested_pids == 384)
             _APP_SERVER_PLACEMENTS.clear()
