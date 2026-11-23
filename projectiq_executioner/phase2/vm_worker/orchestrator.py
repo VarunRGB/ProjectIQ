@@ -88,6 +88,16 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             result['reason'] = 'PHASE4DC_BROWSER_NOT_OPERATOR_APPROVED'
             _save(result, output)
             return result
+    # The operator's config explicitly opts reviewed browser VMs into
+    # the 384/512 profile. All other VMs retain the 128/192 baseline.
+    browser_profile_name = config.get('browser_resource_profile', 'standard_128_192_v1')
+    if browser_guest_bundle is not None and browser_profile_name not in (
+            'standard_128_192_v1', 'reviewed_browser_384_512_v1'):
+        result['reason'] = 'PHASE4DC_BROWSER_RESOURCE_POLICY_DENIED'
+        _save(result, output)
+        return result
+    browser_cgroup_pids = (384 if browser_guest_bundle is not None and
+                            browser_profile_name == 'reviewed_browser_384_512_v1' else 128)
     crud_guest_bundle = None
     if crud_bundle is not None:
         from ...phase4.crud_workflow_contracts import CrudReviewError, validate_reviewed_crud
@@ -268,6 +278,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             if browser_guest_bundle is not None:
                 request['phase4dc_source'] = source
                 request['phase4dc_browser_bundle'] = browser_guest_bundle
+                request['phase4dc_browser_resource_pids'] = browser_cgroup_pids
             if crud_guest_bundle is not None:
                 request['phase4db_source'] = source
                 request['phase4db_auth_bundle'] = crud_guest_bundle['auth']
@@ -301,7 +312,8 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             seed = make_nocloud_iso(work, pubkey, 'projectiq-' + uuid.uuid4().hex,
                                     mysql_bootstrap=(candidate['adapter'] == 'php_mysql_v1'),
                                     workspace_disk_mib=request['workspace_disk_mib'],
-                                    app_cgroup=True)
+                                    app_cgroup=True,
+                                    app_cgroup_pids=browser_cgroup_pids)
             port = _free_loopback_port()
             limits = candidate['vm_limits']
             worker = QemuWorker({**config, 'workspace_disk_mib': request['workspace_disk_mib']},

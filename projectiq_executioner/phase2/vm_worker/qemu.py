@@ -362,12 +362,16 @@ def _validate_workspace_mib(mib: int) -> int:
 
 def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_setup: bool = False,
                       mysql_bootstrap: bool = False, workspace_disk_mib: int = 0,
-                      cgroup_probe: bool = False, app_cgroup: bool = False) -> Path:
+                      cgroup_probe: bool = False, app_cgroup: bool = False,
+                      app_cgroup_pids: int = 128) -> Path:
     """Generate a per-run cloud-init seed without executing anything from source.
 
     Dependency: ``pip install pycdlib`` on the operator host (not inside student
     repositories). A template must include cloud-init and have been cleaned.
     """
+    if (type(app_cgroup_pids) is not int or app_cgroup_pids not in (128, 384)
+            or (app_cgroup_pids != 128 and not app_cgroup)):
+        raise WorkerFailure('REVIEWED_BROWSER_CGROUP_POLICY_INVALID')
     try:
         import pycdlib
     except ImportError as exc:
@@ -447,7 +451,13 @@ def make_nocloud_iso(workdir: Path, pubkey: str, instance_id: str, *, template_s
             '    encoding: b64\n'
             f'    content: {guard_encoded}\n'
         )
-        encoded = base64.b64encode(APP_CGROUP_BOOTSTRAP_SCRIPT.encode('utf-8')).decode('ascii')
+        # Only a reviewed browser VM receives a larger bounded pids cgroup.
+        bootstrap = APP_CGROUP_BOOTSTRAP_SCRIPT
+        if app_cgroup_pids == 384:
+            if bootstrap.count('TasksMax=128\n') != 1:
+                raise WorkerFailure('REVIEWED_BROWSER_BOOTSTRAP_ANCHOR_INVALID')
+            bootstrap = bootstrap.replace('TasksMax=128\n', 'TasksMax=384\n', 1)
+        encoded = base64.b64encode(bootstrap.encode('utf-8')).decode('ascii')
         data += (
             '  - path: /usr/local/sbin/projectiq-eval-bootstrap\n'
             '    owner: root:root\n'

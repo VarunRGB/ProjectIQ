@@ -9,8 +9,10 @@ class Browser128TaskExperiment(unittest.TestCase):
         self.assertEqual(guest_agent.APP_CGROUP_PIDS, 128)
         self.assertIn('TasksMax=128', qemu.APP_CGROUP_BOOTSTRAP_SCRIPT)
         self.assertNotIn('TasksMax=80', qemu.APP_CGROUP_BOOTSTRAP_SCRIPT)
-        self.assertIn("node.joinpath('pids.max').read_text().strip() != str(APP_CGROUP_PIDS)",
-                      __import__('inspect').getsource(guest_agent._evaluation_policy_matches))
+        verifier = __import__('inspect').getsource(guest_agent._evaluation_policy_matches)
+        self.assertIn('expected_pids: int = APP_CGROUP_PIDS', verifier)
+        self.assertIn("node.joinpath('pids.max').read_text().strip() != str(expected_pids)", verifier)
+        self.assertIn('expected_pids not in (128, 384)', verifier)
 
     def test_existing_memory_io_and_mysql_limits_unchanged(self):
         self.assertEqual(qemu.APP_CGROUP_MEMORY_BYTES, 2147483648)
@@ -25,7 +27,9 @@ class Browser128TaskExperiment(unittest.TestCase):
 
     def test_browser_profile_and_isolation_intact(self):
         launcher = guest_agent.APP_LIMIT_LAUNCHER
-        self.assertIn('192 if _browser_requested else 96', launcher)
+        self.assertIn('(512 if _browser_extended else 192) if _browser_requested else 96', launcher)
+        self.assertIn("_browser_extended = os.environ.get('PROJECTIQ_REVIEWED_BROWSER_384') == '1'", launcher)
+        self.assertIn('not _browser_requested or not _browser_valid', launcher)
         self.assertIn('resource.RLIMIT_NOFILE, 512', launcher)
         self.assertIn('resource.RLIMIT_CORE, 0', launcher)
         self.assertIn('PROJECTIQ_EVAL_REQUIRED', launcher)
@@ -36,7 +40,10 @@ class Browser128TaskExperiment(unittest.TestCase):
         import inspect
         src = inspect.getsource(qemu.make_nocloud_iso)
         self.assertIn('if app_cgroup:', src)
-        self.assertIn("APP_CGROUP_BOOTSTRAP_SCRIPT.encode('utf-8')", src)
+        self.assertIn('app_cgroup_pids: int = 128', src)
+        self.assertIn('bootstrap = APP_CGROUP_BOOTSTRAP_SCRIPT', src)
+        self.assertIn('if app_cgroup_pids == 384:', src)
+        self.assertIn("bootstrap.encode('utf-8')", src)
         self.assertIn('bootstrap_tasks.append', src)
 
 if __name__ == '__main__':

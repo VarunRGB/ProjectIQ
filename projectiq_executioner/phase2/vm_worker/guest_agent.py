@@ -136,6 +136,7 @@ if sys.platform != 'linux' or os.geteuid() == 0 or len(sys.argv) < 2:
 # A browser-specific RLIMIT_NPROC exception does NOT change its cgroup cap.
 # This is set only by the trusted guest controller, never by the student app.
 _browser_requested = os.environ.get('PROJECTIQ_BROWSER_PROFILE') == '1'
+_browser_extended = os.environ.get('PROJECTIQ_REVIEWED_BROWSER_384') == '1'
 _browser_valid = (
     len(sys.argv) >= 4
     and sys.argv[1] == '/usr/bin/google-chrome-stable'
@@ -148,9 +149,11 @@ _browser_valid = (
 _browser_valid = _browser_valid or (
     sys.argv[1:] == ['/usr/bin/python3', '-I', '/home/projectiq/guest_browser_cdp.py']
 )
-if _browser_requested and not _browser_valid:
+if (_browser_requested and not _browser_valid) or (_browser_extended and
+        (not _browser_requested or not _browser_valid)):
     sys.exit(114)
-for limit, maximum in ((resource.RLIMIT_NPROC, 192 if _browser_requested else 96),
+for limit, maximum in ((resource.RLIMIT_NPROC,
+                        (512 if _browser_extended else 192) if _browser_requested else 96),
                        (resource.RLIMIT_NOFILE, 512),
                        (resource.RLIMIT_CORE, 0)):
     _soft, old_hard = resource.getrlimit(limit)
@@ -385,11 +388,17 @@ APP_CGROUP_MEMORY_BYTES = 2147483648
 APP_CGROUP_PIDS = 128
 APP_CGROUP_IO_BPS = 16777216
 _APP_CGROUP_ACTIVE = False
+# Assigned solely by the trusted guest controller after the reviewed VM
+# request was checked. It is never imported from student code.
+_REVIEWED_BROWSER_RESOURCE_ACTIVE = False
 
 
 def _evaluation_policy_matches(group: str, workspace: Path, *, uid: int,
-                               cgroup_root: Path = Path('/sys/fs/cgroup')) -> bool:
+                               cgroup_root: Path = Path('/sys/fs/cgroup'),
+                               expected_pids: int = APP_CGROUP_PIDS) -> bool:
     """Require exact user-manager slice and real kernel cgroup limits."""
+    if type(expected_pids) is not int or expected_pids not in (128, 384):
+        return False
     parts = group.strip('/').split('/')
     expected = ['user.slice', f'user-{uid}.slice', f'user@{uid}.service',
                 'projectiq.slice', APP_CGROUP_SLICE]
@@ -399,7 +408,7 @@ def _evaluation_policy_matches(group: str, workspace: Path, *, uid: int,
         node = cgroup_root.joinpath(*parts)
         if node.is_symlink() or node.joinpath('memory.max').read_text().strip() != str(APP_CGROUP_MEMORY_BYTES):
             return False
-        if node.joinpath('pids.max').read_text().strip() != str(APP_CGROUP_PIDS):
+        if node.joinpath('pids.max').read_text().strip() != str(expected_pids):
             return False
         device = workspace.stat().st_dev
         expected_dev = f'{os.major(device)}:{os.minor(device)}'
@@ -412,7 +421,7 @@ def _evaluation_policy_matches(group: str, workspace: Path, *, uid: int,
         return False
 
 
-def _verify_evaluation_cgroup(workspace: Path) -> None:
+def _verify_evaluation_cgroup(workspace: Path, *, expected_pids: int = APP_CGROUP_PIDS) -> None:
     """Fail closed before any evaluation code if bootstrap/slice is missing."""
     marker = Path('/run/projectiq-eval-bootstrap.ready')
     deadline = time.monotonic() + 85
@@ -432,7 +441,8 @@ def _verify_evaluation_cgroup(workspace: Path) -> None:
                                   'ControlGroup', APP_CGROUP_SLICE], timeout=10, env=env)
         if (started.returncode != 0 or shown.returncode != 0 or
                 not _evaluation_policy_matches(shown.stdout.decode('utf-8').strip(),
-                                                workspace, uid=uid)):
+                                                workspace, uid=uid,
+                                                expected_pids=expected_pids)):
             raise GuestFailure('APP_CGROUP_ENFORCEMENT_UNAVAILABLE')
     except (OSError, UnicodeError) as exc:
         raise GuestFailure('APP_CGROUP_ENFORCEMENT_UNAVAILABLE') from exc
@@ -730,6 +740,8 @@ def _project_command(command: list[str], env: dict | None = None, *, audit_preex
                 'PATH': '/usr/local/bin:/usr/bin:/bin'}
     if browser_profile:
         env_vars['PROJECTIQ_BROWSER_PROFILE'] = '1'
+        if _REVIEWED_BROWSER_RESOURCE_ACTIVE:
+            env_vars['PROJECTIQ_REVIEWED_BROWSER_384'] = '1'
     if 'PROJECTIQ_QUOTA_TMP' in os.environ:
         env_vars['TMPDIR'] = os.environ['PROJECTIQ_QUOTA_TMP']
         env_vars['TMP'] = os.environ['PROJECTIQ_QUOTA_TMP']
@@ -2357,7 +2369,6 @@ def _d4_frontend_serve(dist: Path, frontend_port: int, backend_port: int) -> Non
     # No network/security policy changes, no URLs/headers/addresses exported.
     import threading
     import queue
-    import resource
     a5_diagnostic = (os.environ.get('PROJECTIQ_4DC_HTTP_DIAG') == '1')
     a5_lock = threading.Lock()
     a5_event_budget = 320
@@ -2433,6 +2444,7 @@ def _d4_frontend_serve(dist: Path, frontend_port: int, backend_port: int) -> Non
             pass
 
     if a5_diagnostic:
+        import resource
         nsoft, nhard = resource.getrlimit(resource.RLIMIT_NPROC)
         fsoft, fhard = resource.getrlimit(resource.RLIMIT_NOFILE)
         def a5_limit(v):
@@ -3009,7 +3021,7 @@ def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765
 
 
 def main() -> int:
-    global _APP_CGROUP_ACTIVE
+    global _APP_CGROUP_ACTIVE, _REVIEWED_BROWSER_RESOURCE_ACTIVE
     if len(sys.argv) == 5 and sys.argv[1] == '--serve-d4-frontend':
         _d4_frontend_serve(Path(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]))
         return 0
@@ -3026,7 +3038,15 @@ def main() -> int:
                                          'prepare_npm_cache', 'prepare_python_wheels'):
             if meta.get('app_cgroup') is not True:
                 raise GuestFailure('APP_CGROUP_ENFORCEMENT_UNAVAILABLE')
-            _verify_evaluation_cgroup(app_base)
+            requested_pids = meta.get('phase4dc_browser_resource_pids', 128)
+            if (type(requested_pids) is not int or requested_pids not in (128, 384)
+                    or (requested_pids == 384 and
+                        (meta.get('adapter') != 'node_fullstack_offline_v1' or
+                         'phase4dc_browser_bundle' not in meta or
+                         'phase4dc_source' not in meta))):
+                raise GuestFailure('REVIEWED_BROWSER_RESOURCE_POLICY_DENIED')
+            _verify_evaluation_cgroup(app_base, expected_pids=requested_pids)
+            _REVIEWED_BROWSER_RESOURCE_ACTIVE = (requested_pids == 384)
             _APP_SERVER_PLACEMENTS.clear()
             _APP_BUILD_HANDOFFS.clear()
             _APP_CGROUP_ACTIVE = True

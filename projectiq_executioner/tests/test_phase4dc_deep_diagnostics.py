@@ -110,7 +110,8 @@ class DeepDiagnostics(unittest.TestCase):
         self.assertIn('PIQ4DC_LIMITS nproc=', src)
         self.assertIn('resource.getrlimit(resource.RLIMIT_NPROC)', src)
         self.assertIn('os.execvpe(sys.argv[1], sys.argv[1:], os.environ)', src)
-        self.assertIn('192 if _browser_requested else 96', src)
+        self.assertIn('(512 if _browser_extended else 192) if _browser_requested else 96', src)
+        self.assertIn('not _browser_requested or not _browser_valid', src)
         self.assertIn('projectiq-eval.slice', src)
         self.assertNotIn('--no-sandbox', '\n'.join(
             line for line in src.splitlines() if 'PIQ4DC_LIMITS' in line))

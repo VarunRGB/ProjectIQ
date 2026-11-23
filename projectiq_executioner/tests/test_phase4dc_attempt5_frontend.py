@@ -343,7 +343,9 @@ class Attempt5Frontend(unittest.TestCase):
 
     def test_19_nproc_policy_guard_is_not_modified_by_patch(self):
         source=Path(agent.__file__).read_text('utf-8')
-        self.assertIn('192 if _browser_requested else 96',source)
+        self.assertIn('(512 if _browser_extended else 192) if _browser_requested else 96',source)
+        self.assertIn("_browser_extended = os.environ.get('PROJECTIQ_REVIEWED_BROWSER_384') == '1'",source)
+        self.assertIn('not _browser_requested or not _browser_valid',source)
         self.assertIn('PIQ4DC_A5 ',source)
 
     def test_20_helper_report_does_not_cause_browser_pass(self):

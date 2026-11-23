@@ -42,7 +42,8 @@ class BrowserOnlyNprocPolicy(unittest.TestCase):
 
     def test_launcher_hard_caps_remain_bounded(self):
         launcher = guest_agent.APP_LIMIT_LAUNCHER
-        self.assertIn('192 if _browser_requested else 96', launcher)
+        self.assertIn('(512 if _browser_extended else 192) if _browser_requested else 96', launcher)
+        self.assertIn('not _browser_requested or not _browser_valid', launcher)
         self.assertIn('resource.RLIMIT_NOFILE, 512', launcher)
         self.assertIn('resource.RLIMIT_CORE, 0', launcher)
         self.assertIn("sys.exit(114)", launcher)

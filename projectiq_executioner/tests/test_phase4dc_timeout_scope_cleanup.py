@@ -86,7 +86,9 @@ class BrowserScopeTimeoutTests(unittest.TestCase):
         self.assertEqual(qemu.APP_CGROUP_PIDS, 128)
         self.assertEqual(guest_agent.APP_CGROUP_PIDS, 128)
         self.assertEqual(guest_agent.APP_CGROUP_MEMORY_BYTES, 2147483648)
-        self.assertIn('192 if _browser_requested else 96',
+        self.assertIn('(512 if _browser_extended else 192) if _browser_requested else 96',
+                      guest_agent.APP_LIMIT_LAUNCHER)
+        self.assertIn('not _browser_requested or not _browser_valid',
                       guest_agent.APP_LIMIT_LAUNCHER)
         source = __import__('inspect').getsource(guest_browser_ui.run_browser_ui)
         self.assertNotIn('--no-sandbox', [
