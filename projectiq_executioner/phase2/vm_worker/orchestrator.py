@@ -51,7 +51,8 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                          postcondition_bundle: dict | None = None,
                          workflow_bundle: dict | None = None,
                          crud_bundle: dict | None = None,
-                         browser_bundle: dict | None = None) -> dict:
+                         browser_bundle: dict | None = None,
+                         login_bundle: dict | None = None) -> dict:
     """Runs only approved source SHAs. Does not use Docker/Podman for any stage.
 
     'reviewed_fixture=True' signifies human approval of a particular pinned
@@ -74,10 +75,21 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
         return result
     if sum(x is not None for x in (test_bundle, api_bundle, db_fixture_bundle, auth_bundle,
                                     postcondition_bundle, workflow_bundle, crud_bundle,
-                                    browser_bundle)) > 1:
+                                     browser_bundle, login_bundle)) > 1:
         result['reason'] = 'PHASE4_MULTIPLE_BUNDLE_MODES_DENIED'
         _save(result, output)
         return result
+    # 4D-D: separate, exact source/fixture approval; never share 4D-C mode.
+    login_guest_bundle = None
+    if login_bundle is not None:
+        from ...phase4.browser_login_contracts import (
+            LoginReviewError, validate_reviewed_login)
+        try:
+            login_guest_bundle = validate_reviewed_login(login_bundle, candidate, config)
+        except (LoginReviewError, TypeError, ValueError, KeyError):
+            result['reason'] = 'PHASE4DD_LOGIN_NOT_OPERATOR_APPROVED'
+            _save(result, output)
+            return result
     browser_guest_bundle = None
     if browser_bundle is not None:
         from ...phase4.browser_ui_contracts import (
@@ -96,7 +108,8 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
         result['reason'] = 'PHASE4DC_BROWSER_RESOURCE_POLICY_DENIED'
         _save(result, output)
         return result
-    browser_cgroup_pids = (384 if browser_guest_bundle is not None and
+    browser_cgroup_pids = (384 if (browser_guest_bundle is not None or
+                                  login_guest_bundle is not None) and
                             browser_profile_name == 'reviewed_browser_384_512_v1' else 128)
     crud_guest_bundle = None
     if crud_bundle is not None:
@@ -235,6 +248,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
         _save(result, output)
         return result
     started_at = time.monotonic()
+    worker_stage = 'WORKSPACE_PREPARE'
     vm_started = False
     worker_stopped = False
     expired = threading.Event()
@@ -242,6 +256,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
     with runtime.hold() as work:
         worker = None
         try:
+            worker_stage = 'SNAPSHOT_FETCH'
             source_record = RepositorySource(kind='github', repository=source['repository'],
                          url='https://github.com/' + source['repository'], requested_ref=None,
                          resolved_ref=source['commit_sha'], commit_sha=source['commit_sha'])
@@ -278,6 +293,10 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             if browser_guest_bundle is not None:
                 request['phase4dc_source'] = source
                 request['phase4dc_browser_bundle'] = browser_guest_bundle
+                request['phase4dc_browser_resource_pids'] = browser_cgroup_pids
+            if login_guest_bundle is not None:
+                request['phase4dd_source'] = source
+                request['phase4dd_login_bundle'] = login_guest_bundle
                 request['phase4dc_browser_resource_pids'] = browser_cgroup_pids
             if crud_guest_bundle is not None:
                 request['phase4db_source'] = source
@@ -320,6 +339,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                                 work, port, ram_mib=limits['ram_mib'],
                                 cpus=effective_vm_vcpus(config, limits['vcpu']))
             runtime.mark_launching()
+            worker_stage = 'VM_LAUNCH'
             worker.start(seed)
             vm_started = True
             runtime.mark_launched(worker.proc)
@@ -332,10 +352,14 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             watchdog.start()
             result['execution'] = 'VM_BOOT_REQUESTED'
             ssh = SSHControl(config, work, port, key)
+            worker_stage = 'VM_SSH_READY'
             ssh.wait_ssh(worker, seconds=85)
             runtime.mark_booted()
+            worker_stage = 'SNAPSHOT_TRANSFER'
             ssh.copy(archive, 'snapshot.zip')
+            worker_stage = 'GUEST_AGENT_TRANSFER'
             ssh.copy(Path(__file__).with_name('guest_agent.py'), 'guest_agent.py')
+            worker_stage = 'GUEST_REQUEST_TRANSFER'
             ssh.copy(work / 'request.json', 'request.json')
             if test_bundle is not None:
                 # Trusted runner, not code from the student checkout.
@@ -356,6 +380,24 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 if ssh.ssh('chmod', '0644', '/home/projectiq/guest_browser_cdp.py',
                            timeout=8).returncode != 0:
                     raise WorkerFailure('Trusted CDP helper permissions unavailable')
+            if login_guest_bundle is not None:
+                for module in ('guest_browser_login.py', 'guest_browser_login_cdp.py',
+                               'guest_browser_cdp.py'):
+                    worker_stage = {
+                        'guest_browser_login.py': 'LOGIN_CONTROLLER_TRANSFER',
+                        'guest_browser_login_cdp.py': 'LOGIN_CDP_TRANSFER',
+                        'guest_browser_cdp.py': 'BASE_CDP_TRANSFER',
+                    }[module]
+                    ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / module,
+                             module)
+                    worker_stage = {
+                        'guest_browser_login.py': 'LOGIN_CONTROLLER_PERMISSIONS',
+                        'guest_browser_login_cdp.py': 'LOGIN_CDP_PERMISSIONS',
+                        'guest_browser_cdp.py': 'BASE_CDP_PERMISSIONS',
+                    }[module]
+                    if ssh.ssh('chmod', '0644', '/home/projectiq/' + module,
+                               timeout=8).returncode != 0:
+                        raise WorkerFailure('Trusted login helper permissions unavailable')
             if crud_guest_bundle is not None:
                 ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / 'guest_api.py',
                          'guest_api.py')
@@ -372,14 +414,18 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             if python_assets is not None:
                 ssh.copy_offline_asset(python_assets['pip_wheel'], 'python_pip.whl')
                 ssh.copy_offline_asset(python_assets['wheelhouse_zip'], 'python_wheelhouse.zip')
+            worker_stage = 'GUEST_EXECUTION'
             result['execution'] = 'GUEST_AGENT_STARTED'
             command = ssh.ssh('python3', '/home/projectiq/guest_agent.py',
                               timeout=710 if candidate['adapter'] == 'node_fullstack_offline_v1' else
                               415 if candidate['adapter'] in ('node_vite_offline_v1', 'node_express_offline_v1') else
                               (240 if candidate['adapter'] == 'python_web_offline_v1' else
-                               (125 if candidate['adapter'] == 'php_mysql_v1' else 75)))
+                                ((190 if login_guest_bundle is not None else 125)
+                                 if candidate['adapter'] == 'php_mysql_v1' else 75)))
             output_path = work / 'result.json'
+            worker_stage = 'GUEST_REPORT_RETRIEVAL'
             ssh.receive('result.json', output_path)
+            worker_stage = 'GUEST_REPORT_PARSING'
             guest = load_json(output_path, limit=64_000)
             # Only allow a strict, small data subset into the persisted report.
             status = guest.get('status')
@@ -455,6 +501,16 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 else:
                     result['phase4dc_status'] = 'VALIDATED'
                     result['phase4dc_browser_report'] = guest['phase4dc_browser_report']
+            if login_guest_bundle is not None:
+                from ...phase4.browser_login_contracts import (
+                    LoginReviewError, validate_login_report)
+                try:
+                    validate_login_report(login_guest_bundle, guest.get('phase4dd_login_report'))
+                except (LoginReviewError, KeyError, TypeError, ValueError):
+                    result['phase4dd_status'] = 'INVALID_GUEST_REPORT'
+                else:
+                    result['phase4dd_status'] = 'VALIDATED'
+                    result['phase4dd_login_report'] = guest['phase4dd_login_report']
             if crud_guest_bundle is not None:
                 from ...phase4.auth_report_contracts import AuthReportError, validate_auth_report
                 from ...phase4.guest_crud import CrudError, validate_crud_report
@@ -612,6 +668,7 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 'PHASE4DA_TRUSTED_DEPENDENT_DISPATCH_FAILED',
                 'PHASE4DB_TRUSTED_CRUD_DISPATCH_FAILED',
                 'PHASE4DC_TRUSTED_BROWSER_DISPATCH_FAILED',
+                'PHASE4DD_TRUSTED_LOGIN_DISPATCH_FAILED',
                 'REVIEWED_BROWSER_RESOURCE_POLICY_DENIED',
                 'UNEXPECTED_GUEST_FAILURE',
             }
@@ -626,7 +683,8 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                     and (postcondition_guest_bundle is None or result.get('phase4d3_status') == 'VALIDATED')
                     and (dependent_guest_bundle is None or result.get('phase4da_status') == 'VALIDATED')
                     and (crud_guest_bundle is None or result.get('phase4db_status') == 'VALIDATED')
-                    and (browser_guest_bundle is None or result.get('phase4dc_status') == 'VALIDATED')):
+                    and (browser_guest_bundle is None or result.get('phase4dc_status') == 'VALIDATED')
+                    and (login_guest_bundle is None or result.get('phase4dd_status') == 'VALIDATED')):
                 result.update(status='STARTUP_VERIFIED', execution='PERFORMED_IN_DISPOSABLE_VM',
                               readiness=('HTTP_200_FULLSTACK_PROBE_PASSED' if candidate['adapter'] == 'node_fullstack_offline_v1' else
                                          'HTTP_200_API_PROBE_PASSED' if candidate['adapter'] in ('python_web_offline_v1', 'node_express_offline_v1') else 'HTTP_200_HTML_PROBE_PASSED'))
@@ -634,13 +692,33 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
                 bad_test_report = ((test_bundle is not None or api_bundle is not None or db_fixture_bundle is not None
                                     or auth_guest_bundle is not None or postcondition_guest_bundle is not None
                                     or dependent_guest_bundle is not None or crud_guest_bundle is not None
-                                    or browser_guest_bundle is not None)
+                                    or browser_guest_bundle is not None or login_guest_bundle is not None)
                                    and status == 'STARTUP_VERIFIED' and command.returncode == 0)
                 result.update(status='PHASE4_REPORT_INVALID' if bad_test_report else 'STARTUP_FAILED',
                               execution='ATTEMPTED_IN_DISPOSABLE_VM', readiness='NOT_VERIFIED',
                               reason=('GUEST_PHASE4_REPORT_NOT_VERIFIED' if bad_test_report
                                       else 'GUEST_ADAPTER_FAILED'))
         except Exception as exc:
+            # Only trusted, fixed messages map to fixed diagnostic codes.
+            # Never export exception text, argv, stderr, URL or HTML.
+            if isinstance(exc, WorkerFailure):
+                result['worker_failure_stage'] = worker_stage
+                result['worker_failure_code'] = {
+                    'Unapproved destination filename': 'UNAPPROVED_VM_TRANSFER_DESTINATION',
+                    'Unable to copy trusted input into disposable VM': 'VM_TRANSFER_FAILED',
+                    'Trusted login helper permissions unavailable': 'LOGIN_HELPER_PERMISSIONS_FAILED',
+                    'Trusted CDP helper permissions unavailable': 'CDP_HELPER_PERMISSIONS_FAILED',
+                    'Invalid or oversized VM report': 'VM_REPORT_UNAVAILABLE_OR_OVERSIZED',
+                    'Worker VM SSH readiness timed out': 'VM_SSH_READINESS_TIMEOUT',
+                    'Worker VM exited before SSH became ready': 'VM_EXITED_BEFORE_SSH',
+                    'Worker VM startup cancelled': 'VM_BOOT_CANCELLED',
+                    'Windows VM lifetime guard unavailable': 'WINDOWS_VM_LIFETIME_GUARD_MISSING',
+                    'Unable to create disposable QEMU disk overlay': 'VM_OVERLAY_CREATION_FAILED',
+                    'Could not create bounded disposable workspace disk': 'VM_WORKSPACE_DISK_CREATION_FAILED',
+                    'Snapshot archive exceeds operator limit': 'SNAPSHOT_TOO_LARGE',
+                    'Unapproved VM output name': 'UNAPPROVED_VM_OUTPUT',
+                    'Invalid trusted SSH command arguments': 'INVALID_TRUSTED_SSH_ARGS',
+                }.get(str(exc), 'OTHER_WORKER_FAILURE')
             # No user source text, token, database password or remote stderr in logs.
             result.update(status='WALL_TIME_LIMIT' if expired.is_set() else 'INFRASTRUCTURE_OR_ADAPTER_FAILURE',
                           reason='VM_WALL_TIME_EXCEEDED' if expired.is_set() else type(exc).__name__)

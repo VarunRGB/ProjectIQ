@@ -149,7 +149,9 @@ _browser_valid = (
                 for x in sys.argv[2:])
 )
 _browser_valid = _browser_valid or (
-    sys.argv[1:] == ['/usr/bin/python3', '-I', '/home/projectiq/guest_browser_cdp.py']
+    sys.argv[1:] in (
+        ['/usr/bin/python3', '-I', '/home/projectiq/guest_browser_cdp.py'],
+        ['/usr/bin/python3', '-I', '/home/projectiq/guest_browser_login_cdp.py'])
 )
 if (_browser_requested and not _browser_valid) or (_browser_extended and
         (not _browser_requested or not _browser_valid)):
@@ -725,8 +727,9 @@ def _project_command(command: list[str], env: dict | None = None, *, audit_preex
     # CDP pipe helper. No arbitrary Python programs or student URLs.
     if browser_profile and not _APP_CGROUP_ACTIVE:
         raise GuestFailure('BROWSER_PROFILE_REQUIRES_REVIEWED_CHROME_COMMAND')
-    cdp_helper = (isinstance(command, list) and command == [
-        '/usr/bin/python3', '-I', '/home/projectiq/guest_browser_cdp.py'])
+    cdp_helper = (isinstance(command, list) and command in (
+        ['/usr/bin/python3', '-I', '/home/projectiq/guest_browser_cdp.py'],
+        ['/usr/bin/python3', '-I', '/home/projectiq/guest_browser_login_cdp.py']))
     direct_chrome = (isinstance(command, list) and bool(command)
             and command[0] == '/usr/bin/google-chrome-stable'
             and '--headless=new' in command and '--dump-dom' in command
@@ -2043,6 +2046,13 @@ def _run_phase4db_on_live_app(req: dict, port: int, env: dict):
 def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: int = 8765) -> dict:
     req = json.loads(request_path.read_text('utf-8'))
     adapter = req.get('adapter')
+    if 'phase4dd_login_bundle' in req and (
+            adapter != 'php_mysql_v1' or any(x in req for x in (
+                'phase4dc_browser_bundle', 'phase4da_workflow_bundle',
+                'phase4d1_fixture_bundle', 'phase4d3_postcondition_bundle',
+                'phase4d2_auth_bundle', 'phase4c_api_bundle',
+                'phase4_test_bundle', 'phase4db_crud_bundle'))):
+        raise GuestFailure('PHASE4DD_TRUSTED_LOGIN_DISPATCH_FAILED')
     if 'phase4dc_browser_bundle' in req and (
             adapter not in ('node_fullstack_offline_v1', 'php_mysql_v1')
             or any(x in req for x in (
@@ -2155,6 +2165,9 @@ def run(request_path: Path, *, base_dir: Path = Path('/home/projectiq'), port: i
         phase4dc = _run_phase4dc_on_live_app(req, base_dir)
         if phase4dc is not None:
             result['phase4dc_browser_report'] = phase4dc
+        phase4dd = _run_phase4dd_login_on_live_app(req, base_dir)
+        if phase4dd is not None:
+            result['phase4dd_login_report'] = phase4dd
     finally:
         server.terminate()
         try:
@@ -2970,6 +2983,19 @@ def _run_phase4dc_on_live_app(req: dict, base_dir: Path):
         raise GuestFailure('PHASE4DC_TRUSTED_BROWSER_DISPATCH_FAILED') from None
 
 
+def _run_phase4dd_login_on_live_app(req: dict, base_dir: Path):
+    """Only the fixed, reviewed MiniCollabApp browser workflow in live PHP VM."""
+    if 'phase4dd_login_bundle' not in req:
+        return None
+    try:
+        from guest_browser_login import run_login
+        return run_login(req['phase4dd_login_bundle'],
+                         expected_source=req['phase4dd_source'],
+                         workspace=base_dir, trusted_process=_trusted_process)
+    except (ImportError, ValueError, TypeError, KeyError):
+        raise GuestFailure('PHASE4DD_TRUSTED_LOGIN_DISPATCH_FAILED') from None
+
+
 def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765) -> dict:
     if req.get('adapter') != 'node_fullstack_offline_v1' or port != 8765:
         raise GuestFailure('NODE_FULLSTACK_INVALID_REQUEST')
@@ -3041,6 +3067,31 @@ def _reviewed_browser_pids_for_request(meta: dict) -> int:
     pids = meta.get('phase4dc_browser_resource_pids', 128)
     if type(pids) is not int or pids not in (128, 384):
         raise GuestFailure('REVIEWED_BROWSER_RESOURCE_POLICY_DENIED')
+    # Login workflow is never permitted under the ordinary 128-task profile.
+    if meta.get('phase4dd_login_bundle') is not None:
+        if pids != 384 or meta.get('phase4dc_browser_bundle') is not None:
+            raise GuestFailure('REVIEWED_BROWSER_RESOURCE_POLICY_DENIED')
+        bundle = meta['phase4dd_login_bundle']
+        if (meta.get('adapter') != 'php_mysql_v1'
+                or type(bundle) is not dict
+                or bundle.get('source') != meta.get('phase4dd_source')
+                or bundle.get('source') != {
+                    'kind': 'github',
+                    'repository': 'VarunRGB/Mini-Task-Collaboration-App',
+                    'commit_sha': 'c4f7965d16807fa05c3d7ffeee54f86fee4d0a37'}
+                or bundle.get('flow') != 'minicollab_user_login_session_v1'
+                or bundle.get('schema_version') != '0.1'
+                or bundle.get('adapter') != 'php_mysql_v1'
+                or bundle.get('start_path') != '/public/login.html'
+                or bundle.get('target_path') != '/public/user_dashboard.html'
+                or bundle.get('checks') != [
+                    'login_form_ready', 'unauthenticated_tasks_denied',
+                    'login_redirected', 'authenticated_tasks_readable']
+                or bundle.get('browser_binary') != '/usr/bin/google-chrome-stable'
+                or type(bundle.get('catalog_sha256')) is not str
+                or not re.fullmatch(r'[a-f0-9]{64}', bundle['catalog_sha256'])):
+            raise GuestFailure('REVIEWED_BROWSER_RESOURCE_POLICY_DENIED')
+        return 384
     if pids == 128:
         return 128
     adapter = meta.get('adapter')
