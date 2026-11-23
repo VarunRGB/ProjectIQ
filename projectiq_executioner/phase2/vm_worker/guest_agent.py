@@ -145,6 +145,9 @@ _browser_valid = (
     and not any(x == '--no-sandbox' or x.startswith('--user-data-dir=/tmp/')
                 for x in sys.argv[2:])
 )
+_browser_valid = _browser_valid or (
+    sys.argv[1:] == ['/usr/bin/python3', '-I', '/home/projectiq/guest_browser_cdp.py']
+)
 if _browser_requested and not _browser_valid:
     sys.exit(114)
 for limit, maximum in ((resource.RLIMIT_NPROC, 192 if _browser_requested else 96),
@@ -706,17 +709,23 @@ def _build_handoff_report(adapter: str) -> dict:
 def _project_command(command: list[str], env: dict | None = None, *, audit_preexec: bool = False,
                      browser_profile: bool = False) -> list[str]:
     """Only project-owned subprocesses use sudo, exclusively AS APP_USER."""
-    if browser_profile and (not _APP_CGROUP_ACTIVE
-            or not isinstance(command, list)
-            or not command or command[0] != '/usr/bin/google-chrome-stable'
-            or '--headless=new' not in command or '--dump-dom' not in command
-            or command[-1] not in ('http://127.0.0.1:8765/index.html', 'data:text/html,%3C!doctype%20html%3E%3Chtml%3E%3Cbody%3E%3Ch1%3EPIQ4DC_SMOKE_OK%3C/h1%3E%3C/body%3E%3C/html%3E')
-            or '--no-sandbox' in command):
+    # The only additional browser-profile command is a trusted, fixed-path
+    # CDP pipe helper. No arbitrary Python programs or student URLs.
+    if browser_profile and not _APP_CGROUP_ACTIVE:
+        raise GuestFailure('BROWSER_PROFILE_REQUIRES_REVIEWED_CHROME_COMMAND')
+    cdp_helper = (isinstance(command, list) and command == [
+        '/usr/bin/python3', '-I', '/home/projectiq/guest_browser_cdp.py'])
+    direct_chrome = (isinstance(command, list) and bool(command)
+            and command[0] == '/usr/bin/google-chrome-stable'
+            and '--headless=new' in command and '--dump-dom' in command
+            and command[-1] in ('http://127.0.0.1:8765/index.html', 'data:text/html,%3C!doctype%20html%3E%3Chtml%3E%3Cbody%3E%3Ch1%3EPIQ4DC_SMOKE_OK%3C/h1%3E%3C/body%3E%3C/html%3E')
+            and '--no-sandbox' not in command)
+    if browser_profile and not (cdp_helper or direct_chrome):
         raise GuestFailure('BROWSER_PROFILE_REQUIRES_REVIEWED_CHROME_COMMAND')
     allowed = {'PATH', 'PORT', 'HOST', 'NODE_ENV', 'CI', 'PYTHONPATH',
                'PYTHONUNBUFFERED', 'PYTHONNOUSERSITE', 'PYTHONDONTWRITEBYTECODE',
                'PIP_CONFIG_FILE', 'PIP_DISABLE_PIP_VERSION_CHECK', 'LC_ALL',
-               'PROJECTIQ_PDO_CONNECTOR'}
+               'PROJECTIQ_PDO_CONNECTOR', 'PROJECTIQ_4DC_HTTP_DIAG'}
     env_vars = {'HOME': os.environ.get('PROJECTIQ_QUOTA_HOME', '/home/' + APP_USER),
                 'PATH': '/usr/local/bin:/usr/bin:/bin'}
     if browser_profile:
@@ -2339,16 +2348,143 @@ def _d4_install_and_build(checkout: Path, base_dir: Path, req: dict) -> tuple[Pa
 
 def _d4_frontend_serve(dist: Path, frontend_port: int, backend_port: int) -> None:
     """Trusted loopback static server; only /api/* GETs are forwarded locally."""
-    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+    from http.server import SimpleHTTPRequestHandler, HTTPServer
     from http.client import HTTPConnection
 
     if not dist.is_dir() or not (dist / 'index.html').is_file():
         raise GuestFailure('NODE_FULLSTACK_BUILD_OUTPUT_INVALID')
+    # Trusted, diagnostic-only instrumentation for the frontend serving process.
+    # No network/security policy changes, no URLs/headers/addresses exported.
+    import threading
+    import queue
+    import resource
+    a5_diagnostic = (os.environ.get('PROJECTIQ_4DC_HTTP_DIAG') == '1')
+    a5_lock = threading.Lock()
+    a5_event_budget = 320
+    a5_allowed = frozenset((
+        'ACCEPT','DISPATCH_ATTEMPT','DISPATCH_OK','DISPATCH_FAIL_RUNTIME',
+        'DISPATCH_FAIL_OS','THREAD_ENTER','THREAD_EXIT','HANDLER_CONSTRUCT',
+        'PARSE_ENTER','PARSE_OK','PARSE_REJECT','GET_ENTER','RESPONSE_200',
+        'RESPONSE_OTHER','HEADERS_END','HANDLER_ERROR'))
+
+    def a5_write(kind, value):
+        nonlocal a5_event_budget
+        if not a5_diagnostic:
+            return
+        if kind == 'EVT' and value not in a5_allowed:
+            return
+        if kind not in ('EVT','UIDTASK','LIMIT','FDCOUNT','THREADCOUNT'):
+            return
+        with a5_lock:
+            if a5_event_budget <= 0:
+                return
+            a5_event_budget -= 1
+            try:
+                os.write(2, ('PIQ4DC_A5 ' + kind + ' ' + value + '\n').encode('ascii'))
+            except (OSError, UnicodeError, ValueError):
+                pass
+
+    def a5_uid_tasks():
+        if not a5_diagnostic:
+            return None
+        uid = os.getuid()
+        count = 0
+        scanned = 0
+        try:
+            with os.scandir('/proc') as items:
+                for item in items:
+                    if not item.name.isascii() or not item.name.isdecimal():
+                        continue
+                    scanned += 1
+                    if scanned > 8192:
+                        return None
+                    try:
+                        if os.stat(item.path).st_uid != uid:
+                            continue
+                        with os.scandir(item.path + '/task') as threads:
+                            for task in threads:
+                                if task.name.isascii() and task.name.isdecimal():
+                                    count += 1
+                                    if count > 65535:
+                                        return None
+                    except FileNotFoundError:
+                        continue  # transient exit, not an observed task count
+                    except (PermissionError, OSError):
+                        return None
+            return count
+        except (OSError, ValueError):
+            return None
+
+    def a5_sample():
+        count = a5_uid_tasks()
+        if count is not None:
+            a5_write('UIDTASK', str(count))
+        try:
+            fd_count = len(os.listdir('/proc/self/fd'))
+            if 0 <= fd_count <= 65535:
+                a5_write('FDCOUNT', str(fd_count))
+        except OSError:
+            pass
+        try:
+            active = threading.active_count()
+            if 0 <= active <= 65535:
+                a5_write('THREADCOUNT', str(active))
+        except RuntimeError:
+            pass
+
+    if a5_diagnostic:
+        nsoft, nhard = resource.getrlimit(resource.RLIMIT_NPROC)
+        fsoft, fhard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        def a5_limit(v):
+            return str(v) if type(v) is int and 0 <= v <= 65535 else '-1'
+        a5_write('LIMIT', ' '.join(a5_limit(x) for x in (nsoft, nhard, fsoft, fhard)))
+        a5_sample()
+
     class Handler(SimpleHTTPRequestHandler):
+        def _piq_diag(self, event):
+            if os.environ.get('PROJECTIQ_4DC_HTTP_DIAG') != '1':
+                return
+            kind=('INDEX' if self.path == '/index.html' else
+                  'API' if self.path == '/api/sqlite-check' else
+                  'ASSET' if self.path.startswith('/assets/') else 'OTHER')
+            if event in ('SEEN','HTTP_200','HTTP_3XX','HTTP_4XX','HTTP_5XX',
+                         'HTTP_OTHER','COMPLETE','SOCKET_FAILURE'):
+                print('PIQ4DC_HTTP '+kind+' '+event, file=sys.stderr, flush=True)
+
+        def send_response(self, code, message=None):
+            a5_write('EVT','RESPONSE_200' if code == 200 else 'RESPONSE_OTHER')
+            self._piq_diag('HTTP_200' if code == 200 else
+                           'HTTP_3XX' if 300 <= code <= 399 else
+                           'HTTP_4XX' if 400 <= code <= 499 else
+                           'HTTP_5XX' if 500 <= code <= 599 else 'HTTP_OTHER')
+            return super().send_response(code,message)
+
+        def do_GET(self):
+            a5_write('EVT','GET_ENTER')
+            self._piq_diag('SEEN')
+            try:
+                self._do_GET_impl()
+            except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+                self._piq_diag('SOCKET_FAILURE')
+                raise
+            else:
+                self._piq_diag('COMPLETE')
+
+        def parse_request(self):
+            a5_write('EVT','PARSE_ENTER')
+            good = super().parse_request()
+            a5_write('EVT','PARSE_OK' if good else 'PARSE_REJECT')
+            return good
+
+        def end_headers(self):
+            result = super().end_headers()
+            a5_write('EVT','HEADERS_END')
+            return result
+
         def __init__(self, *args, **kwargs):
             super().__init__(*args, directory=str(dist), **kwargs)
 
-        def do_GET(self):
+        def _do_GET_impl(self):
             if not self.path.startswith('/api/'):
                 return super().do_GET()
             # Fixed destination, no redirects, no arbitrary host/URL parsing.
@@ -2377,8 +2513,127 @@ def _d4_frontend_serve(dist: Path, frontend_port: int, backend_port: int) -> Non
         def log_message(self, *args):
             pass
 
-    server = ThreadingHTTPServer(('127.0.0.1', frontend_port), Handler)
-    server.serve_forever(poll_interval=0.5)
+    class ObservedServer(HTTPServer):
+        """Bounded, prestarted request workers; no thread creation at accept time.
+
+        The frontend retains its 96-task per-UID NPROC limit. Workers start while
+        the user task count is low, before browser launch; each request reuses one.
+        This server binds only to the original loopback address. Never log
+        request content or client addresses.
+        """
+        request_queue_size = 16
+        _worker_count = 4
+        _pending_limit = 16
+        _socket_timeout_seconds = 5.0
+
+        def __init__(self, *args, **kwargs):
+            self._pending = queue.Queue(maxsize=self._pending_limit)
+            self._pool_stop = threading.Event()
+            self._workers = []
+            super().__init__(*args, **kwargs)
+            try:
+                for index in range(self._worker_count):
+                    worker = threading.Thread(
+                        target=self._worker_loop,
+                        name='piq-frontend-worker-' + str(index),
+                        daemon=True)
+                    worker.start()
+                    self._workers.append(worker)
+            except (RuntimeError, OSError):
+                # Fail closed during startup, not after accepting live traffic.
+                self.server_close()
+                raise GuestFailure('NODE_FULLSTACK_FRONTEND_WORKER_POOL_UNAVAILABLE') from None
+
+        def _worker_loop(self):
+            while not self._pool_stop.is_set():
+                try:
+                    request, address = self._pending.get(timeout=0.2)
+                except queue.Empty:
+                    continue
+                try:
+                    if self._pool_stop.is_set():
+                        self.shutdown_request(request)
+                    else:
+                        self._pool_handle(request, address)
+                finally:
+                    self._pending.task_done()
+
+        def _pool_handle(self, request, client_address):
+            a5_write('EVT', 'THREAD_ENTER')
+            try:
+                try:
+                    self.finish_request(request, client_address)
+                except Exception:
+                    self.handle_error(request, client_address)
+                finally:
+                    self.shutdown_request(request)
+            finally:
+                a5_write('EVT', 'THREAD_EXIT')
+
+        def process_request(self, request, client_address):
+            a5_write('EVT', 'DISPATCH_ATTEMPT')
+            try:
+                self._pending.put_nowait((request, client_address))
+            except queue.Full:
+                # Shed excess work without blocking the accept thread or
+                # creating an unbounded thread backlog. Never echo input.
+                self.shutdown_request(request)
+                if a5_diagnostic:
+                    try:
+                        os.write(2, b'PIQ4DC_POOL QUEUE_FULL\n')
+                    except OSError:
+                        pass
+                return
+            a5_write('EVT', 'DISPATCH_OK')
+
+        def finish_request(self, request, client_address):
+            a5_write('EVT', 'HANDLER_CONSTRUCT')
+            return super().finish_request(request, client_address)
+
+        def handle_error(self, request, client_address):
+            a5_write('EVT', 'HANDLER_ERROR')
+            # Avoid stdlib traceback printing of any client-controlled state.
+            # The caller always closes the connection.
+
+        def get_request(self):
+            sock, address = super().get_request()
+            try:
+                sock.settimeout(self._socket_timeout_seconds)
+            except OSError:
+                sock.close()
+                raise
+            # TCP accept is earlier than HTTP parsing; no address is emitted.
+            if a5_diagnostic:
+                print('PIQ4DC_HTTP TCP ACCEPT', file=sys.stderr, flush=True)
+                a5_write('EVT', 'ACCEPT')
+                a5_sample()
+            return sock, address
+
+        def server_close(self):
+            self._pool_stop.set()
+            # Prevent queued connections from lingering during graceful stop.
+            while True:
+                try:
+                    request, _address = self._pending.get_nowait()
+                except queue.Empty:
+                    break
+                try:
+                    self.shutdown_request(request)
+                finally:
+                    self._pending.task_done()
+            super().server_close()
+            # Workers are daemon threads to honor disposable VM hard cleanup.
+            # In a graceful close, only a bounded join is permitted.
+            for worker in self._workers:
+                worker.join(timeout=0.5)
+
+    server = ObservedServer(('127.0.0.1', frontend_port), Handler)
+    if os.environ.get('PROJECTIQ_4DC_HTTP_DIAG') == '1':
+        print('PIQ4DC_HTTP READY', file=sys.stderr, flush=True)
+    try:
+        server.serve_forever(poll_interval=0.5)
+    finally:
+        server.server_close()
 
 
 def _d4_json(path: str, port: int) -> dict:
@@ -2422,16 +2677,275 @@ def _d4_stop_process(proc: subprocess.Popen) -> None:
         proc.wait(timeout=5)
 
 
+
+# Observational-only frontend request counters (never security attestation).
+_P4DC_HTTP = re.compile(rb'^PIQ4DC_HTTP (TCP|INDEX|ASSET|API|OTHER) (SEEN|HTTP_200|HTTP_3XX|HTTP_4XX|HTTP_5XX|HTTP_OTHER|COMPLETE|SOCKET_FAILURE|ACCEPT)$')
+
+def _phase4dc_http_snapshot(base_dir: Path) -> dict:
+    counters = dict.fromkeys(('index_seen','index_http_200','index_http_3xx',
+          'index_http_4xx','index_http_5xx','index_http_other','index_complete',
+          'index_socket_failure','asset_seen','asset_http_200','api_seen','api_http_200',
+          'other_seen','tcp_accepted'),0)
+    found=False
+    try:
+        log=base_dir / 'd4_frontend.log'
+        with log.open('rb') as f:
+            f.seek(0,2)
+            size=f.tell()
+            if size > 30000:  # Never silently treat truncated event logs as complete.
+                return {'instrumentation_active':False,**counters}
+            f.seek(0)
+            raw=f.read(30000)
+        found=b'PIQ4DC_HTTP READY\n' in raw
+        for row in raw.splitlines():
+            match=_P4DC_HTTP.fullmatch(row)
+            if match is None:
+                continue
+            kind, event=match.groups()
+            mapping={(b'TCP',b'ACCEPT'):'tcp_accepted',
+                     (b'INDEX',b'SEEN'):'index_seen',
+                     (b'INDEX',b'HTTP_200'):'index_http_200',
+                     (b'INDEX',b'HTTP_3XX'):'index_http_3xx',
+                     (b'INDEX',b'HTTP_4XX'):'index_http_4xx',
+                     (b'INDEX',b'HTTP_5XX'):'index_http_5xx',
+                     (b'INDEX',b'HTTP_OTHER'):'index_http_other',
+                     (b'ASSET',b'HTTP_200'):'asset_http_200',
+                     (b'API',b'HTTP_200'):'api_http_200',
+                     (b'INDEX',b'COMPLETE'):'index_complete',
+                     (b'INDEX',b'SOCKET_FAILURE'):'index_socket_failure',
+                     (b'ASSET',b'SEEN'):'asset_seen',
+                     (b'API',b'SEEN'):'api_seen',
+                     (b'OTHER',b'SEEN'):'other_seen'}
+            key=mapping.get((kind,event))
+            if key is not None:
+                counters[key]=min(9999,counters[key]+1)
+    except (OSError,ValueError):
+        found=False
+    return {'instrumentation_active':found,**counters}
+
+
+def _phase4dc_http_difference(before: dict, after: dict) -> dict:
+    keys=('index_seen','index_http_200','index_http_3xx','index_http_4xx',
+          'index_http_5xx','index_http_other','index_complete',
+          'index_socket_failure','asset_seen','asset_http_200','api_seen',
+          'api_http_200','other_seen','tcp_accepted')
+    # Preserve old observation records without the new TCP counter.
+    if 'tcp_accepted' not in before or 'tcp_accepted' not in after:
+        keys = tuple(k for k in keys if k != 'tcp_accepted')
+    valid=bool(before['instrumentation_active'] and after['instrumentation_active'])
+    return {'classification':'OBSERVATIONAL_NOT_SECURITY_ATTESTATION',
+            'instrumentation_active':valid,
+            **{k:min(9999,max(0,after[k]-before[k])) if valid else 0 for k in keys}}
+
+
+# ProjectIQ Phase 4D-C Attempt 5: parent-side interpretation of *trusted* fixed
+# frontend instrumentation markers. No raw log lines cross the VM boundary.
+_A5_EVENTS = ('ACCEPT','DISPATCH_ATTEMPT','DISPATCH_OK','DISPATCH_FAIL_RUNTIME',
+    'DISPATCH_FAIL_OS','THREAD_ENTER','THREAD_EXIT','HANDLER_CONSTRUCT',
+    'PARSE_ENTER','PARSE_OK','PARSE_REJECT','GET_ENTER','RESPONSE_200',
+    'RESPONSE_OTHER','HEADERS_END','HANDLER_ERROR')
+_A5_CLASS = 'OBSERVATIONAL_NOT_SECURITY_ATTESTATION'
+_A5_LOG_STATES = frozenset(('VALID','LOG_MISSING','LOG_UNAVAILABLE',
+    'LOG_TOO_LARGE','NOT_INSTRUMENTED','INVALID_LOG','SNAPSHOT_INVALID'))
+_A5_HTTP_OUTCOMES = frozenset((
+    'HTTP_200','HTTP_OTHER','REMOTE_DISCONNECTED','CONNECTION_REFUSED',
+    'CONNECTION_RESET','CONNECTION_ABORTED','TIMEOUT','BAD_STATUS',
+    'BROKEN_PIPE','PERMISSION_DENIED','FD_LIMIT','OTHER_OS_ERROR','OTHER_FAILURE'))
+
+
+def _a5_server_snapshot(base_dir: Path):
+    result = {'state':'LOG_UNAVAILABLE','counts':None,'limits':None,'samples':[],
+              'fds':[],'threads':[]}
+    filename = base_dir / 'd4_frontend.log'
+    try:
+        if filename.is_symlink():
+            return result
+        with filename.open('rb') as stream:
+            raw = stream.read(100001)
+    except FileNotFoundError:
+        result['state'] = 'LOG_MISSING'
+        return result
+    except OSError:
+        return result
+    if len(raw) > 100000:
+        result['state'] = 'LOG_TOO_LARGE'
+        return result
+    counts = {key:0 for key in _A5_EVENTS}
+    limits = None
+    samples = []
+    fd_samples = []
+    thread_samples = []
+    found_ready = False
+    try:
+        for line in raw.split(b'\n'):
+            line = line.rstrip(b'\r')
+            if line == b'PIQ4DC_HTTP READY':
+                found_ready = True
+            if not line.startswith(b'PIQ4DC_A5 '):
+                continue
+            if len(line)>160:
+                raise ValueError('oversize A5 log line')
+            if line.startswith(b'PIQ4DC_A5 EVT '):
+                key = line[14:].decode('ascii','strict')
+                if key not in counts:
+                    raise ValueError('unknown event')
+                counts[key] = min(counts[key]+1, 9999)
+            elif line.startswith(b'PIQ4DC_A5 UIDTASK '):
+                num = line[18:].decode('ascii','strict')
+                if not num.isdecimal() or not num.isascii() or int(num)>65535:
+                    raise ValueError('invalid uid count')
+                if len(samples)<128:
+                    samples.append(int(num))
+            elif line.startswith((b'PIQ4DC_A5 FDCOUNT ', b'PIQ4DC_A5 THREADCOUNT ')):
+                is_fd = line.startswith(b'PIQ4DC_A5 FDCOUNT ')
+                prefix = b'PIQ4DC_A5 FDCOUNT ' if is_fd else b'PIQ4DC_A5 THREADCOUNT '
+                num = line[len(prefix):].decode('ascii','strict')
+                if not num.isascii() or not num.isdecimal() or int(num)>65535:
+                    raise ValueError('invalid process count')
+                bucket = fd_samples if is_fd else thread_samples
+                if len(bucket)<128:
+                    bucket.append(int(num))
+            elif line.startswith(b'PIQ4DC_A5 LIMIT '):
+                if limits is not None:
+                    raise ValueError('duplicate limit record')
+                words = line[16:].decode('ascii','strict').split(' ')
+                if len(words)!=4 or any(not (w=='-1' or (w.isascii() and w.isdecimal()
+                        and int(w)<=65535)) for w in words):
+                    raise ValueError('invalid limits')
+                fields = ('nproc_soft','nproc_hard','nofile_soft','nofile_hard')
+                limits = {k:(None if v=='-1' else int(v)) for k,v in zip(fields,words)}
+            else:
+                raise ValueError('unknown A5 marker')
+    except (UnicodeError,ValueError,TypeError):
+        result['state'] = 'INVALID_LOG'
+        return result
+    if not found_ready or limits is None:
+        result['state']='NOT_INSTRUMENTED'
+        return result
+    result.update({'state':'VALID','counts':counts,'limits':limits,'samples':samples,'fds':fd_samples,'threads':thread_samples})
+    return result
+
+
+def _a5_http_get_after():
+    # Executed only after CDP/Chrome subprocess has returned; do not export
+    # HTML, response bodies, headers, URLs, or exception messages.
+    import http.client
+    conn = None
+    try:
+        conn = http.client.HTTPConnection('127.0.0.1', 8765, timeout=1.5)
+        conn.request('GET','/index.html?__piq_a5_after=1', headers={'Connection':'close'})
+        response = conn.getresponse()
+        return 'HTTP_200' if response.status == 200 else 'HTTP_OTHER'
+    except http.client.RemoteDisconnected:
+        return 'REMOTE_DISCONNECTED'
+    except ConnectionRefusedError:
+        return 'CONNECTION_REFUSED'
+    except ConnectionResetError:
+        return 'CONNECTION_RESET'
+    except ConnectionAbortedError:
+        return 'CONNECTION_ABORTED'
+    except (TimeoutError, socket.timeout):
+        return 'TIMEOUT'
+    except http.client.BadStatusLine:
+        return 'BAD_STATUS'
+    except BrokenPipeError:
+        return 'BROKEN_PIPE'
+    except OSError as exc:
+        if exc.errno in (13,1):
+            return 'PERMISSION_DENIED'
+        if exc.errno in (23,24):
+            return 'FD_LIMIT'
+        return 'OTHER_OS_ERROR'
+    except Exception:
+        return 'OTHER_FAILURE'
+    finally:
+        if conn is not None:
+            try:
+                conn.close()
+            except OSError:
+                pass
+
+
+def _a5_sample_summary(values):
+    if not values:
+        return {'min':None,'max':None,'count':0}
+    return {'min':min(values),'max':max(values),'count':min(128,len(values))}
+
+
+def _a5_report(pre,during,post,post_http):
+    limits = {'nproc_soft':None,'nproc_hard':None,
+              'nofile_soft':None,'nofile_hard':None}
+    if (not all(type(x) is dict and x.get('state') == 'VALID'
+                for x in (pre,during,post))):
+        state = next((x.get('state','SNAPSHOT_INVALID') for x in (pre,during,post)
+                      if type(x) is dict and x.get('state') != 'VALID'),
+                     'SNAPSHOT_INVALID')
+        if state not in _A5_LOG_STATES:
+            state='SNAPSHOT_INVALID'
+        return {'classification':_A5_CLASS,'version':1,'trace_state':state,
+                'limits':limits,'pre_counts':None,'during_delta':None,'post_delta':None,
+                'uid_before':_a5_sample_summary([]),
+                'uid_during':_a5_sample_summary([]),
+                'uid_after':_a5_sample_summary([]),
+                'fds_before':_a5_sample_summary([]),
+                'fds_during':_a5_sample_summary([]),
+                'fds_after':_a5_sample_summary([]),
+                'threads_before':_a5_sample_summary([]),
+                'threads_during':_a5_sample_summary([]),
+                'threads_after':_a5_sample_summary([]),
+                'post_http':post_http}
+    b,d,a = (x['counts'] for x in (pre,during,post))
+    bp,dp,ap = (x['samples'] for x in (pre,during,post))
+    fb,fd,fa = (x['fds'] for x in (pre,during,post))
+    tb,td,ta = (x['threads'] for x in (pre,during,post))
+    if (any(d[k]<b[k] or a[k]<d[k] for k in _A5_EVENTS)
+        or dp[:len(bp)]!=bp or ap[:len(dp)]!=dp
+        or fd[:len(fb)]!=fb or fa[:len(fd)]!=fd
+        or td[:len(tb)]!=tb or ta[:len(td)]!=td
+        or pre['limits']!=during['limits'] or pre['limits']!=post['limits']):
+        return _a5_report({'state':'SNAPSHOT_INVALID'},
+                          {'state':'SNAPSHOT_INVALID'},
+                          {'state':'SNAPSHOT_INVALID'},post_http)
+    return {
+        'classification':_A5_CLASS,'version':1,'trace_state':'VALID',
+        'limits':pre['limits'], 'pre_counts':dict(b),
+        'during_delta':{k:min(9999,d[k]-b[k]) for k in _A5_EVENTS},
+        'post_delta':{k:min(9999,a[k]-d[k]) for k in _A5_EVENTS},
+        'uid_before':_a5_sample_summary(bp),
+        'uid_during':_a5_sample_summary(dp[len(bp):]),
+        'uid_after':_a5_sample_summary(ap[len(dp):]),
+        'fds_before':_a5_sample_summary(fb),
+        'fds_during':_a5_sample_summary(fd[len(fb):]),
+        'fds_after':_a5_sample_summary(fa[len(fd):]),
+        'threads_before':_a5_sample_summary(tb),
+        'threads_during':_a5_sample_summary(td[len(tb):]),
+        'threads_after':_a5_sample_summary(ta[len(td):]),
+        'post_http':post_http,
+    }
+
+
 def _run_phase4dc_on_live_app(req: dict, base_dir: Path):
     """Trusted headless browser within current full-stack VM; never on Windows."""
     if 'phase4dc_browser_bundle' not in req:
         return None
     try:
         from guest_browser_ui import BrowserUiError, run_browser_ui
-        return run_browser_ui(req['phase4dc_browser_bundle'],
+        before = _phase4dc_http_snapshot(base_dir)
+        a5_before = _a5_server_snapshot(base_dir)
+        browser_report = run_browser_ui(req['phase4dc_browser_bundle'],
                               expected_source=req['phase4dc_source'],
                               expected_adapter=req['adapter'],
-                              workspace=base_dir, trusted_process=_trusted_process)
+                              workspace=base_dir, trusted_process=_trusted_process,
+                              cdp_mode=True)
+        if browser_report.get('status') == 'INCONCLUSIVE':
+            browser_report['server_trace'] = _phase4dc_http_difference(
+                before, _phase4dc_http_snapshot(base_dir))
+            a5_during = _a5_server_snapshot(base_dir)
+            a5_post_result = _a5_http_get_after()
+            a5_after = _a5_server_snapshot(base_dir)
+            browser_report['attempt5_frontend'] = _a5_report(
+                a5_before, a5_during, a5_after, a5_post_result)
+        return browser_report
     except (BrowserUiError, ImportError, ValueError, KeyError, TypeError):
         raise GuestFailure('PHASE4DC_TRUSTED_BROWSER_DISPATCH_FAILED') from None
 
@@ -2454,7 +2968,8 @@ def run_fullstack(checkout: Path, base_dir: Path, req: dict, *, port: int = 8765
             process = _project_popen(
                 [sys.executable, str(Path(__file__).resolve()),
                  '--serve-d4-frontend', str(dist), str(port), '8766'],
-                cwd=base_dir, env={}, log=log)
+                cwd=base_dir, env=({'PROJECTIQ_4DC_HTTP_DIAG':'1'} if
+                                   'phase4dc_browser_bundle' in req else {}), log=log)
         processes.append(process)
         status, kind = _probe('/index.html', port=port, deadline=30)
         if status != 200 or kind != 'HTML_RESPONSE_OK':

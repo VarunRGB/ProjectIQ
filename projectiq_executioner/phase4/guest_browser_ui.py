@@ -599,6 +599,741 @@ def _empty(bundle, *, status='INCONCLUSIVE', issue='BROWSER_RUNTIME_UNAVAILABLE'
             'checks': [{'tag': x['tag'], 'matched': None} for x in bundle['checks']]}
 
 
+
+# Only constant-domain Chrome/network evidence. No raw stderr, URLs, HTML or IDs.
+_FORENSIC_COUNTERS = ('document_request','document_response','document_response_extra',
+                      'document_finished','document_failed','asset_request','api_request',
+                      'other_request','target_crash','runtime_exception','target_detached','redirect_count')
+_FORENSIC_EVENTS = ('pids_max','memory_high','memory_max','memory_oom',
+                    'memory_oom_kill','memory_oom_group_kill')
+_FORENSIC_PROCESS = ('browser_children','network_services','renderers',
+                     'zygotes','gpu_processes','crashpad_processes')
+_FORENSIC_TCP = ('listen','syn_sent','established','close_wait','time_wait','other')
+
+
+def _validate_forensic_trace(value):
+    def count(v,limit=9999):
+        return type(v) is int and 0 <= v <= limit
+    def optional_count(v,limit=2**40):
+        return v is None or count(v,limit)
+    def optional_bool(v):
+        return v is None or type(v) is bool
+    if (not isinstance(value,dict) or set(value) != {
+           'classification','protocol','process','kernel','tcp','app_uid_connect'}
+          or value['classification'] != 'OBSERVATIONAL_NOT_SECURITY_ATTESTATION'
+          or value['app_uid_connect'] not in {'CONNECTED','REFUSED','TIMEOUT','OTHER_ERROR',
+              'PERMISSION_DENIED','NETWORK_UNREACHABLE','HOST_UNREACHABLE',
+              'CONNECTION_RESET','CONNECTION_ABORTED','ADDRESS_UNAVAILABLE',
+              'PROTOCOL_UNSUPPORTED','NO_SOCKET_BUFFERS','PROCESS_FD_LIMIT',
+              'SYSTEM_FD_LIMIT','TEMPORARILY_UNAVAILABLE'}):
+        _deny('INVALID_4DC_FORENSICS')
+    p=value['protocol']
+    if (not isinstance(p,dict) or set(p) != {'stage','counters','frame',
+            'document_http_status','failure_canceled','blocked_reason',
+            'request_started','response_seen'}
+          or p['stage'] not in {'NOT_STARTED','INITIAL','CREATING_TARGET',
+               'ATTACHING_SESSION','ENABLING_DOMAINS','NAVIGATING','READING_DOM'}
+          or p['frame'] not in {'NONE','TARGET','ERROR_PAGE','OTHER'}
+          or not optional_bool(p['failure_canceled'])
+          or type(p['request_started']) is not bool or type(p['response_seen']) is not bool
+          or (p['document_http_status'] is not None and not count(p['document_http_status'],599))
+          or (p['document_http_status'] is not None and p['document_http_status'] < 100)
+          or p['blocked_reason'] not in {'NOT_REPORTED','csp','mixed-content','origin',
+              'inspector','subresource-filter','content-type','other',
+              'coep-frame-resource-needs-coep-header',
+              'corp-not-same-origin','corp-not-same-origin-after-defaulted-to-same-origin-by-coep',
+              'corp-not-same-site'}
+          or not isinstance(p['counters'],dict)
+          or set(p['counters']) != set(_FORENSIC_COUNTERS)
+          or not all(count(v,99) for v in p['counters'].values())):
+        _deny('INVALID_4DC_FORENSICS_PROTOCOL')
+    proc=value['process']
+    if (not isinstance(proc,dict) or set(proc) != set(_FORENSIC_PROCESS) | {
+            'browser_alive','browser_netns_equal','network_service_netns_equal','proc_tree_readable'}
+          or any(not count(proc[k],128) for k in _FORENSIC_PROCESS)
+          or not all(optional_bool(proc[k]) for k in ('browser_alive',
+              'browser_netns_equal','network_service_netns_equal'))
+          or type(proc['proc_tree_readable']) is not bool):
+        _deny('INVALID_4DC_FORENSICS_PROCESS')
+    kernel=value['kernel']
+    if (not isinstance(kernel,dict) or set(kernel) != set(_FORENSIC_EVENTS) | {
+              'pids_current','pids_max_limit','memory_current','memory_max_limit'}
+          or any(not optional_count(kernel[k]) for k in kernel)):
+        _deny('INVALID_4DC_FORENSICS_KERNEL')
+    tcp=value['tcp']
+    if (not isinstance(tcp,dict) or set(tcp) != set(_FORENSIC_TCP) | {'readable'}
+          or type(tcp['readable']) is not bool
+          or any(not count(tcp[k],200) for k in _FORENSIC_TCP)):
+        _deny('INVALID_4DC_FORENSICS_TCP')
+
+
+def _parse_forensic_trace(stderr):
+    if not isinstance(stderr,bytes) or len(stderr) > 65536:
+        return None
+    lines=[line[17:].rstrip(b'\r') for line in stderr.split(b'\n')
+           if line.startswith(b'PIQ4DC_FORENSICS ')]
+    if len(lines) != 1 or not 2 <= len(lines[0]) <= 3800:
+        return None
+    try:
+        import json
+        obj=json.loads(lines[0].decode('ascii'))
+        _validate_forensic_trace(obj)
+        return obj
+    except (ValueError, UnicodeError, TypeError, BrowserUiError):
+        return None
+
+
+_SERVER_TRACE_FIELDS = ('index_seen','index_http_200','index_http_3xx','index_http_4xx',
+                        'index_http_5xx','index_http_other','index_complete','index_socket_failure',
+                        'asset_seen','asset_http_200','api_seen','api_http_200','other_seen')
+
+def _validate_server_trace(value):
+    if (not isinstance(value,dict) or set(value) != {
+            'classification','instrumentation_active',*_SERVER_TRACE_FIELDS} and set(value) != {'classification','instrumentation_active',*_SERVER_TRACE_FIELDS,'tcp_accepted'}
+          or value['classification'] != 'OBSERVATIONAL_NOT_SECURITY_ATTESTATION'
+          or type(value['instrumentation_active']) is not bool
+          or any(type(value[k]) is not int or not 0 <= value[k] <= 9999
+                 for k in _SERVER_TRACE_FIELDS) or
+          ('tcp_accepted' in value and (type(value['tcp_accepted']) is not int or
+                 not 0 <= value['tcp_accepted'] <= 9999))):
+        _deny('INVALID_4DC_SERVER_TRACE')
+
+
+
+# Attempt 2 independent controller evidence: never depend on forensics JSON.
+_CDP_TRIAGE_STAGES = frozenset(('ENTRY','SOCKET_CONTROL','SPAWNING','SPAWNED',
+    'TARGET_CREATE','TARGET_CREATED','SESSION_ATTACH','SESSION_ATTACHED',
+    'DOMAINS_ENABLE','DOMAINS_ENABLED','NAVIGATE_DISPATCH','NAVIGATE_REPLY',
+    'DOM_EVALUATE','DOM_READY','ERROR_CAUGHT','FORENSIC_BEGIN','FORENSIC_DONE',
+    'FORENSIC_FAILED','FORENSIC_SKIPPED','CLEANUP'))
+_CDP_TRIAGE_FAULTS = frozenset(('NONE','OSError','ValueError','TypeError',
+    'RuntimeError','IndexError','KeyError','AttributeError','MemoryError',
+    'BrokenPipeError','FileNotFoundError','PermissionError','TimeoutError',
+    'AssertionError','OTHER'))
+_CDP_TRIAGE_RETURNS = frozenset(('NOT_RETURNED','ZERO_NO_DOM','ZERO_INVALID_DOM',
+    'HELPER_119','HELPER_REJECTED','NONZERO_OTHER','SIGNALLED', 'RETURN_INVALID'))
+# Controller-owned post-mortem survives if the CDP helper/Chrome is OOM-killed.
+_ATTEMPT2_KERNEL_FIELDS = ('pids_max','memory_high','memory_max','memory_oom','memory_oom_kill')
+
+
+def _attempt2_kernel_events(*, root=Path('/sys/fs/cgroup'), uid=None):
+    result = dict.fromkeys(_ATTEMPT2_KERNEL_FIELDS)
+    if uid is None:
+        getuid = getattr(os,'getuid',None)
+        uid = getuid() if callable(getuid) else None
+    if type(uid) is not int or not 1 <= uid <= 2**31-1:
+        return result
+    group = (root / 'user.slice' / f'user-{uid}.slice' / f'user@{uid}.service'
+             / 'projectiq.slice' / 'projectiq-eval.slice')
+    try:
+        if group.is_symlink() or not group.is_dir():
+            return result
+        for filename, prefix, allowed in (
+             ('pids.events','pids_',('max',)),
+             ('memory.events','memory_',('high','max','oom','oom_kill'))):
+            raw = (group / filename).read_bytes()[:4096]
+            for row in raw.splitlines():
+                parts = row.split()
+                if (len(parts)==2 and parts[0].decode('ascii','ignore') in allowed
+                        and 0 < len(parts[1]) <= 14 and parts[1].isascii()
+                        and parts[1].isdigit()):
+                    key = prefix + parts[0].decode('ascii')
+                    result[key] = min(int(parts[1]),2**40)
+    except (OSError,ValueError,UnicodeError):
+        pass
+    return result
+
+
+def _attempt2_kernel_delta(before,after):
+    out={}
+    for k in _ATTEMPT2_KERNEL_FIELDS:
+        b=before.get(k) if isinstance(before,dict) else None
+        a=after.get(k) if isinstance(after,dict) else None
+        out[k] = min(a-b,9999) if type(a) is int and type(b) is int and a>=b else None
+    return out
+
+_CDP_TRIAGE_TRACES = frozenset(('VALID','ABSENT','MALFORMED','DUPLICATE',
+    'OVERSIZE','STDERR_UNAVAILABLE','STDERR_TRUNCATED'))
+_CDP_TRIAGE_LAUNCH = frozenset(('NONE','TIMEOUT','POLICY_REJECTED','OS_ERROR','OTHER_EXCEPTION'))
+_CDP_TRIAGE_CODES = frozenset(('CDP_INVALID_JSON','CDP_INVALID_MESSAGE',
+    'CDP_FRAME_TOO_LARGE','CDP_PENDING_TOO_LARGE','CDP_REPLY_TIMEOUT',
+    'CDP_PIPE_CLOSED','CDP_PIPE_WRITE_FAILED','CDP_PROTOCOL_ERROR',
+    'CDP_MISSING_RESULT','CDP_TOO_MANY_PENDING','CDP_COMMAND_TOO_LARGE',
+    'CDP_NO_PAGE_TARGET','CDP_NO_SESSION','CDP_NAVIGATION_ERROR',
+    'CDP_ADMIN_POLICY_BLOCK','CDP_CLIENT_BLOCK','CDP_CONNECTION_REFUSED',
+    'CDP_CONNECTION_RESET','CDP_CONNECTION_TIMEOUT','CDP_ADDRESS_UNREACHABLE',
+    'CDP_NETWORK_ERROR','CDP_JAVASCRIPT_CONTEXT_ERROR','CDP_DOM_TOO_LARGE',
+    'CDP_EMPTY_DOM','CDP_UNKNOWN_FAILURE','CDP_RUNTIME_ERROR'))
+
+
+def _attempt2_helper_code(stderr):
+    if not isinstance(stderr,bytes):
+        return 'NOT_REPORTED'
+    for line in stderr[:65536].split(b'\n'):
+        try:
+            value = line.rstrip(b'\r').decode('ascii', 'strict')
+        except UnicodeError:
+            continue
+        if value in _CDP_TRIAGE_CODES or re.fullmatch(r'CDP_NET_ERR_[A-Z][A-Z0-9_]{0,47}',value,re.ASCII):
+            return value
+    return 'NOT_REPORTED'
+
+
+def _attempt2_trace_state(stderr):
+    if not isinstance(stderr,bytes):
+        return 'STDERR_UNAVAILABLE'
+    head = stderr[:65536]
+    marker = b'PIQ4DC_FORENSICS '
+    candidates = [row[len(marker):].rstrip(b'\r') for row in head.split(b'\n')
+                  if row.startswith(marker)]
+    if len(candidates) > 1:
+        return 'DUPLICATE'
+    if len(candidates) == 0:
+        return 'STDERR_TRUNCATED' if len(stderr) > 65536 else 'ABSENT'
+    if len(candidates[0]) > 3800:
+        return 'OVERSIZE'
+    return 'VALID' if _parse_forensic_trace(stderr) is not None else 'MALFORMED'
+
+
+def _attempt2_triage(proc=None, *, launch='NONE', kernel_before=None, kernel_after=None):
+    stderr = getattr(proc,'stderr',None) if proc is not None else None
+    rc = getattr(proc,'returncode',None) if proc is not None else None
+    if proc is None:
+        state = 'NOT_RETURNED'
+    elif type(rc) is not int:
+        state = 'RETURN_INVALID'
+    elif rc == 0:
+        raw = getattr(proc,'stdout',None)
+        state = 'ZERO_NO_DOM' if raw == b'' else 'ZERO_INVALID_DOM'
+    elif rc == 119:
+        state = 'HELPER_119'
+    elif rc in (111,112,113,114,118):
+        state = 'HELPER_REJECTED'
+    elif rc < 0 or rc > 128:
+        state = 'SIGNALLED'
+    else:
+        state = 'NONZERO_OTHER'
+    stage = 'NOT_REPORTED'
+    fault = 'NONE'
+    stage_count = 0
+    if isinstance(stderr,bytes):
+        for line in stderr[:65536].split(b'\n'):
+            if line.startswith(b'PIQ4DC_STAGE '):
+                value = line[13:].rstrip(b'\r').decode('ascii','ignore')
+                if value in _CDP_TRIAGE_STAGES:
+                    if value not in {'ERROR_CAUGHT','FORENSIC_BEGIN',
+                                     'FORENSIC_DONE','FORENSIC_FAILED','FORENSIC_SKIPPED','CLEANUP'}:
+                        stage = value
+                    stage_count = min(stage_count+1,99)
+            elif line.startswith(b'PIQ4DC_FAULT '):
+                value = line[13:].rstrip(b'\r').decode('ascii','ignore')
+                if value in _CDP_TRIAGE_FAULTS:
+                    fault = value
+    record = {'classification':'OBSERVATIONAL_NOT_SECURITY_ATTESTATION',
+              'helper_return':state,'last_stage':stage,'stage_markers':stage_count,
+              'kernel_events':_attempt2_kernel_delta(kernel_before,kernel_after),
+              'fault_class':fault,'helper_code':_attempt2_helper_code(stderr),
+              'forensics_state':_attempt2_trace_state(stderr),
+              'launch_failure':launch,
+              'stderr_size_bin':('UNAVAILABLE' if not isinstance(stderr,bytes) else
+                'UNDER_2K' if len(stderr)<=2048 else
+                'UNDER_16K' if len(stderr)<=16384 else
+                'UNDER_64K' if len(stderr)<=65536 else 'OVER_64K')}
+    return record
+
+
+def _validate_attempt2_triage(item):
+    if (not isinstance(item,dict) or set(item) != {'classification',
+           'helper_return','last_stage','stage_markers','fault_class','helper_code','kernel_events',
+           'forensics_state','launch_failure','stderr_size_bin'}
+          or item['classification'] != 'OBSERVATIONAL_NOT_SECURITY_ATTESTATION'
+          or not isinstance(item['kernel_events'],dict)
+          or set(item['kernel_events']) != set(_ATTEMPT2_KERNEL_FIELDS)
+          or any(v is not None and (type(v) is not int or not 0<=v<=9999)
+                 for v in item['kernel_events'].values())
+          or item['helper_return'] not in _CDP_TRIAGE_RETURNS
+          or item['last_stage'] not in (_CDP_TRIAGE_STAGES | {'NOT_REPORTED'})
+          or type(item['stage_markers']) is not int or not 0 <= item['stage_markers'] <= 99
+          or item['fault_class'] not in _CDP_TRIAGE_FAULTS
+          or (item['helper_code'] not in (_CDP_TRIAGE_CODES | {'NOT_REPORTED'})
+              and not (isinstance(item['helper_code'],str) and re.fullmatch(
+                   r'CDP_NET_ERR_[A-Z][A-Z0-9_]{0,47}',item['helper_code'],re.ASCII)))
+          or item['forensics_state'] not in _CDP_TRIAGE_TRACES
+          or item['launch_failure'] not in _CDP_TRIAGE_LAUNCH
+          or item['stderr_size_bin'] not in {
+              'UNAVAILABLE','UNDER_2K','UNDER_16K','UNDER_64K','OVER_64K'}):
+        _deny('INVALID_ATTEMPT2_CDP_TRIAGE')
+
+# Attempt 3: small, independently validated diagnostic evidence.
+_A3_STATES = frozenset(('VALID','ABSENT','MALFORMED','DUPLICATE','OVERSIZE',
+                        'STDERR_UNAVAILABLE','STDERR_TRUNCATED'))
+_A3_FORENSIC = frozenset(('DONE','FAILED','SKIPPED','BEGIN_ONLY',
+                          'MULTIPLE_TERMINALS','NOT_REPORTED'))
+_A3_FORENSIC_REASONS = frozenset(('NOT_REPORTED','LENGTH_OR_ENCODING',
+    'OSError','ValueError','TypeError','KeyError','AttributeError','IndexError',
+    'RuntimeError','MemoryError','PermissionError','FileNotFoundError','OTHER'))
+_A3_PROBE_STATUS = frozenset(('NOT_RUN','SKIPPED_NO_SESSION',
+    'SKIPPED_BROWSER_EXITED','PARTIAL','SERVER_SETUP_FAILED','COMPLETED',
+    'PROBE_EXCEPTION','ENCODING_FAILED'))
+_A3_GET = frozenset(('NOT_RUN','HTTP_200','HTTP_OTHER','TIMEOUT','IO_ERROR'))
+_A3_DOM = frozenset(('NOT_RUN','MATCH','NO_MATCH','CDP_ERROR','CDP_TIMEOUT'))
+_A3_NAV = frozenset(('NOT_RUN','OK','NAV_ERROR','CDP_ERROR','CDP_TIMEOUT'))
+_A3_DETAIL_KEYS = frozenset(('classification','probe_status',
+    'original_document_request','original_document_response','original_document_failed',
+    'original_network_error','browser_alive','network_service_count',
+    'proc_tree_readable','browser_netns_equal','network_service_netns_equal',
+    'frontend_python_get','minimal_python_get','data_nav','data_dom',
+    'minimal_nav','minimal_dom','minimal_tcp_accepts','minimal_http_gets'))
+
+
+def _attempt3_validate_details(obj):
+    if not isinstance(obj,dict) or set(obj) != _A3_DETAIL_KEYS:
+        _deny('INVALID_ATTEMPT3_DETAIL_SHAPE')
+    enums=('classification','probe_status','frontend_python_get','minimal_python_get',
+           'data_nav','data_dom','minimal_nav','minimal_dom','original_network_error')
+    if any(type(obj[key]) is not str for key in enums):
+        _deny('INVALID_ATTEMPT3_STRING_TYPES')
+    if (obj['classification'] != 'OBSERVATIONAL_NOT_SECURITY_ATTESTATION'
+            or obj['probe_status'] not in _A3_PROBE_STATUS
+            or obj['frontend_python_get'] not in _A3_GET
+            or obj['minimal_python_get'] not in _A3_GET
+            or obj['data_dom'] not in _A3_DOM
+            or obj['minimal_dom'] not in _A3_DOM):
+        _deny('INVALID_ATTEMPT3_DETAIL_ENUM')
+    if not (obj['original_network_error'] in ('NOT_OBSERVED','OTHER') or
+        re.fullmatch(r'NET_[A-Z][A-Z0-9_]{0,47}',
+                     obj['original_network_error'],re.ASCII)):
+        _deny('INVALID_ATTEMPT3_ORIGINAL_ERROR')
+    for k in ('data_nav','minimal_nav'):
+        value=obj[k]
+        if not (type(value) is str and
+                (value in _A3_NAV or re.fullmatch(r'NET_[A-Z][A-Z0-9_]{0,47}',
+                                                 value,re.ASCII))):
+            _deny('INVALID_ATTEMPT3_NAV')
+    for k in ('browser_alive','proc_tree_readable',
+              'browser_netns_equal','network_service_netns_equal'):
+        if obj[k] is not None and type(obj[k]) is not bool:
+            _deny('INVALID_ATTEMPT3_BOOLEAN')
+    for k in ('original_document_request','original_document_response',
+              'original_document_failed','network_service_count',
+              'minimal_tcp_accepts','minimal_http_gets'):
+        if obj[k] is not None and (type(obj[k]) is not int or
+                                  not 0 <= obj[k] <= 99):
+            _deny('INVALID_ATTEMPT3_COUNT')
+    if (obj['probe_status'] == 'NOT_RUN' and any(
+           obj[k] != 'NOT_RUN' for k in
+           ('frontend_python_get','minimal_python_get','data_nav','minimal_nav'))):
+        _deny('INVALID_ATTEMPT3_SKIPPED_FIELDS')
+
+
+def _attempt3_forensic_terminal(stderr):
+    if not isinstance(stderr,bytes):
+        return 'NOT_REPORTED'
+    lines = stderr[:65536].split(b'\n')
+    sentinels = [x for x in lines if x in (
+        b'PIQ4DC_STAGE FORENSIC_DONE', b'PIQ4DC_STAGE FORENSIC_FAILED',
+        b'PIQ4DC_STAGE FORENSIC_SKIPPED')]
+    if len(sentinels) > 1:
+        return 'MULTIPLE_TERMINALS'
+    if len(sentinels) == 1:
+        return sentinels[0].split(b'_')[-1].decode('ascii')
+    if b'PIQ4DC_STAGE FORENSIC_BEGIN' in lines:
+        return 'BEGIN_ONLY'
+    return 'NOT_REPORTED'
+
+
+def _attempt3_forensic_reason(stderr):
+    if not isinstance(stderr,bytes):
+        return 'NOT_REPORTED'
+    choices=[]
+    for row in stderr[:65536].split(b'\n'):
+        if row.startswith(b'PIQ4DC_A3_FORENSICS_FAIL '):
+            choices.append(row[25:].rstrip(b'\r'))
+        elif row == b'PIQ4DC_A3_FORENSICS_SKIP LENGTH_OR_ENCODING':
+            choices.append(b'LENGTH_OR_ENCODING')
+    if len(choices)!=1:
+        return 'NOT_REPORTED'
+    try:
+        value=choices[0].decode('ascii','strict')
+    except UnicodeError:
+        return 'NOT_REPORTED'
+    return value if value in _A3_FORENSIC_REASONS else 'NOT_REPORTED'
+
+
+def _attempt3_parse(stderr):
+    result = {'collection_state':'ABSENT','forensic_terminal':'NOT_REPORTED',
+              'forensic_reason':'NOT_REPORTED','details':None}
+    if not isinstance(stderr,bytes):
+        result['collection_state']='STDERR_UNAVAILABLE'
+        return result
+    result['forensic_terminal'] = _attempt3_forensic_terminal(stderr)
+    result['forensic_reason'] = _attempt3_forensic_reason(stderr)
+    if len(stderr)>65536:
+        result['collection_state']='STDERR_TRUNCATED'
+        return result
+    marker = b'PIQ4DC_A3 '
+    rows=[row[len(marker):].rstrip(b'\r') for row in stderr.split(b'\n')
+          if row.startswith(marker)]
+    if len(rows)>1:
+        result['collection_state']='DUPLICATE'
+        return result
+    if not rows:
+        return result
+    if not 2 <= len(rows[0]) <= 1600:
+        result['collection_state']='OVERSIZE'
+        return result
+    try:
+        import json
+        obj=json.loads(rows[0].decode('ascii','strict'))
+        _attempt3_validate_details(obj)
+    except (ValueError,TypeError,UnicodeError,BrowserUiError):
+        result['collection_state']='MALFORMED'
+        return result
+    result['collection_state']='VALID'
+    result['details']=obj
+    return result
+
+
+def _attempt3_validate_report(value):
+    if (not isinstance(value,dict) or
+            set(value) != {'collection_state','forensic_terminal','forensic_reason','details'}
+            or any(type(value[k]) is not str for k in
+                   ('collection_state','forensic_terminal','forensic_reason'))
+            or value['collection_state'] not in _A3_STATES
+            or value['forensic_terminal'] not in _A3_FORENSIC
+            or value['forensic_reason'] not in _A3_FORENSIC_REASONS):
+        _deny('INVALID_ATTEMPT3_RECORD')
+    if value['collection_state']=='VALID':
+        _attempt3_validate_details(value['details'])
+    elif value['details'] is not None:
+        _deny('INVALID_ATTEMPT3_MISSING_DETAILS')
+
+
+# ProjectIQ Attempt 4: validate only fixed, bounded observational diagnostic values.
+_A4_STATES = frozenset(('VALID', 'ABSENT', 'MALFORMED', 'OVERSIZE',
+                        'DUPLICATE', 'STDERR_UNAVAILABLE', 'STDERR_TRUNCATED'))
+_A4_FAULTS = frozenset(('NONE', 'OSError', 'ValueError', 'TypeError',
+    'AttributeError', 'RuntimeError', 'IndexError', 'KeyError', 'MemoryError',
+    'PermissionError', 'FileNotFoundError', 'TimeoutError', 'AssertionError',
+    'BrokenPipeError', 'OTHER'))
+_A4_PROBES = ('process','frontend','data','minimal')
+_A4_HTTP = frozenset(('NOT_RUN','HTTP_200','HTTP_OTHER','TIMEOUT','IO_ERROR'))
+_A4_DOM = frozenset(('NOT_RUN','MATCH','NO_MATCH','CDP_ERROR','CDP_TIMEOUT'))
+_A4_NAV_BASE = frozenset(('NOT_RUN','OK','NAV_ERROR','CDP_ERROR','CDP_TIMEOUT'))
+
+
+def _a4_is_nav(x):
+    return (type(x) is str and
+            (x in _A4_NAV_BASE or
+             re.fullmatch(r'NET_[A-Z][A-Z0-9_]{0,47}',x,re.ASCII) is not None))
+
+
+def _a4_is_count(x):
+    return x is None or (type(x) is int and 0 <= x <= 99)
+
+
+def _a4_is_bool(x):
+    return x is None or type(x) is bool
+
+
+def _a4_validate_details(d):
+    if not isinstance(d,dict) or set(d) != {
+            'classification','version','collector','original_error',
+            'original_before','original_after','process','frontend','data','minimal'}:
+        _deny('A4_SHAPE')
+    if (d['classification'] != 'OBSERVATIONAL_NOT_SECURITY_ATTESTATION'
+        or type(d['version']) is not int or d['version'] != 1
+        or d['collector'] not in ('PARTIAL','COMPLETED','FAILED')
+        or type(d['original_error']) is not str
+        or not (d['original_error'] in ('NOT_REPORTED','RUNTIME_ERROR','OTHER')
+                or re.fullmatch(r'NET_[A-Z][A-Z0-9_]{0,47}',d['original_error'],re.ASCII))):
+        _deny('A4_HEADER')
+    for key in ('original_before','original_after'):
+        x=d[key]
+        if (not isinstance(x,dict) or set(x)!= {'request','response','failed'}
+                or any(not _a4_is_count(v) for v in x.values())):
+            _deny('A4_COUNTS')
+    for name, keys in (
+        ('process', {'state','error','alive','tree','browser_netns','network_netns',
+                      'network_services'}),
+        ('frontend',{'state','error','python_get'}),
+        ('data', {'state','error','navigate','dom'}),
+        ('minimal',{'state','error','python_get','navigate','dom','tcp_accepted',
+                    'first_bytes','request_lines','get_requests','http_200'})):
+        x=d[name]
+        if (not isinstance(x,dict) or set(x)!=keys
+            or type(x['state']) is not str or x['state'] not in ('NOT_RUN','OK','FAILED','SKIPPED')
+            or type(x['error']) is not str or x['error'] not in _A4_FAULTS):
+            _deny('A4_STAGE')
+        if (x['state']=='FAILED') != (x['error']!='NONE'):
+            _deny('A4_STAGE_FAULT_MISMATCH')
+    p=d['process']
+    if (not all(_a4_is_bool(p[k]) for k in ('alive','tree','browser_netns','network_netns'))
+        or not _a4_is_count(p['network_services'])):
+        _deny('A4_PROCESS')
+    if (type(d['frontend']['python_get']) is not str or
+            d['frontend']['python_get'] not in _A4_HTTP):
+        _deny('A4_FRONTEND')
+    if (not _a4_is_nav(d['data']['navigate'])
+        or type(d['data']['dom']) is not str
+        or d['data']['dom'] not in _A4_DOM):
+        _deny('A4_DATA')
+    m=d['minimal']
+    if (type(m['python_get']) is not str or m['python_get'] not in _A4_HTTP
+        or not _a4_is_nav(m['navigate'])
+        or type(m['dom']) is not str or m['dom'] not in _A4_DOM
+        or any(not _a4_is_count(m[k]) for k in
+               ('tcp_accepted','first_bytes','request_lines','get_requests','http_200'))):
+        _deny('A4_MINIMAL')
+    if (m['navigate']!='OK' and m['dom']!='NOT_RUN') or (
+            d['data']['navigate']!='OK' and d['data']['dom']!='NOT_RUN'):
+        _deny('A4_DOM_WITHOUT_NAV')
+    if d['collector']=='COMPLETED' and any(d[k]['state'] not in ('OK','SKIPPED') for k in _A4_PROBES):
+        _deny('A4_FALSE_COMPLETION')
+    if d['collector']=='FAILED' and any(d[k]['state']=='OK' for k in _A4_PROBES):
+        _deny('A4_INCONSISTENT_FAILURE')
+
+
+def _a4_parse(stderr):
+    result={'collection_state':'ABSENT','details':None,'steps':[],
+            'entered':False,'unexpected':'NONE','emit_failed':'NONE'}
+    if not isinstance(stderr,bytes):
+        result['collection_state']='STDERR_UNAVAILABLE'
+        return result
+    if len(stderr)>65536:
+        result['collection_state']='STDERR_TRUNCATED'
+        return result
+    rows=stderr.split(b'\n')
+    prefix=b'PIQ4DC_A4 '
+    candidates=[x[len(prefix):].rstrip(b'\r') for x in rows if x.startswith(prefix)]
+    result['entered']=b'PIQ4DC_A4_ENTER' in rows
+    for name, field in ((b'PIQ4DC_A4_UNEXPECTED ','unexpected'),
+                        (b'PIQ4DC_A4_EMIT_FAILED ','emit_failed')):
+        found=[x[len(name):].rstrip(b'\r') for x in rows if x.startswith(name)]
+        if len(found)==1:
+            try:
+                value=found[0].decode('ascii','strict')
+                if value in _A4_FAULTS:
+                    result[field]=value
+            except UnicodeError:
+                pass
+    for x in rows:
+        if not x.startswith(b'PIQ4DC_A4_STEP '):
+            continue
+        parts=x.rstrip(b'\r').split(b' ')
+        if len(parts)!=4:
+            continue
+        try:
+            name,status,fault=(v.decode('ascii','strict') for v in parts[1:])
+        except UnicodeError:
+            continue
+        if (name in _A4_PROBES and status in ('OK','FAILED','SKIPPED')
+             and fault in _A4_FAULTS and len(result['steps']) < 8):
+            result['steps'].append(name+':'+status+':'+fault)
+    if len(candidates)>1:
+        result['collection_state']='DUPLICATE'
+        return result
+    if len(candidates)==0:
+        return result
+    if not 2<=len(candidates[0])<=4096:
+        result['collection_state']='OVERSIZE'
+        return result
+    try:
+        import json
+        obj=json.loads(candidates[0].decode('ascii','strict'))
+        _a4_validate_details(obj)
+    except (UnicodeError,ValueError,TypeError,BrowserUiError):
+        result['collection_state']='MALFORMED'
+        return result
+    result['collection_state']='VALID'
+    result['details']=obj
+    return result
+
+
+def _a4_validate_report(r):
+    if (not isinstance(r,dict)
+        or set(r) != {'collection_state','details','steps','entered','unexpected','emit_failed'}
+        or type(r['collection_state']) is not str or r['collection_state'] not in _A4_STATES
+        or type(r['entered']) is not bool
+        or type(r['unexpected']) is not str or r['unexpected'] not in _A4_FAULTS
+        or type(r['emit_failed']) is not str or r['emit_failed'] not in _A4_FAULTS
+        or not isinstance(r['steps'],list) or len(r['steps'])>8
+        or any(type(v) is not str or not re.fullmatch(
+            r'(process|frontend|data|minimal):(OK|FAILED|SKIPPED):[A-Za-z]+',v,re.ASCII)
+            for v in r['steps'])):
+        _deny('A4_INVALID_REPORT')
+    if len(set(x.split(':')[0] for x in r['steps'])) != len(r['steps']):
+        _deny('A4_DUPLICATE_STEP')
+    for v in r['steps']:
+        _name,_status,fault=v.split(':')
+        if fault not in _A4_FAULTS or ((_status=='FAILED') != (fault!='NONE')):
+            _deny('A4_INVALID_STEP_FAULT')
+    if r['collection_state']=='VALID':
+        _a4_validate_details(r['details'])
+    elif r['details'] is not None:
+        _deny('A4_FALSE_DETAILS')
+
+
+# ProjectIQ Phase 4D-C Attempt 5: strict bounded validation of helper-side
+# connection-stage evidence. Never a security attestation or PASS oracle.
+_A5_HELPER_STATES = frozenset(('VALID','ABSENT','DUPLICATE','MALFORMED','OVERSIZE',
+                               'STDERR_UNAVAILABLE','STDERR_TRUNCATED'))
+_A5_HELPER_PHASES = frozenset(('CONNECT','WRITE','READ','DONE'))
+_A5_HELPER_OUTCOMES = frozenset((
+    'NOT_RUN','HTTP_200','HTTP_OTHER','EOF_NO_RESPONSE',
+    'CONNECTION_REFUSED','CONNECTION_RESET','CONNECTION_ABORTED',
+    'CONNECTION_TIMEOUT','BROKEN_PIPE','PERMISSION_DENIED','FD_LIMIT',
+    'TASK_TEMPORARILY_UNAVAILABLE','OTHER_OS_ERROR','OTHER_FAILURE'))
+
+
+def _a5_validate_helper_details(data):
+    if (type(data) is not dict or set(data) != {
+            'classification','version','socket','uid_tasks','nproc_soft','nproc_hard'}
+          or data['classification'] != 'OBSERVATIONAL_NOT_SECURITY_ATTESTATION'
+          or type(data['version']) is not int or data['version'] != 1
+          or type(data['socket']) is not dict
+          or set(data['socket']) != {'phase','outcome'}
+          or data['socket']['phase'] not in _A5_HELPER_PHASES
+          or data['socket']['outcome'] not in _A5_HELPER_OUTCOMES):
+        _deny('A5_INVALID_HELPER_RECORD')
+    for key in ('uid_tasks','nproc_soft','nproc_hard'):
+        value = data[key]
+        if value is not None and (type(value) is not int or not 0 <= value <= 65535):
+            _deny('A5_INVALID_HELPER_RESOURCE')
+
+
+def _a5_parse_helper(stderr):
+    report = {'collection_state':'ABSENT', 'details':None}
+    if not isinstance(stderr, bytes):
+        report['collection_state'] = 'STDERR_UNAVAILABLE'
+        return report
+    if len(stderr) > 65536:
+        report['collection_state'] = 'STDERR_TRUNCATED'
+        return report
+    prefix = b'PIQ4DC_A5_HELPER '
+    rows = [row[len(prefix):].rstrip(b'\r') for row in stderr.split(b'\n')
+            if row.startswith(prefix)]
+    if len(rows) > 1:
+        report['collection_state'] = 'DUPLICATE'
+    elif len(rows) == 1:
+        if not 2 <= len(rows[0]) <= 512:
+            report['collection_state'] = 'OVERSIZE'
+        else:
+            try:
+                import json
+                obj = json.loads(rows[0].decode('ascii', 'strict'))
+                _a5_validate_helper_details(obj)
+            except (UnicodeError, ValueError, TypeError, BrowserUiError):
+                report['collection_state'] = 'MALFORMED'
+            else:
+                report['collection_state'] = 'VALID'
+                report['details'] = obj
+    return report
+
+
+def _a5_validate_helper_report(record):
+    if (type(record) is not dict or set(record) != {'collection_state','details'}
+            or record['collection_state'] not in _A5_HELPER_STATES):
+        _deny('A5_INVALID_HELPER_SHAPE')
+    if record['collection_state'] == 'VALID':
+        _a5_validate_helper_details(record['details'])
+    elif record['details'] is not None:
+        _deny('A5_UNSUPPORTED_HELPER_DETAILS')
+
+
+_A5_EVENTS = ('ACCEPT','DISPATCH_ATTEMPT','DISPATCH_OK','DISPATCH_FAIL_RUNTIME',
+    'DISPATCH_FAIL_OS','THREAD_ENTER','THREAD_EXIT','HANDLER_CONSTRUCT',
+    'PARSE_ENTER','PARSE_OK','PARSE_REJECT','GET_ENTER','RESPONSE_200',
+    'RESPONSE_OTHER','HEADERS_END','HANDLER_ERROR')
+_A5_HTTP_OUTCOMES = frozenset((
+    'HTTP_200','HTTP_OTHER','REMOTE_DISCONNECTED','CONNECTION_REFUSED',
+    'CONNECTION_RESET','CONNECTION_ABORTED','TIMEOUT','BAD_STATUS',
+    'BROKEN_PIPE','PERMISSION_DENIED','FD_LIMIT','OTHER_OS_ERROR',
+    'OTHER_FAILURE'))
+_A5_FRONTEND_STATES = frozenset(('VALID','LOG_MISSING','LOG_UNAVAILABLE',
+    'LOG_TOO_LARGE','NOT_INSTRUMENTED','INVALID_LOG','SNAPSHOT_INVALID'))
+
+
+def _a5_check_counter_map(value):
+    return (type(value) is dict and set(value) == set(_A5_EVENTS)
+            and all(type(x) is int and 0 <= x <= 9999 for x in value.values()))
+
+
+def _a5_check_samples(value):
+    return (type(value) is dict and set(value) == {'min','max','count'}
+            and type(value['count']) is int and 0 <= value['count'] <= 128
+            and all(v is None or (type(v) is int and 0 <= v <= 65535)
+                    for v in (value['min'],value['max']))
+            and ((value['count'] == 0 and value['min'] is None and value['max'] is None)
+                 or (value['count'] > 0 and value['min'] is not None
+                     and value['max'] is not None
+                     and value['min'] <= value['max'])))
+
+
+def _a5_validate_frontend_report(r):
+    if (type(r) is not dict or set(r) != {
+            'classification','version','trace_state','limits',
+            'pre_counts','during_delta','post_delta',
+            'uid_before','uid_during','uid_after',
+            'fds_before','fds_during','fds_after',
+            'threads_before','threads_during','threads_after','post_http'}
+          or r['classification'] != 'OBSERVATIONAL_NOT_SECURITY_ATTESTATION'
+          or type(r['version']) is not int or r['version'] != 1
+          or r['trace_state'] not in _A5_FRONTEND_STATES
+          or r['post_http'] not in _A5_HTTP_OUTCOMES
+          or type(r['limits']) is not dict
+          or set(r['limits']) != {'nproc_soft','nproc_hard','nofile_soft','nofile_hard'}):
+        _deny('A5_INVALID_FRONTEND_SHAPE')
+    for v in r['limits'].values():
+        if v is not None and (type(v) is not int or not 0 <= v <= 65535):
+            _deny('A5_INVALID_FRONTEND_LIMIT')
+    for key in ('pre_counts','during_delta','post_delta'):
+        if r[key] is not None and not _a5_check_counter_map(r[key]):
+            _deny('A5_INVALID_FRONTEND_COUNT')
+    for key in ('uid_before','uid_during','uid_after',
+                'fds_before','fds_during','fds_after',
+                'threads_before','threads_during','threads_after'):
+        if not _a5_check_samples(r[key]):
+            _deny('A5_INVALID_FRONTEND_UID')
+    if r['trace_state'] != 'VALID':
+        if any(r[x] is not None for x in ('pre_counts','during_delta','post_delta')):
+            _deny('A5_UNTRUSTED_COUNTERS')
+    else:
+        if any(r[x] is None for x in ('pre_counts','during_delta','post_delta')):
+            _deny('A5_MISSING_COUNTERS')
+
+
+def _cdp_failure_issue(returncode: object, stderr: object) -> str:
+    """Map only bounded, fixed CDP codes or Chromium net error identifiers."""
+    if isinstance(stderr, bytes):
+        # Attempt-2 stage markers can exceed the old 512-byte scan window.
+        # This bounded scan must still find the exact helper error line.
+        sample = stderr[:8192]
+        # The helper emits one tightly bounded token. Do not forward raw stderr.
+        net_match = (re.search(
+            rb'(?:\A|\n)CDP_NET_ERR_([A-Z][A-Z0-9_]{0,47})\r?(?:\n|\Z)', sample)
+            if returncode == 119 else None)
+        if net_match is not None:
+            return 'BROWSER_CDP_NET_ERR_' + net_match.group(1).decode('ascii')
+        mapping = (
+            (b'CDP_ADMIN_POLICY_BLOCK', 'BROWSER_CDP_ADMIN_POLICY_BLOCK'),
+            (b'CDP_CONNECTION_REFUSED', 'BROWSER_CDP_CONNECTION_REFUSED'),
+            (b'CDP_NETWORK_ERROR', 'BROWSER_CDP_NAVIGATION_FAILED'),
+            (b'CDP_NAVIGATION_ERROR', 'BROWSER_CDP_NAVIGATION_FAILED'),
+            (b'CDP_REPLY_TIMEOUT', 'BROWSER_CDP_TIMEOUT'),
+            (b'CDP_PIPE_CLOSED', 'BROWSER_CDP_PIPE_CLOSED'),
+            (b'CDP_PIPE_WRITE_FAILED', 'BROWSER_CDP_PIPE_CLOSED'),
+            (b'CDP_PROTOCOL_ERROR', 'BROWSER_CDP_PROTOCOL_ERROR'),
+            (b'CDP_RUNTIME_ERROR', 'BROWSER_CDP_RUNTIME_ERROR'),
+        )
+        for marker, issue in mapping:
+            if marker in sample:
+                return issue
+    if returncode in (111, 112, 113, 114, 118):
+        return 'BROWSER_CDP_HELPER_REJECTED'
+    return 'BROWSER_CDP_UNAVAILABLE'
+
+
 def _browser_exit_issue(returncode: int, stderr: bytes | None) -> str:
     """Allowlisted categories only: Chrome stderr and page content stay in guest.
 
@@ -833,8 +1568,32 @@ def _launch_exception_issue(exc: OSError | RuntimeError | ValueError) -> str:
     return 'BROWSER_PROCESS_UNAVAILABLE'
 
 
+def _p4dc_pending_backend_dom(raw: bytes, checks: list[dict]) -> bool:
+    """Only the approved pilot's initial React state warrants a CDP retry.
+
+    `--dump-dom` captures one snapshot, not an app-specific asynchronous ready
+    state.  Reuse the existing bounded CDP polling path rather than accepting
+    an initial paragraph as a definitive failure. Never inspect unbounded HTML
+    or treat script text / malformed HTML as proof the app is ready.
+    """
+    if (not isinstance(raw, bytes) or not 0 < len(raw) <= MAX_DOM or
+            [(x.get('tag'), x.get('exact_text')) for x in checks] != [
+                ('h1', 'ProjectIQ D4 pilot'), ('p', 'SQLite verified')]):
+        return False
+    try:
+        fp = _dom_fingerprint(raw.decode('utf-8', 'strict'))
+    except (UnicodeError, ValueError, TypeError):
+        return False
+    return (fp['title_expected'] and fp['root_present'] and
+            fp['main_present'] and fp['vite_js_asset_present'] and
+            fp['h1_expected'] and fp['h1_count'] == 1 and
+            fp['p_count'] == 1 and fp['p_state'] == 'INITIAL' and
+            not fp['chrome_error_marker'])
+
+
 def run_browser_ui(bundle: dict, *, expected_source: dict, expected_adapter: str,
-                   workspace: Path, trusted_process: Callable[..., Any]) -> dict:
+                   workspace: Path, trusted_process: Callable[..., Any],
+                   cdp_mode: bool = False) -> dict:
     """A real Chrome headless renderer; subprocess stays in guest app cgroup.
 
     This initial slice deliberately has no browser clicks or JavaScript supplied
@@ -895,7 +1654,54 @@ def run_browser_ui(bundle: dict, *, expected_source: dict, expected_adapter: str
         return _empty(bundle, issue='BROWSER_STDOUT_UNAVAILABLE')
     if len(proc.stdout) > MAX_DOM:
         return _empty(bundle, issue='BROWSER_DOM_TOO_LARGE')
-    if not proc.stdout:
+    if not proc.stdout or (cdp_mode and _p4dc_pending_backend_dom(proc.stdout, bundle['checks'])):
+        if cdp_mode:
+            # `--dump-dom` occasionally returns exit=0 and zero HTML after an
+            # HTTP navigation. CDP uses a *private* pipe, not an exposed port,
+            # and checks real DOM state instead of inferring from exit status.
+            kernel_before = _attempt2_kernel_events()
+            try:
+                cdp = trusted_process(
+                    ['/usr/bin/python3', '-I', '/home/projectiq/guest_browser_cdp.py'],
+                    project_code=True, browser_profile=True, timeout=43,
+                    cwd=Path(workspace))
+            except (OSError, RuntimeError, ValueError) as exc:
+                reason = str(exc.args[0]) if len(exc.args) == 1 and type(exc.args[0]) is str else ''
+                launch = ('TIMEOUT' if 'TIMEOUT' in reason else
+                          'POLICY_REJECTED' if 'POLICY' in reason or 'PROFILE' in reason else
+                          'OS_ERROR' if isinstance(exc,OSError) else 'OTHER_EXCEPTION')
+                report = _empty(bundle, issue='BROWSER_CDP_UNAVAILABLE')
+                report['cdp_triage'] = _attempt2_triage(launch=launch,
+                    kernel_before=kernel_before,kernel_after=_attempt2_kernel_events())
+                return report
+            if (getattr(cdp, 'returncode', None) != 0 or
+                    not isinstance(getattr(cdp, 'stdout', None), bytes) or
+                    not cdp.stdout or len(cdp.stdout) > MAX_DOM):
+                issue = _cdp_failure_issue(getattr(cdp, 'returncode', None),
+                                           getattr(cdp, 'stderr', None))
+                report = _empty(bundle, issue=issue)
+                report['cdp_triage'] = _attempt2_triage(cdp,
+                    kernel_before=kernel_before,kernel_after=_attempt2_kernel_events())
+                report['attempt4_probe'] = _a4_parse(getattr(cdp, 'stderr', None))
+                report['attempt5_client'] = _a5_parse_helper(getattr(cdp, 'stderr', None))
+                trace = _parse_forensic_trace(getattr(cdp, 'stderr', None))
+                if trace is not None:
+                    report['cdp_forensics'] = trace
+                return report
+            try:
+                dom = cdp.stdout.decode('utf-8', 'strict')
+                matches = dom_checks(dom, bundle['checks'])
+            except (UnicodeError, ValueError):
+                return _empty(bundle, issue='BROWSER_DOM_INVALID')
+            passed = all(x['matched'] for x in matches)
+            report = _empty(bundle, status='PASS' if passed else 'FAIL',
+                            issue=None if passed else 'RENDERED_DOM_DID_NOT_MATCH')
+            report['checks'] = matches
+            report['render_engine'] = 'CDP_PIPE'
+            if not passed:
+                report['page_fingerprint'] = _dom_fingerprint(dom)
+                report['capture_shape'] = _capture_shape(cdp.stdout)
+            return report
         issue = _empty_capture_issue(trusted_process, workspace, browser)
         report = _empty(bundle, issue=issue)
         report['diagnostics'] = _diagnostics(proc, snapshot_before, snapshot_after)
@@ -927,7 +1733,7 @@ def validate_browser_ui_report(bundle: dict, report: Any) -> None:
     required = {'schema_version', 'stage', 'source', 'adapter', 'catalog_sha256',
                 'execution', 'status', 'issue_code', 'checks'}
     if (not isinstance(report, dict) or not required <= set(report)
-            or set(report) - required - {'diagnostics', 'page_fingerprint', 'navigation_probe', 'capture_shape', 'render_smoke', 'loopback_differential'}
+            or set(report) - required - {'diagnostics', 'page_fingerprint', 'navigation_probe', 'capture_shape', 'render_smoke', 'loopback_differential', 'render_engine', 'cdp_forensics', 'server_trace', 'cdp_triage', 'attempt3_probe', 'attempt4_probe', 'attempt5_client', 'attempt5_frontend'}
             or report['schema_version'] != SCHEMA or report['stage'] != 'guest_browser_ui'
             or report['source'] != bundle['source'] or report['adapter'] != bundle['adapter']
             or report['catalog_sha256'] != bundle['catalog_sha256']
@@ -941,6 +1747,43 @@ def validate_browser_ui_report(bundle: dict, report: Any) -> None:
                 or got['tag'] != expected['tag']
                 or got['matched'] is not None and type(got['matched']) is not bool):
             _deny('BROWSER_UI_REPORT_CHECK_INVALID')
+    if 'attempt5_client' in report:
+        if report['status'] != 'INCONCLUSIVE':
+            _deny('ATTEMPT5_HELPER_FAIL_ONLY')
+        _a5_validate_helper_report(report['attempt5_client'])
+    if 'attempt5_frontend' in report:
+        if report['status'] != 'INCONCLUSIVE':
+            _deny('ATTEMPT5_FRONTEND_FAIL_ONLY')
+        _a5_validate_frontend_report(report['attempt5_frontend'])
+    if 'attempt4_probe' in report:
+        if (report['status'] != 'INCONCLUSIVE' or
+                not isinstance(report['issue_code'], str) or
+                not report['issue_code'].startswith('BROWSER_CDP_')):
+            _deny('ATTEMPT4_FAIL_ONLY')
+        _a4_validate_report(report['attempt4_probe'])
+    if 'attempt3_probe' in report:
+        if (report['status'] != 'INCONCLUSIVE' or
+                not isinstance(report['issue_code'], str) or
+                not report['issue_code'].startswith('BROWSER_CDP_')):
+            _deny('ATTEMPT3_FAIL_ONLY')
+        _attempt3_validate_report(report['attempt3_probe'])
+    if 'cdp_triage' in report:
+        if (report['status'] != 'INCONCLUSIVE' or
+                not isinstance(report['issue_code'],str) or
+                not report['issue_code'].startswith('BROWSER_CDP_')):
+            _deny('ATTEMPT2_TRIAGE_FAIL_ONLY')
+        _validate_attempt2_triage(report['cdp_triage'])
+    if 'cdp_forensics' in report:
+        if report['status'] != 'INCONCLUSIVE' or not str(report['issue_code']).startswith('BROWSER_CDP_'):
+            _deny('4DC_FORENSICS_FAIL_ONLY')
+        _validate_forensic_trace(report['cdp_forensics'])
+    if 'server_trace' in report:
+        if report['status'] != 'INCONCLUSIVE':
+            _deny('4DC_SERVER_TRACE_FAIL_ONLY')
+        _validate_server_trace(report['server_trace'])
+    if 'render_engine' in report and (report['render_engine'] != 'CDP_PIPE' or
+            report['status'] not in ('PASS', 'FAIL')):
+        _deny('INVALID_BROWSER_RENDER_ENGINE')
     if 'loopback_differential' in report:
         if (report['status'] != 'INCONCLUSIVE' or
                 report['issue_code'] != 'BROWSER_EMPTY_STDOUT_DUMP_DOM'):
@@ -978,7 +1821,9 @@ def validate_browser_ui_report(bundle: dict, report: Any) -> None:
                 or report['issue_code'] != 'RENDERED_DOM_DID_NOT_MATCH'):
             _deny('BROWSER_UI_INVALID_FAIL')
     elif (any(x is not None for x in states) or
-          report['issue_code'] not in {
+          (not (isinstance(report['issue_code'], str) and re.fullmatch(
+              r'BROWSER_CDP_NET_ERR_[A-Z][A-Z0-9_]{0,47}', report['issue_code'], re.ASCII))
+           and report['issue_code'] not in {
               'BROWSER_RUNTIME_UNAVAILABLE', 'BROWSER_BINARY_OUTSIDE_TRUSTED_IMAGE',
               'BROWSER_QUOTA_HOME_UNAVAILABLE', 'BROWSER_PROCESS_UNAVAILABLE',
               'BROWSER_COMMAND_TIMEOUT', 'BROWSER_COMMAND_TIMEOUT_WITH_OUTPUT',
@@ -991,9 +1836,14 @@ def validate_browser_ui_report(bundle: dict, report: Any) -> None:
               'BROWSER_SHARED_LIBRARY_UNAVAILABLE', 'BROWSER_PROFILE_UNAVAILABLE',
               'BROWSER_PROCESS_LIMIT', 'BROWSER_CGROUP_PIDS_LIMIT_HIT',
               'BROWSER_EXIT_NONZERO',
+              'BROWSER_CDP_UNAVAILABLE', 'BROWSER_CDP_NAVIGATION_FAILED',
+              'BROWSER_CDP_ADMIN_POLICY_BLOCK', 'BROWSER_CDP_CONNECTION_REFUSED',
+              'BROWSER_CDP_TIMEOUT',
+              'BROWSER_CDP_PIPE_CLOSED', 'BROWSER_CDP_PROTOCOL_ERROR',
+              'BROWSER_CDP_RUNTIME_ERROR', 'BROWSER_CDP_HELPER_REJECTED',
               'BROWSER_STDOUT_UNAVAILABLE', 'BROWSER_DOM_TOO_LARGE',
               'BROWSER_EMPTY_STDOUT_SCOPE_UNVERIFIED',
               'BROWSER_EMPTY_STDOUT_CHROME_VERSION_UNVERIFIED',
               'BROWSER_EMPTY_STDOUT_DUMP_DOM',
-              'BROWSER_FAILED_OR_OUTPUT_TOO_LARGE', 'BROWSER_DOM_INVALID'}):
+              'BROWSER_FAILED_OR_OUTPUT_TOO_LARGE', 'BROWSER_DOM_INVALID'})):
         _deny('BROWSER_UI_INVALID_INCONCLUSIVE')

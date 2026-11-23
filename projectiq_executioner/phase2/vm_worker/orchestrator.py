@@ -339,6 +339,11 @@ def execute_vm_candidate(candidate: dict, config: dict, output: Path,
             if browser_guest_bundle is not None:
                 ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / 'guest_browser_ui.py',
                          'guest_browser_ui.py')
+                ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / 'guest_browser_cdp.py',
+                         'guest_browser_cdp.py')
+                if ssh.ssh('chmod', '0644', '/home/projectiq/guest_browser_cdp.py',
+                           timeout=8).returncode != 0:
+                    raise WorkerFailure('Trusted CDP helper permissions unavailable')
             if crud_guest_bundle is not None:
                 ssh.copy(Path(__file__).resolve().parents[2] / 'phase4' / 'guest_api.py',
                          'guest_api.py')

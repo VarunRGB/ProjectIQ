@@ -674,7 +674,7 @@ class SSHControl:
             'snapshot.zip', 'guest_agent.py', 'request.json', 'template_seal.sh',
             'guest_http.py', 'guest_api.py', 'guest_db_fixture.py',
             'guest_db_postconditions.py', 'guest_workflow.py', 'guest_crud.py',
-            'guest_browser_ui.py',
+            'guest_browser_ui.py', 'guest_browser_cdp.py',
         }:
             raise WorkerFailure('Unapproved destination filename')
         content = local.read_bytes()
