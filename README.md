@@ -160,3 +160,9 @@ check. It never reduces marks on its own.
   `--model qwen2.5:7b`.
 - **Results differ slightly between runs**: expected with a language model. That
   variation is exactly what the self-consistency part of the confidence score measures.
+
+## Executioner Agent — one-call repository evaluation
+
+ProjectIQ also includes the **Executioner**, a pinned-GitHub repository analyzer and carefully gated disposable-VM tester. For new machines, start with [the complete Executioner setup / operator handoff](projectiq_executioner/README.md). The phase-by-phase technical record is in [Version 1.4](logs/version_1.4_executioner_agent_change_log.md).
+
+To run **STATIC** source analysis without QEMU, create a Python 3.11+ environment, install `requirements-executioner.txt`, and follow the README's ready-to-copy CLI request. The optional **REVIEWED** runtime mode requires an operator-approved immutable Git SHA, a verified private QEMU/Ubuntu configuration and any necessary reviewed offline asset/test catalogs. The runtime is **not security-attested for arbitrary untrusted student repositories**. The main ProjectIQ orchestrator can import `projectiq_executioner.orchestration.evaluate()` directly.

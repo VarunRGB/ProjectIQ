@@ -1,3 +1,9 @@
+# ProjectIQ complete application environment (all agents).
+# For the much smaller Executioner-only controller install, run:
+#   python -m pip install -r requirements-executioner.txt
+# This does NOT install QEMU/Ubuntu/guest app dependencies.
+-r requirements-executioner.txt
+
 requests>=2.28
 pydantic>=2.5
 pyspellchecker>=0.8

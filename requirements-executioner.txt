@@ -1,0 +1,6 @@
+# Lightweight host-controller dependencies for ProjectIQ Executioner.
+# Python >=3.11 required. All submitted repositories remain UNTRUSTED DATA.
+# QEMU, OpenSSH, Ubuntu QCOW2, guest runtimes and offline caches are NOT pip packages.
+# The Executioner analyzer, planner, test generator, diagnosis, benchmark and
+# one-call orchestrator otherwise use Python's standard library.
+pycdlib>=1.14.0,<2
