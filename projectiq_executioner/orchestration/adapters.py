@@ -82,11 +82,25 @@ def diagnose(*, plan: dict|None, runs: list[tuple[dict,str,dict|None]],
              quality: dict|None, receipts: list[dict], dest: Path) -> dict:
     from projectiq_executioner.phase6.pipeline import build
     from projectiq_executioner.phase6.report import markdown,validate_report
-    from projectiq_executioner.phase6.contracts import write_json_atomic
+    from projectiq_executioner.phase6.contracts import write_json_atomic, EvidenceError
+    from projectiq_executioner.phase6.catalog import diagnosis
     if plan is None and quality is None and not runs:
         reject('NO_PHASE6_EVIDENCE')
-    report=build(plans=[(plan,'PLAN')] if plan else [],run_inputs=runs,
-                 quality_input=(quality,'QUALITY') if quality else None,receipts=receipts)
+    base=dict(plans=[(plan,'PLAN')] if plan else [],quality_input=(quality,'QUALITY') if quality else None)
+    accepted=[]; rejected=[]
+    # Keep strict normalization: a malformed or cross-source run never becomes
+    # an observation. Isolate rejected inputs while retaining valid evidence.
+    for run in runs:
+        try:build(**base,run_inputs=[run])
+        except EvidenceError as exc:rejected.append((run[1],exc.code))
+        else:accepted.append(run)
+    report=build(**base,run_inputs=accepted,receipts=receipts)
+    if rejected:
+        if report['status']!='SECURITY_HOLD':report['status']='PARTIAL'
+        for label,code in rejected:
+            report['diagnoses'].append(diagnosis('INVALID_TEST_EVIDENCE',evidence=[label],confidence='HIGH'))
+            report['limitations'].append('Rejected diagnostic input '+label+': '+code)
+        report['summary']['diagnoses']=len(report['diagnoses'])
     validate_report(report)
     dest.mkdir(parents=True,exist_ok=True)
     write_json_atomic(report,dest/'phase6_diagnosis.json')

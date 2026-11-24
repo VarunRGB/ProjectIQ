@@ -22,6 +22,8 @@ from .contracts import (ATTESTATION,CLEAN,EXECUTED,VM_COST,OrchestrationError,
                         validate_request,validate_source,verified_run_shape,write_json)
 from .report import render_markdown
 from .matrix import build_test_case_matrix
+from .review_errors import review_error_codes
+from .coverage import route_inventory, plan_review_hints, bounded_observations, workflow_metrics
 
 # Independent VM workflows; this is a preference ranking, not a dependency
 # chain. Each reviewed workflow starts and cleans its own VM context.
@@ -51,6 +53,9 @@ def _reason(exc: BaseException) -> str:
     # No exception message or hostname/student file content in final output.
     if isinstance(exc,OrchestrationError):
         return exc.code
+    if type(exc).__module__=='projectiq_executioner.phase6.contracts' and type(exc).__name__=='EvidenceError':
+        code=getattr(exc,'code','')
+        if isinstance(code,str) and code and len(code)<=90 and code.replace('_','').isalnum() and code.isupper():return code
     return 'STAGE_'+type(exc).__name__.upper()[:38]
 
 
@@ -157,6 +162,10 @@ def _static_snapshot(result: dict, manifest: dict, candidate: dict|None,
                     for f in manifest.get('findings',[])[:100] if type(f) is dict],
         'unknowns':manifest.get('unknowns',[])[:100],
     }
+    inventory=route_inventory(manifest)
+    result['project_intelligence'].update(inventory)
+    result['project_intelligence']['findings']=[{k:f.get(k) for k in ('code','severity','message','evidence')}
+        for f in manifest.get('findings',[])[:100] if type(f) is dict]
     techs=[t.get('name') for t in result['project_intelligence']['technologies']
            if type(t.get('name')) is str][:8]
     features=[f.get('name') for f in result['project_intelligence']['features']
@@ -183,6 +192,8 @@ def _static_snapshot(result: dict, manifest: dict, candidate: dict|None,
                                        'assertions':c.get('assertions',[])}
                                       for c in plan.get('test_cases',[])],
                              'trust':'TEST_SPECIFICATIONS_NOT_EXECUTION'}
+    if plan:
+        result['test_plan']['review_candidates']=plan_review_hints(plan,inventory,manifest)
     if quality:
         result['code_quality']={'status':quality['status'],'summary':quality['summary'],
                                 'coverage':quality['coverage'], 'quality':quality['quality'],
@@ -193,6 +204,14 @@ def _static_snapshot(result: dict, manifest: dict, candidate: dict|None,
                                 'duplications':quality['duplications'],
                                 'limitations':quality['limitations'],
                                 'score_is_grade':False}
+        # Raw Phase 5 v0.3 evidence remains intact for existing consumers. The
+        # public aggregate must not call an incomplete score overall quality.
+        q=dict(result['code_quality']['quality'])
+        if q.get('status')!='PROVISIONAL':
+            q['measured_dimensions_indicator']=q.get('score')
+            q['score']=None
+            q['overall_score_status']='WITHHELD_LIMITED_COVERAGE'
+        result['code_quality']['quality']=q
 
 
 def _restore_static(prior_path: Path, out: Path, source: dict) -> tuple[dict,dict,dict,dict,dict,dict]:
@@ -349,7 +368,7 @@ def _summary_suites(entries: list[dict]) -> dict:
     return {'suite_count':len(entries),'states':dict(sorted(counts.items())),
             'verified_passes':sum(s['state']=='PASS' and s.get('vm_verified',False) for s in entries),
             'observed_failures':sum(s['state']=='FAIL' for s in entries),
-            'unverified':sum(s['state'] in ('BLOCKED','NOT_VERIFIED','INCONCLUSIVE','REVIEW_REQUIRED') for s in entries)}
+            'unverified':sum(not s.get('vm_verified',False) for s in entries)}
 
 
 def _normalized_state(kind: str, r: dict, vm: dict|None) -> str:
@@ -541,7 +560,8 @@ def evaluate(request: Mapping[str,Any], *, output_dir:Path,
                        'has_test_plan':bool(result['test_plan']),
                        'has_code_quality':bool(result['code_quality']),
                        'has_diagnosis':bool(result['diagnostics']),
-                       'vm_attempts_scheduled_this_call':result['vm_attempts_scheduled']}
+                       'vm_attempts_scheduled_this_call':result['vm_attempts_scheduled'],
+                       'verified_current_suites':sum(s.get('vm_verified') is True and not s.get('reused_from_prior') for s in result['suites'])}
     try:
         result['artifacts']=_collect_artifacts(out)
         report_path=out/'executioner_report.md'
@@ -646,21 +666,27 @@ def _run_reviewed(req:dict,op:OperatorContext,out:Path,result:dict,
             check=runners.preflight(kind,plan=plan,candidate=candidate,config=config,catalogs=cats)
             if check['approved']:
                 item['ready']=True
+                item['scenario_links']=check.get('scenario_links',[])
             else:
                 item.update(ready=False,reason=check['code'])
-        except (OSError,ValueError,TypeError,KeyError,RuntimeError):
-            item.update(ready=False,reason='CATALOG_REVIEW_INVALID_OR_UNAPPROVED')
+        except (OSError,ValueError,TypeError,KeyError,RuntimeError) as exc:
+            codes=review_error_codes(exc)
+            item.update(ready=False,reason=codes[0] if codes else 'CATALOG_REVIEW_INVALID_OR_UNAPPROVED',
+                        review_error_codes=codes)
         preflight.append(item)
     cost=0
     for item in preflight:
         kind=item['kind']
         if result['status']=='SECURITY_HOLD':
             result['suites'].append({'kind':kind,'state':'BLOCKED','reason':'SECURITY_HOLD_ACTIVE',
+                                     'approved_scenario_links':item.get('scenario_links',[]),
                                      'vm_verified':False,'fingerprint':item['fingerprint']})
             continue
         if not item.get('ready'):
             result['suites'].append({'kind':kind,'state':'REVIEW_REQUIRED',
                                      'reason':item.get('reason','REVIEW_MISSING'),
+                                     'review_error_codes':item.get('review_error_codes',[]),
+                                     'execution_state':'NOT_EXECUTED',
                                      'fingerprint':item['fingerprint'],'vm_verified':False})
             _review(result,'CATALOG_APPROVAL_OR_ORACLE_REQUIRED',kind,source=source)
             continue
@@ -677,10 +703,19 @@ def _run_reviewed(req:dict,op:OperatorContext,out:Path,result:dict,
                 if cost+VM_COST[kind]>req['max_vm_launches']:
                     result['suites'].append({'kind':kind,'state':'BLOCKED',
                         'reason':'VM_ATTEMPT_BUDGET','fingerprint':item['fingerprint'],
+                        'approved_scenario_links':item.get('scenario_links',[]),
                         'vm_verified':False})
                     _limit(result,'VM_BUDGET_EXHAUSTED')
                     continue
-                dir.mkdir(parents=True,exist_ok=False)
+                # Runners own their fresh output directory (several reject an
+                # already-existing directory even if empty). Refuse unsafe
+                # destinations before reserving VM budget or calling a runner.
+                if dir.exists() or not no_symlinks(dir):
+                    result['suites'].append({'kind':kind,'state':'BLOCKED',
+                        'reason':'OUTPUT_DESTINATION_NOT_FRESH','vm_verified':False,
+                        'execution_state':'NOT_INVOKED','fingerprint':item['fingerprint']})
+                    _review(result,'OUTPUT_DESTINATION_NOT_FRESH',kind,source=source)
+                    continue
                 # Each Phase 4 runner is responsible for its own reviewed
                 # guest-only execution and independently verified cleanup.
                 cost+=VM_COST[kind]
@@ -725,14 +760,7 @@ def _run_reviewed(req:dict,op:OperatorContext,out:Path,result:dict,
             # Export bounded outcome metadata, not raw HTTP bodies, cookies,
             # submitted credentials, or diagnostic logs. The complete validated
             # source report stays available by artifact hash.
-            rows=report.get('results') or report.get('checks') or report.get('scenarios') or []
-            observations=[]
-            if type(rows) is list:
-                for row in rows[:400]:
-                    if type(row) is dict:
-                        observations.append({k:row.get(k) for k in (
-                            'test_id','id','step','result','status','http_status',
-                            'issue_code','reason_code') if k in row})
+            observations=bounded_observations(kind,report,item.get('scenario_links',[])) if vm_verified else []
             entry={'kind':kind,'state':state,'result_status':report.get('status'),
                    'cleanup':report.get('cleanup'),'vm_verified':vm_verified,
                    'reused_from_prior':reused,'fingerprint':item['fingerprint'],
@@ -740,6 +768,10 @@ def _run_reviewed(req:dict,op:OperatorContext,out:Path,result:dict,
                    'report_path':'phase4/'+kind+'/'+runners.output_files(kind)[0],
                    'vm_path':('phase4/'+kind+'/'+runners.output_files(kind)[1])
                               if runners.output_files(kind)[1] else None,
+                   'execution_state':'REUSED_VERIFIED' if reused else 'VERIFIED_EXECUTION' if vm_verified else
+                       'NOT_EXECUTED' if report.get('execution')=='NOT_PERFORMED' else 'EXECUTION_NOT_VERIFIED',
+                   'approved_scenario_links':item.get('scenario_links',[]),
+                   'observed_metrics':workflow_metrics(kind,report) if vm_verified else {},
                    'result_count':len(observations),
                    'summary':{k:v for k,v in (report.get('summary') or {}).items()
                                if type(v) in (str,int,bool)},
@@ -759,6 +791,8 @@ def _run_reviewed(req:dict,op:OperatorContext,out:Path,result:dict,
             result['status']='SECURITY_HOLD'
             result['suites'].append({'kind':kind,'state':'INVALID_EVIDENCE',
                  'reason':'RUNNER_INTERRUPTED_OR_EVIDENCE_REJECTED',
+                 'execution_state':'EXECUTION_OR_CLEANUP_UNKNOWN',
+                 'error_category':_reason(exc),
                  'fingerprint':item['fingerprint'],'vm_verified':False})
             _limit(result,'VM_WORKER_EXCEPTION_CLEANUP_UNCONFIRMED')
             _review(result,'VM_SECURITY_HOLD_REQUIRES_OPERATOR_INVESTIGATION',kind,source=source)
@@ -784,11 +818,13 @@ def _recommendations(result:dict) -> list[dict]:
         items.append({'source':'PHASE6','code':code,'priority':d.get('priority'),
              'recommendation':action,'evidence':d.get('evidence',[]),
              'causal_status':d.get('causal_status','UNPROVEN')})
-    for f in result.get('code_quality',{}).get('findings',[])[:150]:
+    findings=result.get('code_quality',{}).get('findings',[])
+    ranks={'HIGH':0,'MEDIUM':1,'LOW':2,'ADVISORY':3}
+    for f in sorted(findings,key=lambda x:ranks.get(x.get('severity'),4))[:150]:
         if type(f) is not dict:continue
         code=f.get('code');path=f.get('path');action=f.get('recommendation')
         if type(code) is not str or type(path) is not str or type(action) is not str:continue
-        k=('PHASE5',code,path,f.get('line'))
+        k=('PHASE5',code) if code=='TRAILING_WHITESPACE' else ('PHASE5',code,path,f.get('line'))
         if k in seen:continue
         seen.add(k)
         items.append({'source':'PHASE5','code':code,'priority':f.get('severity'),

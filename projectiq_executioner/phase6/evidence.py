@@ -13,6 +13,7 @@ from .contracts import (EvidenceError, CLEAN, EXEC, NOT_ATTESTED, MAX_TESTS,
 # Stage-specific, closed status vocabulary. Do not convert unknown statuses to FAIL.
 STAGES = {
  'reviewed_vm_functional_testing': ('TESTS_PASSED','TESTS_FAILED','TESTS_INCONCLUSIVE','GUEST_RESULTS_NOT_VERIFIED','VM_EXECUTION_NOT_VERIFIED','CLEANUP_FAILED','BLOCKED','NO_RUNNABLE_TESTS'),
+ 'reviewed_vm_authentication_testing': ('TESTS_PASSED','TESTS_FAILED','TESTS_INCONCLUSIVE','GUEST_RESULTS_NOT_VERIFIED','VM_EXECUTION_NOT_VERIFIED','CLEANUP_FAILED'),
  'reviewed_vm_api_testing': ('TESTS_PASSED','TESTS_FAILED','TESTS_INCONCLUSIVE','GUEST_RESULTS_NOT_VERIFIED','VM_EXECUTION_NOT_VERIFIED','CLEANUP_FAILED','BLOCKED'),
  'reviewed_browser_ui': ('BROWSER_PASSED','BROWSER_FAILED','BROWSER_INCONCLUSIVE','BROWSER_NOT_VERIFIED','BROWSER_VM_NOT_VERIFIED','CLEANUP_FAILED'),
  'reviewed_browser_login': ('LOGIN_PASSED','LOGIN_FAILED','LOGIN_INCONCLUSIVE','LOGIN_VM_NOT_VERIFIED','CLEANUP_FAILED'),
@@ -26,6 +27,7 @@ STAGES = {
 VM_STAGE_PROOFS = {
  'reviewed_vm_functional_testing':'phase4_status',
  'reviewed_vm_api_testing':'phase4c_status',
+ 'reviewed_vm_authentication_testing':'phase4d2_status',
  'reviewed_browser_ui':'phase4dc_status',
  'reviewed_browser_login':'phase4dd_status',
  'reviewed_vm_database_postconditions':'phase4d3_status',
@@ -103,7 +105,13 @@ def normalize_vm(data: dict) -> dict:
     reason=reason if type(reason) is str and len(reason)<100 else None
     ready = (status == 'STARTUP_VERIFIED' and exe == EXEC and cleanup == CLEAN
              and backend == 'QEMU_DISPOSABLE_QCOW2_VM' and att == NOT_ATTESTED)
-    return {'source':src,'status':status,'execution':exe,'cleanup':cleanup,
+    receipts={}
+    for name,key in (('reviewed_vm_api_testing','phase4c_test_results'),('reviewed_vm_authentication_testing','phase4d2_auth_report')):
+        guest_report=data.get(key)
+        if (type(guest_report) is dict and guest_report.get('source')==data.get('source')
+                and guest_report.get('adapter')==data.get('adapter') and type(guest_report.get('results')) is list):
+            receipts[name]=stable_hash({k:guest_report.get(k) for k in (('results','summary') if name=='reviewed_vm_api_testing' else ('results','summary','session_cookie_observed','auth_catalog_sha256','oracle_catalog_sha256'))})
+    return {'source':src,'status':status,'execution':exe,'cleanup':cleanup,'guest_receipts':receipts,
             'backend':backend,'security_attestation':att,'ready':ready,
             'adapter':data.get('adapter') if type(data.get('adapter')) is str else None,
             'validated_stages':{v for v in VM_STAGE_PROOFS.values() if data.get(v)=='VALIDATED'},
@@ -173,9 +181,12 @@ def normalize_run(data: dict, *, label: str, vm: dict | None = None) -> dict:
     if vm is not None and vm['execution'] != exe:
         fail('VM_RUN_EXECUTION_MISMATCH')
     rows = []
-    if stage in ('reviewed_vm_functional_testing','reviewed_vm_api_testing','reviewed_vm_database_postconditions'):
+    if stage in ('reviewed_vm_functional_testing','reviewed_vm_api_testing','reviewed_vm_authentication_testing','reviewed_vm_database_postconditions'):
         rows = _check_rows(data.get('results', []), data.get('summary'), stage=stage)
         c = Counter(x['outcome'] for x in rows)
+        if stage=='reviewed_vm_authentication_testing' and status in PASS_STATES | FAIL_STATES | INCONCLUSIVE_STATES:
+            if [r['id'] for r in rows]!=['UNAUTHENTICATED','REGISTRATION','LOGIN','AUTHENTICATED']:
+                fail('INVALID_AUTH_STEP_SEQUENCE')
         if status == 'TESTS_PASSED' and (not rows or c['FAIL'] or c['INCONCLUSIVE']):
             fail('PASS_STATUS_CONTRADICTS_RESULTS')
         if status == 'TESTS_FAILED' and not c['FAIL']:
@@ -217,6 +228,10 @@ def normalize_run(data: dict, *, label: str, vm: dict | None = None) -> dict:
                     and vm['validated_stages'].__contains__(VM_STAGE_PROOFS.get(stage))
                     and source[0]=='github'
                     and status in PASS_STATES | FAIL_STATES | INCONCLUSIVE_STATES)
+    if verified and (stage=='reviewed_vm_authentication_testing' or (stage=='reviewed_vm_api_testing' and any(row['id'].startswith('OC-') for row in rows))):
+        fields=('results','summary') if stage=='reviewed_vm_api_testing' else ('results','summary','session_cookie_observed','auth_catalog_sha256','oracle_catalog_sha256')
+        if vm['guest_receipts'].get(stage)!=stable_hash({k:data.get(k) for k in fields}):
+            fail('REVIEWED_RUN_GUEST_OBSERVATIONS_MISMATCH')
     return {'label':label,'source':source,'stage':stage,'status':status,'adapter':adapter,
             'execution':exe,'cleanup':clean,'rows':rows,'issue':issue,
             'supported':supported,'vm':vm,'verified':verified,

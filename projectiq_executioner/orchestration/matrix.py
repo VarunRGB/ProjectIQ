@@ -49,7 +49,7 @@ def _evidence(suite: Mapping[str, Any], observation: Mapping[str, Any] | None = 
     if suite.get('vm_preflight_reason'):
         result['vm_preflight_reason'] = suite['vm_preflight_reason']
     if observation is not None:
-        for key in ('test_id', 'id', 'step', 'result', 'status', 'http_status', 'issue_code', 'reason_code'):
+        for key in ('test_id', 'id', 'step', 'result', 'status', 'http_status', 'issue_code', 'reason_code', 'phase3_test_id', 'method', 'path', 'expected_assertions', 'assertions', 'before_matches', 'after_matches', 'expected_fields_match'):
             if key in observation:
                 result[key] = observation[key]
     return result
@@ -72,6 +72,19 @@ def build_test_case_matrix(plan: Mapping[str, Any] | None,
     known_ids = {c.get('id') for c in cases if type(c) is dict and type(c.get('id')) is str}
     linked: dict[str, list[tuple[str, str, dict]]] = defaultdict(list)
     additional: list[dict] = []
+    related=defaultdict(list)
+    approved=defaultdict(set)
+    workflow_related=defaultdict(list)
+    for suite in suites:
+        if type(suite) is not dict:continue
+        for spec in suite.get('approved_scenario_links') or []:
+            if type(spec) is dict and spec.get('phase3_test_id') in known_ids:
+                approved[spec['phase3_test_id']].add(suite.get('kind'))
+                if suite.get('vm_verified') is True and suite.get('kind') in ('crud','dependent_workflow'):
+                    aggregate=[x for x in suite.get('observations',[]) if x.get('id') in ('WORKFLOW','CRUD_WORKFLOW')]
+                    if len(aggregate)==1:
+                        verdict,_=_check_result(aggregate[0],suite)
+                        workflow_related[spec['phase3_test_id']].append({'suite':suite.get('kind'),'check_id':aggregate[0]['id'],'outcome':verdict,'scope':'AGGREGATE_WORKFLOW_ONLY'})
     dropped = 0
     for suite in suites:
         if type(suite) is not dict:
@@ -96,7 +109,14 @@ def build_test_case_matrix(plan: Mapping[str, Any] | None,
                 continue
             ident = row.get('test_id', row.get('id', row.get('step')))
             # A reviewed check is not automatically a Phase 3 discovered case.
-            additional.append({'suite': suite.get('kind'), 'check_id': ident,
+            parent=row.get('phase3_test_id')
+            # Only host-compiled approved metadata can establish an association.
+            bindings=[a for a in suite.get('approved_scenario_links',[])
+                      if a.get('check_id')==ident and a.get('phase3_test_id')==parent]
+            if parent in known_ids and len(bindings)==1:
+                related[parent].append({'suite':suite.get('kind'),'check_id':ident,'outcome':outcome})
+            else:parent=None
+            additional.append({'suite': suite.get('kind'), 'check_id': ident, 'phase3_test_id':parent,
                                'outcome': outcome, 'reason': reason,
                                'evidence': [evidence],
                                'scope': 'REVIEWED_CHECK_NOT_LINKED_TO_PHASE3_CASE'})
@@ -112,6 +132,9 @@ def build_test_case_matrix(plan: Mapping[str, Any] | None,
             proof = [item[2] for item in matched]
         elif plan_status == 'NEEDS_ORACLE':
             outcome, reason, proof = 'NOT_TESTED', 'REVIEWED_ORACLE_MISSING', []
+            if related[test_id]:reason='REVIEWED_SCENARIO_ONLY_NOT_FULL_ROUTE'
+            elif workflow_related[test_id]:reason='REVIEWED_WORKFLOW_ONLY_NOT_FULL_ROUTE'
+            elif approved[test_id]:reason='APPROVED_SCENARIO_NO_VERIFIED_OBSERVATION'
         elif plan_status == 'UNSUPPORTED_BY_RUNNER':
             outcome, reason, proof = 'NOT_TESTED', 'UNSUPPORTED_TEST_TARGET', []
         elif plan_status == 'READY_FOR_PHASE4':
@@ -137,6 +160,7 @@ def build_test_case_matrix(plan: Mapping[str, Any] | None,
             'expected_assertions': case.get('assertions') or [],
             'outcome': outcome, 'reason': reason,
             'evidence': proof,
+            'related_reviewed_checks':related[test_id]+workflow_related[test_id],
             'scope': 'PHASE3_DISCOVERED_CASE',
         })
     counts = Counter(x['outcome'] for x in discovered)

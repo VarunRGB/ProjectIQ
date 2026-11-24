@@ -14,9 +14,10 @@ import re
 from typing import Any, Mapping
 
 from .source_contracts import _relative_path, static_page_hash, openapi_get_contracts
+from .method_reconciliation import reconcile_file_methods
 
 SCHEMA_VERSION = "1.1"
-GENERATOR_VERSION = "0.2.0"
+GENERATOR_VERSION = "0.2.1"
 MAX_MANIFEST_BYTES = 8_000_000
 MAX_CANDIDATE_BYTES = 200_000
 MAX_TEST_CASES = 400
@@ -179,6 +180,7 @@ def _empty(source: dict[str, Any], adapter: str | None, candidate_status: str | 
         "issues": [],
         "limitations": [
             "Test discovery does not establish application correctness.",
+            "Client-derived HTTP methods describe intended requests, not server-enforced methods.",
             "Missing expected behavior is explicitly not a runnable assertion.",
             "A test plan never authorizes launching untrusted student code.",
             "Phase 4 must independently revalidate source, tests, runtime policy and oracles.",
@@ -274,6 +276,9 @@ def generate_test_plan(manifest: Mapping[str, Any],
         routes = []
     if len(routes) > MAX_RECORDS_PER_FIELD:
         issues.add("ROUTE_INVENTORY_TRUNCATED")
+    # Reconcile an unknown PHP method using matched local client evidence.
+    # This creates only a candidate, never an oracle or an approval.
+    routes = reconcile_file_methods(manifest, routes)
     # Aggregate repeated server/client mentions for the same target.
     by_route: dict[tuple[str, str], dict] = {}
     for route in routes[:MAX_RECORDS_PER_FIELD]:
@@ -308,6 +313,8 @@ def generate_test_plan(manifest: Mapping[str, Any],
         key = (method, path)
         record = by_route.setdefault(key, {"sources": set(), "evidence": []})
         record["sources"].add(kind)
+        if route.get("_client_method_hint") is True and kind == "file_endpoint":
+            record["sources"].add("client_server_method_hint")
         record["evidence"].extend(_evidence(route.get("evidence")))
 
     # Declared OpenAPI GET operations are additional source-backed discovery,

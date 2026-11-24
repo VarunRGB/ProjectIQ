@@ -1,0 +1,1426 @@
+{
+  "provenance": "HISTORICAL_SAVED_EVIDENCE_OFFLINE_REGRESSION_ONLY",
+  "plan": {
+    "execution_context": {
+      "adapter": "php_mysql_v1",
+      "operator_approval": "NOT_EVALUATED",
+      "phase2_candidate_status": "CANDIDATE_NEEDS_VM_VERIFICATION",
+      "source_snapshot_verified": true
+    },
+    "generator": {
+      "llm_used": false,
+      "name": "projectiq_phase3_rules",
+      "student_code_executed": false,
+      "version": "0.2.0"
+    },
+    "inventory": {
+      "database_schemas": [
+        {
+          "path": "sql/mini_collab_app.sql"
+        }
+      ],
+      "existing_tests": [],
+      "features": [
+        {
+          "evidence": [
+            {
+              "line": 10,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "Add tasks with title, deadline, and priority",
+          "related_proposals": [
+            "Translate documented feature into observable assertions: Add tasks with title, deadline, and priority"
+          ]
+        },
+        {
+          "evidence": [
+            {
+              "line": 15,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "Delete any task",
+          "related_proposals": [
+            "Translate documented feature into observable assertions: Delete any task"
+          ]
+        },
+        {
+          "evidence": [
+            {
+              "line": 12,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "Edit their own tasks",
+          "related_proposals": [
+            "Translate documented feature into observable assertions: Edit their own tasks"
+          ]
+        },
+        {
+          "evidence": [
+            {
+              "line": 16,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "Filter tasks by user",
+          "related_proposals": [
+            "Translate documented feature into observable assertions: Filter tasks by user"
+          ]
+        },
+        {
+          "evidence": [
+            {
+              "line": 11,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "Mark tasks as completed",
+          "related_proposals": [
+            "Translate documented feature into observable assertions: Mark tasks as completed"
+          ]
+        },
+        {
+          "evidence": [
+            {
+              "line": 20,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "Proper project structure with folders for auth, db, config, styles, scripts, etc."
+        },
+        {
+          "evidence": [
+            {
+              "line": 18,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "Responsive UI using table layouts with clean styling",
+          "related_proposals": [
+            "Translate documented feature into observable assertions: Responsive UI using table layouts with clean styling"
+          ]
+        },
+        {
+          "evidence": [
+            {
+              "line": 8,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "Role-based Dashboard",
+          "related_proposals": [
+            "Translate documented feature into observable assertions: Role-based Dashboard"
+          ]
+        },
+        {
+          "evidence": [
+            {
+              "line": 19,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "Secure password hashing using password_hash() / password_verify()",
+          "related_proposals": [
+            "Translate documented feature into observable assertions: Secure password hashing using password_hash() / password_verify()"
+          ]
+        },
+        {
+          "evidence": [
+            {
+              "line": 17,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "Task Status: Shows whether a task is Pending or Completed",
+          "related_proposals": [
+            "Translate documented feature into observable assertions: Task Status: Shows whether a task is Pending or Completed"
+          ]
+        },
+        {
+          "evidence": [
+            {
+              "line": 7,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "User Registration & Login (with roles: admin, user)",
+          "related_proposals": [
+            "Translate documented feature into observable assertions: User Registration & Login (with roles: admin, user)"
+          ]
+        },
+        {
+          "evidence": [
+            {
+              "line": 14,
+              "path": "README.md",
+              "reason": "Documented feature or static implementation cue",
+              "source": "repository"
+            }
+          ],
+          "name": "View all tasks by all users",
+          "related_proposals": [
+            "Translate documented feature into observable assertions: View all tasks by all users"
+          ]
+        }
+      ],
+      "page_sources": [
+        {
+          "path": "public/admin_dashboard.html"
+        },
+        {
+          "path": "public/login.html"
+        },
+        {
+          "path": "public/register.html"
+        },
+        {
+          "path": "public/user_dashboard.html"
+        }
+      ],
+      "program_entrypoints": [
+        {
+          "kind": "php_file_endpoint",
+          "path": "auth/login.php"
+        },
+        {
+          "kind": "php_file_endpoint",
+          "path": "auth/logout.php"
+        },
+        {
+          "kind": "php_file_endpoint",
+          "path": "auth/register.php"
+        },
+        {
+          "kind": "php_file_endpoint",
+          "path": "logic/add_task.php"
+        },
+        {
+          "kind": "php_file_endpoint",
+          "path": "logic/delete_task.php"
+        },
+        {
+          "kind": "php_file_endpoint",
+          "path": "logic/delete_task_user.php"
+        },
+        {
+          "kind": "php_file_endpoint",
+          "path": "logic/edit_task.php"
+        },
+        {
+          "kind": "php_file_endpoint",
+          "path": "logic/get_tasks.php"
+        },
+        {
+          "kind": "php_file_endpoint",
+          "path": "logic/get_user_tasks.php"
+        },
+        {
+          "kind": "php_file_endpoint",
+          "path": "logic/update_status.php"
+        },
+        {
+          "kind": "web_page",
+          "path": "public/admin_dashboard.html"
+        },
+        {
+          "kind": "web_page",
+          "path": "public/login.html"
+        },
+        {
+          "kind": "web_page",
+          "path": "public/register.html"
+        },
+        {
+          "kind": "web_page",
+          "path": "public/user_dashboard.html"
+        }
+      ],
+      "proposals": [
+        "Inspect contract and expected behavior for POST auth/login.php",
+        "Inspect contract and expected behavior for POST auth/register.php",
+        "Inspect contract and expected behavior for POST logic/add_task.php",
+        "Inspect contract and expected behavior for POST logic/delete_task.php",
+        "Inspect contract and expected behavior for POST logic/delete_task_user.php",
+        "Inspect contract and expected behavior for POST logic/edit_task.php",
+        "Inspect contract and expected behavior for POST logic/update_status.php",
+        "Inspect contract and expected behavior for UNKNOWN (frontend calls use GET; not server-verified) logic/get_tasks.php",
+        "Inspect contract and expected behavior for UNKNOWN (frontend calls use GET; not server-verified) logic/get_user_tasks.php",
+        "Inspect contract and expected behavior for UNKNOWN auth/logout.php"
+      ],
+      "source_contracts": []
+    },
+    "issues": [
+      {
+        "code": "UNSAFE_OR_UNRESOLVED_ROUTE_SKIPPED",
+        "stage": "test_generation"
+      }
+    ],
+    "limitations": [
+      "Test discovery does not establish application correctness.",
+      "Missing expected behavior is explicitly not a runnable assertion.",
+      "A test plan never authorizes launching untrusted student code.",
+      "Phase 4 must independently revalidate source, tests, runtime policy and oracles."
+    ],
+    "phase": 3,
+    "schema_version": "1.1",
+    "source": {
+      "commit_sha": "c4f7965d16807fa05c3d7ffeee54f86fee4d0a37",
+      "kind": "github",
+      "repository": "VarunRGB/Mini-Task-Collaboration-App"
+    },
+    "stage": "deterministic_test_generation",
+    "status": "GENERATED",
+    "summary": {
+      "categories": {
+        "HTTP_READINESS": 1,
+        "HTTP_ROUTE": 10
+      },
+      "inventory_counts": {
+        "database_schemas": 1,
+        "existing_tests": 0,
+        "features": 12,
+        "page_sources": 4,
+        "program_entrypoints": 14,
+        "proposals": 10,
+        "source_contracts": 0
+      },
+      "needs_oracle": 10,
+      "ready_for_phase4": 1,
+      "total": 11,
+      "unsupported_by_runner": 0
+    },
+    "test_cases": [
+      {
+        "assertions": [
+          {
+            "expected": 200,
+            "kind": "HTTP_STATUS_EQUALS"
+          }
+        ],
+        "blockers": [],
+        "category": "HTTP_READINESS",
+        "evidence": [
+          {
+            "line": null,
+            "path": "probe_path",
+            "reason": "Fixed Phase 2 adapter startup readiness contract",
+            "source": "phase2_candidate"
+          }
+        ],
+        "evidence_kinds": [
+          "phase2_candidate"
+        ],
+        "execution": "NOT_PERFORMED",
+        "id": "TC-0673C5B21F4BBD1A",
+        "oracle": {
+          "basis": "PHASE2_ADAPTER_READINESS_CONTRACT",
+          "status": "GROUNDED"
+        },
+        "related_proposals": [],
+        "required_adapter": "php_mysql_v1",
+        "status": "READY_FOR_PHASE4",
+        "target": {
+          "label": null,
+          "method": "GET",
+          "path": "/public/login.html"
+        },
+        "title": "Adapter readiness: GET /public/login.html"
+      },
+      {
+        "assertions": [],
+        "blockers": [
+          "EXPECTED_BEHAVIOR_UNKNOWN",
+          "INPUT_FIXTURES_AND_STATE_RESET_REQUIRED"
+        ],
+        "category": "HTTP_ROUTE",
+        "evidence": [
+          {
+            "line": 1,
+            "path": "auth/login.php",
+            "reason": "Static route or HTTP client call",
+            "source": "repository"
+          }
+        ],
+        "evidence_kinds": [
+          "file_endpoint"
+        ],
+        "execution": "NOT_PERFORMED",
+        "id": "TC-2E2126D8BDEE2B7C",
+        "oracle": {
+          "basis": null,
+          "status": "NOT_ESTABLISHED"
+        },
+        "related_proposals": [],
+        "required_adapter": "php_mysql_v1",
+        "status": "NEEDS_ORACLE",
+        "target": {
+          "label": null,
+          "method": "POST",
+          "path": "/auth/login.php"
+        },
+        "title": "Verify POST /auth/login.php"
+      },
+      {
+        "assertions": [],
+        "blockers": [
+          "EXPECTED_BEHAVIOR_UNKNOWN",
+          "HTTP_METHOD_UNKNOWN"
+        ],
+        "category": "HTTP_ROUTE",
+        "evidence": [
+          {
+            "line": 1,
+            "path": "auth/logout.php",
+            "reason": "Static route or HTTP client call",
+            "source": "repository"
+          }
+        ],
+        "evidence_kinds": [
+          "file_endpoint"
+        ],
+        "execution": "NOT_PERFORMED",
+        "id": "TC-68D7B8C6E2C47630",
+        "oracle": {
+          "basis": null,
+          "status": "NOT_ESTABLISHED"
+        },
+        "related_proposals": [],
+        "required_adapter": "php_mysql_v1",
+        "status": "NEEDS_ORACLE",
+        "target": {
+          "label": null,
+          "method": null,
+          "path": "/auth/logout.php"
+        },
+        "title": "Verify UNKNOWN /auth/logout.php"
+      },
+      {
+        "assertions": [],
+        "blockers": [
+          "EXPECTED_BEHAVIOR_UNKNOWN",
+          "INPUT_FIXTURES_AND_STATE_RESET_REQUIRED"
+        ],
+        "category": "HTTP_ROUTE",
+        "evidence": [
+          {
+            "line": 1,
+            "path": "auth/register.php",
+            "reason": "Static route or HTTP client call",
+            "source": "repository"
+          }
+        ],
+        "evidence_kinds": [
+          "file_endpoint"
+        ],
+        "execution": "NOT_PERFORMED",
+        "id": "TC-4823E546B9BB45F6",
+        "oracle": {
+          "basis": null,
+          "status": "NOT_ESTABLISHED"
+        },
+        "related_proposals": [],
+        "required_adapter": "php_mysql_v1",
+        "status": "NEEDS_ORACLE",
+        "target": {
+          "label": null,
+          "method": "POST",
+          "path": "/auth/register.php"
+        },
+        "title": "Verify POST /auth/register.php"
+      },
+      {
+        "assertions": [],
+        "blockers": [
+          "EXPECTED_BEHAVIOR_UNKNOWN",
+          "INPUT_FIXTURES_AND_STATE_RESET_REQUIRED"
+        ],
+        "category": "HTTP_ROUTE",
+        "evidence": [
+          {
+            "line": 1,
+            "path": "logic/add_task.php",
+            "reason": "Static route or HTTP client call",
+            "source": "repository"
+          }
+        ],
+        "evidence_kinds": [
+          "file_endpoint"
+        ],
+        "execution": "NOT_PERFORMED",
+        "id": "TC-B16CC375C72165D6",
+        "oracle": {
+          "basis": null,
+          "status": "NOT_ESTABLISHED"
+        },
+        "related_proposals": [],
+        "required_adapter": "php_mysql_v1",
+        "status": "NEEDS_ORACLE",
+        "target": {
+          "label": null,
+          "method": "POST",
+          "path": "/logic/add_task.php"
+        },
+        "title": "Verify POST /logic/add_task.php"
+      },
+      {
+        "assertions": [],
+        "blockers": [
+          "EXPECTED_BEHAVIOR_UNKNOWN",
+          "INPUT_FIXTURES_AND_STATE_RESET_REQUIRED"
+        ],
+        "category": "HTTP_ROUTE",
+        "evidence": [
+          {
+            "line": 1,
+            "path": "logic/delete_task.php",
+            "reason": "Static route or HTTP client call",
+            "source": "repository"
+          }
+        ],
+        "evidence_kinds": [
+          "file_endpoint"
+        ],
+        "execution": "NOT_PERFORMED",
+        "id": "TC-35582FF439994A40",
+        "oracle": {
+          "basis": null,
+          "status": "NOT_ESTABLISHED"
+        },
+        "related_proposals": [],
+        "required_adapter": "php_mysql_v1",
+        "status": "NEEDS_ORACLE",
+        "target": {
+          "label": null,
+          "method": "POST",
+          "path": "/logic/delete_task.php"
+        },
+        "title": "Verify POST /logic/delete_task.php"
+      },
+      {
+        "assertions": [],
+        "blockers": [
+          "EXPECTED_BEHAVIOR_UNKNOWN",
+          "INPUT_FIXTURES_AND_STATE_RESET_REQUIRED"
+        ],
+        "category": "HTTP_ROUTE",
+        "evidence": [
+          {
+            "line": 1,
+            "path": "logic/delete_task_user.php",
+            "reason": "Static route or HTTP client call",
+            "source": "repository"
+          }
+        ],
+        "evidence_kinds": [
+          "file_endpoint"
+        ],
+        "execution": "NOT_PERFORMED",
+        "id": "TC-9117665D6CF65132",
+        "oracle": {
+          "basis": null,
+          "status": "NOT_ESTABLISHED"
+        },
+        "related_proposals": [],
+        "required_adapter": "php_mysql_v1",
+        "status": "NEEDS_ORACLE",
+        "target": {
+          "label": null,
+          "method": "POST",
+          "path": "/logic/delete_task_user.php"
+        },
+        "title": "Verify POST /logic/delete_task_user.php"
+      },
+      {
+        "assertions": [],
+        "blockers": [
+          "EXPECTED_BEHAVIOR_UNKNOWN",
+          "INPUT_FIXTURES_AND_STATE_RESET_REQUIRED"
+        ],
+        "category": "HTTP_ROUTE",
+        "evidence": [
+          {
+            "line": 1,
+            "path": "logic/edit_task.php",
+            "reason": "Static route or HTTP client call",
+            "source": "repository"
+          }
+        ],
+        "evidence_kinds": [
+          "file_endpoint"
+        ],
+        "execution": "NOT_PERFORMED",
+        "id": "TC-E7E3744918C860A0",
+        "oracle": {
+          "basis": null,
+          "status": "NOT_ESTABLISHED"
+        },
+        "related_proposals": [],
+        "required_adapter": "php_mysql_v1",
+        "status": "NEEDS_ORACLE",
+        "target": {
+          "label": null,
+          "method": "POST",
+          "path": "/logic/edit_task.php"
+        },
+        "title": "Verify POST /logic/edit_task.php"
+      },
+      {
+        "assertions": [],
+        "blockers": [
+          "EXPECTED_BEHAVIOR_UNKNOWN",
+          "HTTP_METHOD_UNKNOWN"
+        ],
+        "category": "HTTP_ROUTE",
+        "evidence": [
+          {
+            "line": 1,
+            "path": "logic/get_tasks.php",
+            "reason": "Static route or HTTP client call",
+            "source": "repository"
+          }
+        ],
+        "evidence_kinds": [
+          "file_endpoint"
+        ],
+        "execution": "NOT_PERFORMED",
+        "id": "TC-E901CDDDEB77EF31",
+        "oracle": {
+          "basis": null,
+          "status": "NOT_ESTABLISHED"
+        },
+        "related_proposals": [],
+        "required_adapter": "php_mysql_v1",
+        "status": "NEEDS_ORACLE",
+        "target": {
+          "label": null,
+          "method": null,
+          "path": "/logic/get_tasks.php"
+        },
+        "title": "Verify UNKNOWN /logic/get_tasks.php"
+      },
+      {
+        "assertions": [],
+        "blockers": [
+          "EXPECTED_BEHAVIOR_UNKNOWN",
+          "HTTP_METHOD_UNKNOWN"
+        ],
+        "category": "HTTP_ROUTE",
+        "evidence": [
+          {
+            "line": 1,
+            "path": "logic/get_user_tasks.php",
+            "reason": "Static route or HTTP client call",
+            "source": "repository"
+          }
+        ],
+        "evidence_kinds": [
+          "file_endpoint"
+        ],
+        "execution": "NOT_PERFORMED",
+        "id": "TC-4AEE4FB2948CECE8",
+        "oracle": {
+          "basis": null,
+          "status": "NOT_ESTABLISHED"
+        },
+        "related_proposals": [],
+        "required_adapter": "php_mysql_v1",
+        "status": "NEEDS_ORACLE",
+        "target": {
+          "label": null,
+          "method": null,
+          "path": "/logic/get_user_tasks.php"
+        },
+        "title": "Verify UNKNOWN /logic/get_user_tasks.php"
+      },
+      {
+        "assertions": [],
+        "blockers": [
+          "EXPECTED_BEHAVIOR_UNKNOWN",
+          "INPUT_FIXTURES_AND_STATE_RESET_REQUIRED"
+        ],
+        "category": "HTTP_ROUTE",
+        "evidence": [
+          {
+            "line": 1,
+            "path": "logic/update_status.php",
+            "reason": "Static route or HTTP client call",
+            "source": "repository"
+          }
+        ],
+        "evidence_kinds": [
+          "file_endpoint"
+        ],
+        "execution": "NOT_PERFORMED",
+        "id": "TC-CB03973C5879D774",
+        "oracle": {
+          "basis": null,
+          "status": "NOT_ESTABLISHED"
+        },
+        "related_proposals": [],
+        "required_adapter": "php_mysql_v1",
+        "status": "NEEDS_ORACLE",
+        "target": {
+          "label": null,
+          "method": "POST",
+          "path": "/logic/update_status.php"
+        },
+        "title": "Verify POST /logic/update_status.php"
+      }
+    ]
+  },
+  "manifest": {
+    "routes": [
+      {
+        "path": "../auth/login.php",
+        "method": "POST",
+        "kind": "client_http_call",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/js/login.js",
+            "line": 11,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "../logic/add_task.php",
+        "method": "POST",
+        "kind": "client_http_call",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/js/user_dashboard.js",
+            "line": 13,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "../logic/delete_task.php",
+        "method": "POST",
+        "kind": "client_http_call",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/js/admin_dashboard.js",
+            "line": 40,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "../logic/delete_task_user.php",
+        "method": "POST",
+        "kind": "client_http_call",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/js/user_dashboard.js",
+            "line": 125,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "../logic/edit_task.php",
+        "method": "POST",
+        "kind": "client_http_call",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/js/user_dashboard.js",
+            "line": 177,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "../logic/get_tasks.php",
+        "method": "GET",
+        "kind": "client_http_call",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/js/admin_dashboard.js",
+            "line": 6,
+            "reason": "Static route or HTTP client call"
+          },
+          {
+            "path": "public/js/admin_dashboard.js",
+            "line": 57,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "../logic/get_user_tasks.php",
+        "method": "GET",
+        "kind": "client_http_call",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/js/user_dashboard.js",
+            "line": 30,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "../logic/update_status.php",
+        "method": "POST",
+        "kind": "client_http_call",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/js/user_dashboard.js",
+            "line": 94,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "auth/login.php",
+        "method": "POST",
+        "kind": "file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "auth/login.php",
+            "line": 1,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "auth/logout.php",
+        "method": "UNKNOWN",
+        "kind": "file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "auth/logout.php",
+            "line": 1,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "auth/register.php",
+        "method": "POST",
+        "kind": "file_endpoint",
+        "confidence": "high",
+        "evidence": [
+          {
+            "path": "auth/register.php",
+            "line": 1,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "logic/add_task.php",
+        "method": "POST",
+        "kind": "file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/add_task.php",
+            "line": 1,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "logic/delete_task.php",
+        "method": "POST",
+        "kind": "file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/delete_task.php",
+            "line": 1,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "logic/delete_task_user.php",
+        "method": "POST",
+        "kind": "file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/delete_task_user.php",
+            "line": 1,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "logic/edit_task.php",
+        "method": "POST",
+        "kind": "file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/edit_task.php",
+            "line": 1,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "logic/get_tasks.php",
+        "method": "UNKNOWN",
+        "kind": "file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/get_tasks.php",
+            "line": 1,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "logic/get_user_tasks.php",
+        "method": "UNKNOWN",
+        "kind": "file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/get_user_tasks.php",
+            "line": 1,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      },
+      {
+        "path": "logic/update_status.php",
+        "method": "POST",
+        "kind": "file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/update_status.php",
+            "line": 1,
+            "reason": "Static route or HTTP client call"
+          }
+        ]
+      }
+    ],
+    "entrypoints": [
+      {
+        "path": "auth/login.php",
+        "kind": "php_file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "auth/login.php",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "auth/logout.php",
+        "kind": "php_file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "auth/logout.php",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "auth/register.php",
+        "kind": "php_file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "auth/register.php",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "logic/add_task.php",
+        "kind": "php_file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/add_task.php",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "logic/delete_task.php",
+        "kind": "php_file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/delete_task.php",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "logic/delete_task_user.php",
+        "kind": "php_file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/delete_task_user.php",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "logic/edit_task.php",
+        "kind": "php_file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/edit_task.php",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "logic/get_tasks.php",
+        "kind": "php_file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/get_tasks.php",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "logic/get_user_tasks.php",
+        "kind": "php_file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/get_user_tasks.php",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "logic/update_status.php",
+        "kind": "php_file_endpoint",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "logic/update_status.php",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "public/admin_dashboard.html",
+        "kind": "web_page",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/admin_dashboard.html",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "public/login.html",
+        "kind": "web_page",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/login.html",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "public/register.html",
+        "kind": "web_page",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/register.html",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      },
+      {
+        "path": "public/user_dashboard.html",
+        "kind": "web_page",
+        "confidence": "medium",
+        "evidence": [
+          {
+            "path": "public/user_dashboard.html",
+            "line": 1,
+            "reason": "Entrypoint or script-name convention"
+          }
+        ]
+      }
+    ]
+  },
+  "api": {
+    "run": {
+      "adapter": "php_mysql_v1",
+      "artifacts": {
+        "review": "api_review.json",
+        "vm": "api_vm_execution.json"
+      },
+      "cleanup": "VM_STOPPED_DISPOSABLE_STORAGE_REMOVED",
+      "execution": "PERFORMED_IN_DISPOSABLE_VM",
+      "issue_code": null,
+      "limitations": [
+        "Reviewed operator expectations may be incorrect.",
+        "Credentials, sessions, and database fixtures need separate 4C-D review.",
+        "Not a security attestation for arbitrary student submissions."
+      ],
+      "oracle_catalog_sha256": "8a60315854b4c81ba227e1f680077d807b62d6c512619422f53cd145151e20a1",
+      "phase": 4,
+      "results": [
+        {
+          "assertions": [
+            {
+              "kind": "HTTP_STATUS_EQUALS",
+              "result": "PASS"
+            },
+            {
+              "kind": "JSON_BODY_SUBSET_EQUALS",
+              "result": "PASS"
+            }
+          ],
+          "body_sha256": "c4eec8b947246e9e2f79fa16b40c8d0b0eaeea6d08f4340d48107e3e72a5a04e",
+          "http_status": 200,
+          "issue_code": null,
+          "result": "PASS",
+          "test_id": "OC-3CB38E63233A37C1"
+        }
+      ],
+      "schema_version": "0.1",
+      "security_attestation": "NOT_ATTESTED_FOR_UNTRUSTED_STUDENTS",
+      "source": {
+        "commit_sha": "c4f7965d16807fa05c3d7ffeee54f86fee4d0a37",
+        "kind": "github",
+        "repository": "VarunRGB/Mini-Task-Collaboration-App"
+      },
+      "stage": "reviewed_vm_api_testing",
+      "status": "TESTS_PASSED",
+      "summary": {
+        "failed": 0,
+        "inconclusive": 0,
+        "passed": 1,
+        "total": 1
+      }
+    },
+    "vm": {
+      "source": {
+        "commit_sha": "c4f7965d16807fa05c3d7ffeee54f86fee4d0a37",
+        "kind": "github",
+        "repository": "VarunRGB/Mini-Task-Collaboration-App"
+      },
+      "adapter": "php_mysql_v1",
+      "backend": "QEMU_DISPOSABLE_QCOW2_VM",
+      "security_attestation": "NOT_ATTESTED_FOR_UNTRUSTED_STUDENTS",
+      "execution": "PERFORMED_IN_DISPOSABLE_VM",
+      "cleanup": "VM_STOPPED_DISPOSABLE_STORAGE_REMOVED",
+      "status": "STARTUP_VERIFIED",
+      "phase4c_status": "VALIDATED",
+      "phase4c_test_results": {
+        "adapter": "php_mysql_v1",
+        "execution": "LOOPBACK_API_REQUESTS_PERFORMED",
+        "limitations": [
+          "Operator-reviewed scenario expectations, not proven ground truth.",
+          "No cookies, fixtures or external network requests.",
+          "Runtime sandbox security is independently enforced by Phase 2."
+        ],
+        "phase": 4,
+        "results": [
+          {
+            "assertions": [
+              {
+                "kind": "HTTP_STATUS_EQUALS",
+                "result": "PASS"
+              },
+              {
+                "kind": "JSON_BODY_SUBSET_EQUALS",
+                "result": "PASS"
+              }
+            ],
+            "body_sha256": "c4eec8b947246e9e2f79fa16b40c8d0b0eaeea6d08f4340d48107e3e72a5a04e",
+            "http_status": 200,
+            "issue_code": null,
+            "result": "PASS",
+            "test_id": "OC-3CB38E63233A37C1"
+          }
+        ],
+        "runtime_attestation": "NOT_EVALUATED_BY_API_INTERPRETER",
+        "schema_version": "0.1",
+        "source": {
+          "commit_sha": "c4f7965d16807fa05c3d7ffeee54f86fee4d0a37",
+          "kind": "github",
+          "repository": "VarunRGB/Mini-Task-Collaboration-App"
+        },
+        "stage": "reviewed_guest_api_tests",
+        "status": "COMPLETE",
+        "summary": {
+          "failed": 0,
+          "inconclusive": 0,
+          "passed": 1,
+          "total": 1
+        }
+      }
+    }
+  },
+  "auth": {
+    "run": {
+      "adapter": "php_mysql_v1",
+      "artifacts": {
+        "review": "auth_review.json",
+        "vm": "auth_vm_execution.json"
+      },
+      "auth_catalog_sha256": "b6414af419d85f57897c9221c92073c65cc617d550f60fd1e0bb0585a56e1eda",
+      "cleanup": "VM_STOPPED_DISPOSABLE_STORAGE_REMOVED",
+      "execution": "PERFORMED_IN_DISPOSABLE_VM",
+      "issue_code": null,
+      "limitations": [
+        "Guest-generated throwaway identities only; no external identity provider.",
+        "Only exact reviewed registration/login and error-path probes.",
+        "No database postcondition or role authorization assertions yet.",
+        "Not an attestation for arbitrary untrusted student submissions."
+      ],
+      "oracle_catalog_sha256": "3fe31b54c577972b83faa6e6ee8326c874951de94b30d6ef64fa76d1b9e8c6e1",
+      "phase": 4,
+      "results": [
+        {
+          "assertions": [
+            {
+              "kind": "HTTP_STATUS_EQUALS",
+              "result": "PASS"
+            },
+            {
+              "kind": "JSON_BODY_SUBSET_EQUALS",
+              "result": "PASS"
+            }
+          ],
+          "http_status": 200,
+          "issue_code": null,
+          "result": "PASS",
+          "step": "UNAUTHENTICATED"
+        },
+        {
+          "assertions": [
+            {
+              "kind": "HTTP_STATUS_EQUALS",
+              "result": "PASS"
+            }
+          ],
+          "http_status": 302,
+          "issue_code": null,
+          "result": "PASS",
+          "step": "REGISTRATION"
+        },
+        {
+          "assertions": [
+            {
+              "kind": "HTTP_STATUS_EQUALS",
+              "result": "PASS"
+            },
+            {
+              "kind": "JSON_BODY_SUBSET_EQUALS",
+              "result": "PASS"
+            },
+            {
+              "kind": "SESSION_COOKIE_PRESENT",
+              "result": "PASS"
+            }
+          ],
+          "http_status": 200,
+          "issue_code": null,
+          "result": "PASS",
+          "step": "LOGIN"
+        },
+        {
+          "assertions": [
+            {
+              "kind": "HTTP_STATUS_EQUALS",
+              "result": "PASS"
+            },
+            {
+              "kind": "JSON_BODY_SUBSET_EQUALS",
+              "result": "FAIL"
+            }
+          ],
+          "http_status": 200,
+          "issue_code": null,
+          "result": "FAIL",
+          "step": "AUTHENTICATED"
+        }
+      ],
+      "schema_version": "0.1",
+      "security_attestation": "NOT_ATTESTED_FOR_UNTRUSTED_STUDENTS",
+      "session_cookie_observed": true,
+      "source": {
+        "commit_sha": "c4f7965d16807fa05c3d7ffeee54f86fee4d0a37",
+        "kind": "github",
+        "repository": "VarunRGB/Mini-Task-Collaboration-App"
+      },
+      "stage": "reviewed_vm_authentication_testing",
+      "status": "TESTS_FAILED",
+      "summary": {
+        "failed": 1,
+        "inconclusive": 0,
+        "passed": 3,
+        "total": 4
+      }
+    },
+    "vm": {
+      "source": {
+        "commit_sha": "c4f7965d16807fa05c3d7ffeee54f86fee4d0a37",
+        "kind": "github",
+        "repository": "VarunRGB/Mini-Task-Collaboration-App"
+      },
+      "adapter": "php_mysql_v1",
+      "backend": "QEMU_DISPOSABLE_QCOW2_VM",
+      "security_attestation": "NOT_ATTESTED_FOR_UNTRUSTED_STUDENTS",
+      "execution": "PERFORMED_IN_DISPOSABLE_VM",
+      "cleanup": "VM_STOPPED_DISPOSABLE_STORAGE_REMOVED",
+      "status": "STARTUP_VERIFIED",
+      "phase4d2_status": "VALIDATED",
+      "phase4d2_auth_report": {
+        "adapter": "php_mysql_v1",
+        "auth_catalog_sha256": "b6414af419d85f57897c9221c92073c65cc617d550f60fd1e0bb0585a56e1eda",
+        "credential_origin": "GENERATED_INSIDE_DISPOSABLE_VM",
+        "execution": "LOOPBACK_AUTH_REQUESTS_PERFORMED",
+        "oracle_catalog_sha256": "3fe31b54c577972b83faa6e6ee8326c874951de94b30d6ef64fa76d1b9e8c6e1",
+        "phase": 4,
+        "results": [
+          {
+            "assertions": [
+              {
+                "kind": "HTTP_STATUS_EQUALS",
+                "result": "PASS"
+              },
+              {
+                "kind": "JSON_BODY_SUBSET_EQUALS",
+                "result": "PASS"
+              }
+            ],
+            "http_status": 200,
+            "issue_code": null,
+            "result": "PASS",
+            "step": "UNAUTHENTICATED"
+          },
+          {
+            "assertions": [
+              {
+                "kind": "HTTP_STATUS_EQUALS",
+                "result": "PASS"
+              }
+            ],
+            "http_status": 302,
+            "issue_code": null,
+            "result": "PASS",
+            "step": "REGISTRATION"
+          },
+          {
+            "assertions": [
+              {
+                "kind": "HTTP_STATUS_EQUALS",
+                "result": "PASS"
+              },
+              {
+                "kind": "JSON_BODY_SUBSET_EQUALS",
+                "result": "PASS"
+              },
+              {
+                "kind": "SESSION_COOKIE_PRESENT",
+                "result": "PASS"
+              }
+            ],
+            "http_status": 200,
+            "issue_code": null,
+            "result": "PASS",
+            "step": "LOGIN"
+          },
+          {
+            "assertions": [
+              {
+                "kind": "HTTP_STATUS_EQUALS",
+                "result": "PASS"
+              },
+              {
+                "kind": "JSON_BODY_SUBSET_EQUALS",
+                "result": "FAIL"
+              }
+            ],
+            "http_status": 200,
+            "issue_code": null,
+            "result": "FAIL",
+            "step": "AUTHENTICATED"
+          }
+        ],
+        "runtime_attestation": "NOT_EVALUATED_BY_AUTH_INTERPRETER",
+        "schema_version": "0.1",
+        "session_cookie_observed": true,
+        "source": {
+          "commit_sha": "c4f7965d16807fa05c3d7ffeee54f86fee4d0a37",
+          "kind": "github",
+          "repository": "VarunRGB/Mini-Task-Collaboration-App"
+        },
+        "stage": "guest_reviewed_auth_flow",
+        "status": "COMPLETE",
+        "summary": {
+          "failed": 1,
+          "inconclusive": 0,
+          "passed": 3,
+          "total": 4
+        }
+      }
+    }
+  }
+}

@@ -11,6 +11,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
+from .coverage import scenario_links
 from .contracts import (OrchestrationError, SUITE_CATALOGS, read_json, reject,
                         safe_output_path, no_symlinks)
 
@@ -110,6 +111,7 @@ def preflight(kind: str, *, plan: dict, candidate: dict, config: dict,
                 'dependent_workflow','crud','browser_ui','browser_login'):
         # All compilers accept these arguments in this order EXCEPT browser login,
         # which takes (plan, candidate, catalog, config).
+        compiled={}
         if kind == 'scenario_isolation':
             compiler(plan,catalogs['auth'],catalogs['oracle'],catalogs['postconditions'],
                      candidate,config,catalogs['isolation'])
@@ -118,20 +120,21 @@ def preflight(kind: str, *, plan: dict, candidate: dict, config: dict,
         elif kind == 'readiness':
             pass
         elif kind == 'api':
-            compiler(plan,catalogs['oracle'],candidate,config)
+            compiled=compiler(plan,catalogs['oracle'],candidate,config)
         elif kind == 'auth':
-            compiler(plan,catalogs['auth'],catalogs['oracle'],candidate,config)
+            compiled=compiler(plan,catalogs['auth'],catalogs['oracle'],candidate,config)
         elif kind == 'db_fixture':
             compiler(plan,catalogs['fixture'],candidate,config)
         elif kind == 'db_postconditions':
             compiler(plan,catalogs['auth'],catalogs['oracle'],catalogs['postconditions'],candidate,config)
         elif kind == 'dependent_workflow':
-            compiler(plan,catalogs['fixture'],catalogs['workflow'],candidate,config)
+            compiled=compiler(plan,catalogs['fixture'],catalogs['workflow'],candidate,config)
         elif kind == 'crud':
-            compiler(plan,catalogs['auth'],catalogs['oracle'],catalogs['crud'],candidate,config)
+            compiled=compiler(plan,catalogs['auth'],catalogs['oracle'],catalogs['crud'],candidate,config)
         elif kind == 'browser_ui':
             compiler(plan,catalogs['browser'],candidate,config)
-        return {'approved':True,'code':'APPROVED','selected':None}
+        return {'approved':True,'code':'APPROVED','selected':None,
+                'scenario_links':scenario_links(kind,compiled)}
     reject('UNKNOWN_REVIEWED_RUNNER')
 
 

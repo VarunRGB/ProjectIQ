@@ -47,14 +47,14 @@ def markdown(report:dict)->str:
             lines.append(f'| {esc(f["path"])} | {f["procedural_decision_markers"]} | {f["procedural_loop_markers"]} |')
     lines+=['', '_Markers are lexical observations, not cyclomatic complexity or a complete procedural-code audit._']
     if quality['status']=='PROVISIONAL_LIMITED':
-        score_label='Measured-dimensions-only indicator (NOT an overall project grade)'
+        score_label='Overall score withheld — Measured-dimensions-only indicator (NOT an overall project grade)'
         measured=', '.join(k for k,v in quality['dimensions'].items() if v is not None) or 'none'
         excluded=', '.join(k for k,v in quality['dimensions'].items() if v is None) or 'none'
         score_explanation=(
             '**Low-confidence interpretation:** Only '+measured+' were scored. '
             'Unmeasured '+excluded+' were excluded and the remaining weights '
-            'renormalized. A score of 100 means no deductions in these limited '
-            'checks, NOT perfect code quality.')
+            'renormalized in the legacy machine contract. No overall score is displayed '
+            'because important dimensions are unmeasured.')
     elif quality['status']=='PROVISIONAL':
         score_label='Provisional static-maintainability indicator (NOT a grade)'
         score_explanation=(
@@ -67,7 +67,7 @@ def markdown(report:dict)->str:
             '**No numeric quality claim:** The source or analysis coverage was '
             'insufficient; review the limitation reasons below.')
     lines+=['','## Overall quality indicator','',
-            f'**{score_label}:** {quality["score"] if quality["score"] is not None else "not available"}',
+            f'**{score_label}:** {quality["score"] if quality["status"]=="PROVISIONAL" else "not established"}',
             f'**Status:** {quality["status"]}; **Confidence:** {quality["confidence"]}',
             f'**Score eligibility:** {", ".join(quality["reason_codes"]) if quality["reason_codes"] else "PROVISIONAL_ONLY"}',
             f'**Scoring model:** {quality["scoring_version"]}',

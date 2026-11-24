@@ -191,7 +191,7 @@ def validate_report(r: object) -> None:
         raise ReportContractError('SECURITY_COVERAGE_MISMATCH')
     approved_sec_codes={'TRACKED_ENV_FILE','POTENTIAL_SECRET_FILE','GITHUB_TOKEN_PATTERN',
         'AWS_ACCESS_KEY_PATTERN','GOOGLE_API_KEY_PATTERN','STRIPE_SECRET_KEY_PATTERN',
-        'SLACK_TOKEN_PATTERN','PRIVATE_KEY_HEADER','HIGH_ENTROPY_SECRET_ASSIGNMENT'}
+        'SLACK_TOKEN_PATTERN','PRIVATE_KEY_HEADER','HIGH_ENTROPY_SECRET_ASSIGNMENT','LITERAL_DB_CONFIGURATION'}
     for finding in security['findings']:
         if type(finding) is not dict or set(finding)!={'code','path','line','confidence'} \
                 or finding['code'] not in approved_sec_codes or not safe_rel(finding['path']) \

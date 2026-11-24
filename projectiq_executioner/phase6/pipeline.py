@@ -1,6 +1,7 @@
 """Phase 6 core: deterministic diagnosis from existing reports; no code execution."""
 from __future__ import annotations
 from collections import Counter, defaultdict
+import re
 from typing import Any
 from .catalog import SOURCE_ISSUES, diagnosis
 from .contracts import (CLEAN, EXEC, NOT_ATTESTED, VERSION, MAX_RUNS, MAX_EVENTS,
@@ -43,7 +44,12 @@ def build(*, plans: list[tuple[dict,str]] | None = None,
         if plan:
             for row in r['rows']:
                 if r['stage'] in ('reviewed_vm_functional_testing','reviewed_vm_api_testing') and row['id'] not in plan['cases']:
-                    fail('RUN_TEST_ID_ABSENT_FROM_PLAN')
+                    # Independent oracle IDs are NOT Phase 3 IDs. Keep the
+                    # closed OC format and a validated VM witness; do not
+                    # relax exact linkage for readiness or invented TC IDs.
+                    if not (r['stage']=='reviewed_vm_api_testing' and r['verified']
+                            and re.fullmatch(r'OC-[A-F0-9]{16}',row['id'])):
+                        fail('RUN_TEST_ID_ABSENT_FROM_PLAN')
     deps=read_edges(dependency_input[0],expected_source=source,allowed_ids=known_ids) if dependency_input else {}
     diag=[];events=[];flags=[]
     def add(code:str, refs:list[str], ids:list[str]|None=None,confidence:str='MEDIUM',causal:str='UNPROVEN'):
@@ -130,9 +136,9 @@ def build(*, plans: list[tuple[dict,str]] | None = None,
                 add('TEST_INCONCLUSIVE',refs,[tid],confidence='MEDIUM')
     if plan:
         appeared={e['test_id'] for e in events}
+        missing=[tid for tid,case in sorted(plan['cases'].items()) if tid not in appeared and case['status']=='NEEDS_ORACLE']
+        if missing:add('ORACLE_NOT_ESTABLISHED',[plans[0][1]],missing,confidence='HIGH')
         for tid,case in sorted(plan['cases'].items()):
-            if tid not in appeared and case['status']=='NEEDS_ORACLE':
-                add('INVALID_TEST_ORACLE',[plans[0][1]],[tid],confidence='HIGH')
             if tid not in appeared and case['status']=='UNSUPPORTED_BY_RUNNER':
                 add('TEST_BLOCKED',[plans[0][1]],[tid],confidence='HIGH')
 
@@ -171,7 +177,8 @@ def build(*, plans: list[tuple[dict,str]] | None = None,
     return {'schema_version':VERSION,'phase':6,'stage':'offline_failure_diagnosis',
             'source':public_source,'status':
             'SECURITY_HOLD' if security_hold else 'PARTIAL' if (any(not r['supported'] for r in runs)
-                     or any(not r['verified'] for r in runs) or not runs) else 'DIAGNOSED',
+                     or any(not r['verified'] for r in runs) or not runs
+                     or (plan is not None and any(c['status']!='READY_FOR_PHASE4' for c in plan['cases'].values()))) else 'DIAGNOSED',
             'execution':'NOT_PERFORMED','vm_launches':0,
             'security_attestation':NOT_ATTESTED,
             'summary':{'runs':len(runs),'vm_verified_runs':sum(r['verified'] for r in runs),

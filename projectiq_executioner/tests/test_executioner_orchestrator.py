@@ -133,6 +133,7 @@ class Stubs:
     def invoke(self,kind,**kwargs):
         self.run_calls.append(kind)
         dest=kwargs['output_dir']
+        if dest.exists():raise AssertionError('Orchestrator must pass a fresh suite directory')
         name,vmfile=runners.output_files(kind)
         status=self.api_status
         statuses={'api':status,'browser_ui':'BROWSER_PASSED','readiness':'TESTS_PASSED',

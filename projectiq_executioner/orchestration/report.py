@@ -53,11 +53,15 @@ def render_markdown(r:dict, root:Path|None=None) -> str:
     _kv(lines,'Architecture',intel.get('architecture','NOT_IDENTIFIED'))
     lines+=['','**Project synopsis (source-derived):** '+esc(intel.get('overview','NOT_AVAILABLE')),'']
     _kv(lines,'Source files indexed',(intel.get('inventory') or {}).get('indexed_files','UNKNOWN'))
-    _kv(lines,'Discovered routes',intel.get('routes_discovered','UNKNOWN'))
+    _kv(lines,'Static server endpoint records',intel.get('server_endpoint_count','UNKNOWN'))
+    _kv(lines,'Client route records',intel.get('client_route_records','UNKNOWN'))
+    _kv(lines,'All route observations (not unique endpoints)',intel.get('routes_discovered','UNKNOWN'))
     _kv(lines,'Planned test cases',(plan.get('summary') or {}).get('total','UNKNOWN'))
     for outcome, count in (r.get('test_case_matrix') or {}).get('counts',{}).items():
         _kv(lines,'Discovered tests '+outcome.lower().replace('_',' '),count)
     _kv(lines,'Code-quality finding count',(quality.get('summary') or {}).get('findings','NOT_AVAILABLE'))
+    for outcome,count in ((r.get('test_case_matrix') or {}).get('reviewed_check_counts') or {}).items():
+        _kv(lines,'Additional reviewed checks '+outcome.lower().replace('_',' '),count)
     _kv(lines,'Functional suites selected',len(suites))
     _kv(lines,'Functional suites VM-verified',sum(bool(x.get('vm_verified')) for x in suites))
     _kv(lines,'VM attempts scheduled in this call',r.get('vm_attempts_scheduled',0))
@@ -74,7 +78,9 @@ def render_markdown(r:dict, root:Path|None=None) -> str:
     lines+=['### Discovered project features','']
     table(lines,('Feature','Origin','Confidence'),[(x.get('name'),x.get('origin'),x.get('confidence'))
           for x in intel.get('features',[])])
-    lines+=['### Discovered routes and endpoints (not verified)','']
+    lines+=['### Canonical server endpoint inventory (not runtime verified)','']
+    table(lines,('Path','Server method','Intended method','Method basis'),[(x.get('path'),x.get('method'),x.get('intended_method'),x.get('method_basis')) for x in intel.get('server_endpoints',[])])
+    lines+=['### Raw route observations (including client references)','']
     table(lines,('Method','Path','Evidence origin','Confidence'),[
           (x.get('method'),x.get('path'),x.get('kind'),x.get('confidence'))
           for x in intel.get('routes',[])])
@@ -85,8 +91,8 @@ def render_markdown(r:dict, root:Path|None=None) -> str:
     for k in ('setup_files','database_schema_files','environment_variable_names'):
         _kv(lines,k.replace('_',' ').title(),', '.join(map(str,intel.get(k,[]))) or 'NONE_DETECTED')
     lines+=['','### Source-analysis findings','']
-    table(lines,('Code','Severity','Observation'),[(f.get('code'),f.get('severity'),f.get('message'))
-          for f in intel.get('findings',[])])
+    table(lines,('Code','Severity','Observation','Source location'),[(f.get('code'),f.get('severity'),f.get('message'),
+          ', '.join(str(e.get('path'))+':'+str(e.get('line')) for e in f.get('evidence',[]) if type(e) is dict)) for f in intel.get('findings',[])])
     lines+=['### Remaining uncertainties','']
     for x in intel.get('unknowns',[]):lines.append('- '+esc(x))
     if not intel.get('unknowns'):lines.append('_No additional unknowns reported by Phase 1._')
@@ -103,7 +109,9 @@ def render_markdown(r:dict, root:Path|None=None) -> str:
     _kv(lines,'Plan status',plan.get('status','NOT_AVAILABLE'))
     for k,v in (plan.get('summary') or {}).items():
         if type(v) in (str,int,float,bool):_kv(lines,k.replace('_',' ').title(),v)
-    lines+=['','### Every generated test specification','']
+    lines+=['### Proposed scenario and UI coverage (not approved tests)','']
+    table(lines,('Method','Path','Review candidates'),[(x.get('method'),x.get('path'),', '.join(x.get('scenarios',[]))) for x in plan.get('review_candidates',[])])
+    lines+=['### Every generated test specification','']
     testrows=[]
     for c in plan.get('cases',[]):
         target=c.get('target') or {}
@@ -143,23 +151,24 @@ def render_markdown(r:dict, root:Path|None=None) -> str:
     counts=matrix.get('counts') or {}
     lines+=['**Discovered-case totals:** '+', '.join(str(counts.get(k,0))+' '+k
              for k in ('PASSED','FAILED','INCONCLUSIVE','BLOCKED','NOT_TESTED'))+'.','']
-    lines+=['### Additional independently reviewed checks (not mapped to a discovered ID)','']
-    table(lines,('Suite','Check ID','Outcome','Reason','Evidence report'),[
-        (c.get('suite'),c.get('check_id'),c.get('outcome'),c.get('reason'),
+    lines+=['### Additional independently reviewed scenarios (not full-route passes)','']
+    table(lines,('Suite','Check ID','Related Phase 3 ID','Outcome','Reason','Evidence report'),[
+        (c.get('suite'),c.get('check_id'),c.get('phase3_test_id') or '—',c.get('outcome'),c.get('reason'),
          ', '.join(str(e.get('report_path') or '—') for e in c.get('evidence',[])))
         for c in matrix.get('reviewed_only_checks',[])])
     if matrix.get('reviewed_checks_truncated'):
         lines+=['_Additional reviewed check rows omitted from this bounded summary: '+
                 esc(matrix['reviewed_checks_truncated'])+'; consult original hashed Phase 4 evidence._','']
-    lines+=['_A reviewed check with no matching Phase 3 ID is deliberately listed separately '
+    lines+=['_A reviewed scenario may have an approved parent specification; it is deliberately listed separately '
             'rather than used to inflate discovered-case coverage._','']
     table(lines,('Suite','Outcome','Runner report status','VM verified','Cleanup','Source'),[
         (s.get('kind'),s.get('state'),s.get('result_status','—'),
          'YES' if s.get('vm_verified') else 'NO',s.get('cleanup','—'),
-         'REUSED (not rerun)' if s.get('reused_from_prior') else 'CURRENT') for s in suites])
+         'REUSED (not rerun)' if s.get('reused_from_prior') else s.get('execution_state','NOT_EXECUTED' if s.get('state') in ('BLOCKED','REVIEW_REQUIRED') else 'NOT_VERIFIED')) for s in suites])
     if not suites:
         lines+=['_No approved Phase 4 test execution evidence supplied for this submission._','']
     for suite in suites:
+        if suite.get('reason'):_kv(lines,'Suite blocker ('+esc(suite.get('kind'))+')',suite['reason'])
         if suite.get('vm_preflight_reason'):
             _kv(lines,'VM preflight blocker ('+esc(suite.get('kind'))+')',
                 suite['vm_preflight_reason'])
@@ -174,12 +183,26 @@ def render_markdown(r:dict, root:Path|None=None) -> str:
                 obj=read_json(root.joinpath(*rel.split('/')),limit=8_000_000)
             except (OSError,ValueError):continue
             lines+=['### Suite: '+esc(suite.get('kind')),'',
-                    '- **Validated report status:** '+esc(obj.get('status')),
+                    '- **Runner report status (see VM verification):** '+esc(obj.get('status')),
                     '- **Evidence report:** `'+esc(rel)+'`',
                     '- **VM execution:** '+esc(obj.get('execution')),
                     '- **Cleanup:** '+esc(obj.get('cleanup','NOT_REPORTED')),'']
             if suite.get('vm_preflight_reason'):
                 _kv(lines,'VM preflight blocker',suite['vm_preflight_reason'])
+            metrics=suite.get('observed_metrics') or {}
+            if metrics:
+                table(lines,('Validated observation','Value'),[(k,v) for k,v in metrics.items()])
+            if suite.get('approved_scenario_links'):
+                table(lines,('Reviewed check','Parent specification','Method','Target'),[(x.get('check_id'),x.get('phase3_test_id'),x.get('method'),x.get('path')) for x in suite['approved_scenario_links']])
+            assertions=[]
+            for row in suite.get('observations',[]):
+                ident=row.get('test_id',row.get('id',row.get('step','—')))
+                expected=row.get('expected_assertions') or []
+                observed=row.get('assertions') or []
+                for a in observed:
+                    spec=next((x for x in expected if x.get('kind')==a.get('kind')), {})
+                    assertions.append((ident,a.get('kind'),spec.get('expected','REVIEWED_REDACTED'),row.get('http_status') if a.get('kind')=='HTTP_STATUS_EQUALS' else 'BOUNDED_MATCH',a.get('result')))
+            if assertions:table(lines,('Check','Assertion','Expected','Observed','Result'),assertions)
             summary=obj.get('summary')
             if type(summary) is dict:
                 for k,v in summary.items():
@@ -201,7 +224,8 @@ def render_markdown(r:dict, root:Path|None=None) -> str:
             '## 6. Static code quality (Phase 5)','']
     qscore=quality.get('quality') or {}
     _kv(lines,'Static analysis status',quality.get('status','NOT_AVAILABLE'))
-    _kv(lines,'Maintainability indicator',qscore.get('score','NOT_ASSESSED'))
+    _kv(lines,'Overall maintainability indicator',qscore.get('score') if qscore.get('score') is not None else 'NOT_ESTABLISHED')
+    for k,v in (qscore.get('dimensions') or {}).items():_kv(lines,'Measured dimension '+k,v if v is not None else 'NOT_MEASURED')
     _kv(lines,'Indicator confidence',qscore.get('confidence','NONE'))
     _kv(lines,'Indicator basis',qscore.get('basis','NOT_A_GRADE'))
     _kv(lines,'Coverage status',qscore.get('status','NOT_AVAILABLE'))
@@ -216,7 +240,7 @@ def render_markdown(r:dict, root:Path|None=None) -> str:
         (x.get('severity'),x.get('code'),str(x.get('path'))+':'+str(x.get('line')),
          x.get('confidence'),x.get('recommendation')) for x in quality.get('findings',[])])
     lines+=['### Recognized function/complexity inventory','']
-    table(lines,('Function','Location','Complexity','Nesting','Big-O','Estimate basis'),[
+    table(lines,('Function','Location','Complexity (heuristic where applicable)','Nesting','Big-O','Estimate basis'),[
         (x.get('name'),str(x.get('path'))+':'+str(x.get('start_line')),
          x.get('cyclomatic'),x.get('max_nesting'),x.get('big_o'),x.get('big_o_reason'))
         for x in quality.get('functions',[])[:100]])
@@ -228,6 +252,7 @@ def render_markdown(r:dict, root:Path|None=None) -> str:
          str(x.get('path_b'))+':'+str(x.get('line_b')),x.get('lines'))
         for x in quality.get('duplications',[])])
     lines+=['### Potential secret exposure indicators (values withheld)','']
+    lines+=['_Credential/configuration indicators from Phase 1 and application-review findings above are also relevant; an empty narrow pattern scan is not a security clearance._','']
     table(lines,('Pattern','File','Line','Confidence'),[
         (x.get('code'),x.get('path'),x.get('line','—'),x.get('confidence'))
         for x in (quality.get('security') or {}).get('findings',[])])

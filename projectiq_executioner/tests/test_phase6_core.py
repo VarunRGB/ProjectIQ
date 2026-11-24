@@ -157,7 +157,7 @@ class DiagnosisAcceptance(unittest.TestCase):
         self.assertEqual(result['diagnoses'][0]['code'],'VM_CLEANUP_UNVERIFIED')
     def test_missing_oracle(self):
         r=build(plans=[(plan(mode='NEEDS_ORACLE'),'PLAN')])
-        self.assertTrue(any(x['code']=='INVALID_TEST_ORACLE' for x in r['diagnoses']))
+        self.assertTrue(any(x['code']=='ORACLE_NOT_ESTABLISHED' for x in r['diagnoses']))
     def test_only_plan(self):
         r=build(plans=[(plan(),'PLAN')])
         self.assertEqual(r['status'],'PARTIAL')

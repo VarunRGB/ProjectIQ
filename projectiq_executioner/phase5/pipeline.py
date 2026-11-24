@@ -23,9 +23,11 @@ from .source import collect
 from .security import scan_exposure
 from .procedural import procedural_markers
 from .scope import file_scope
+from .application_review import review_application, merge_credential_indicators, reduce_generated_dump_noise
 
 _LIMITATIONS = [
     'Static source analysis only: no project code, dependencies or linter configurations executed.',
+    'Application review uses bounded local PHP/HTML/JS patterns, not complete dataflow or authorization analysis. External guards and deployment rewrites may change interpretation.',
     'Brace-language function discovery and complexity are heuristic, not parser-complete.',
     'Big-O results assume standard builtins, runtime compliance with type hints, fixed-width numeric operations, and amortized append where labeled; unknown otherwise.',
     'Top-level PHP and JavaScript statements are not counted as functions or fully assessed for complexity.',
@@ -104,7 +106,7 @@ def analyze_project(root: Path, *, repository: str | None = None) -> dict:
             })
             local.append((cc, depth))
         findings.extend(structural_findings(recorded, local, file.path))
-        findings.extend(language_lints(file.text, file.language, file.path))
+        findings.extend(reduce_generated_dump_noise(file,language_lints(file.text,file.language,file.path)))
         langs[file.language] += 1
         rows.append({
             'path': file.path, 'language': file.language, 'scope': scope_name, 'status': 'ANALYZED',
@@ -124,6 +126,8 @@ def analyze_project(root: Path, *, repository: str | None = None) -> dict:
             'procedural_decision_markers':0,'procedural_loop_markers':0,
         })
     rows.sort(key=lambda x: x['path'])
+    app_findings=review_application(kept,index)
+    findings.extend(f for f in app_findings if f['code']!='SEC_DB_LITERAL_CONFIG')
     findings, findings_truncated = stable_findings(
         findings, max_findings=MAX_FINDINGS, with_truncation=True)
     duplications, duplicates_truncated = find_duplications(kept, with_truncation=True)
@@ -161,7 +165,7 @@ def analyze_project(root: Path, *, repository: str | None = None) -> dict:
         production_functions=prod_functions,
         duplicated_production_lines=len(duplicate_lines),
     )
-    security=scan_exposure(index,kept,skipped)
+    security=merge_credential_indicators(scan_exposure(index,kept,skipped),app_findings)
     summary = {
         'indexed_files': len(index.files), 'source_candidates': len(selected),
         'production_files':len(prod_files),

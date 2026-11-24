@@ -60,7 +60,7 @@ def main(argv=None):
     print('  Findings:',report['summary']['findings'])
     print('  Big-O estimated:',report['coverage']['big_o']['estimated_functions'],'of',report['summary']['functions_found'])
     quality=report['quality']
-    print('  Score:',quality['score'] if quality['score'] is not None else 'INSUFFICIENT_COVERAGE')
+    print('  Score:',quality['score'] if quality['status']=='PROVISIONAL' else 'WITHHELD_LIMITED_COVERAGE')
     print('  Score status:',quality['status'],'(confidence:',quality['confidence']+')')
     if quality['status']=='PROVISIONAL_LIMITED':
         measured=', '.join(k for k,v in quality['dimensions'].items() if v is not None)
