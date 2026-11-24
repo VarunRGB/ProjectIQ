@@ -2,9 +2,10 @@
 from __future__ import annotations
 from decimal import Decimal, ROUND_HALF_UP, localcontext
 from collections import defaultdict
-from .contracts import (Rubric, DecisionSet, EvidenceBundle, CriterionResult, Assessment)
+from .contracts import (Rubric, DecisionSet, EvidenceBundle, CriterionResult, Assessment, Feedback)
 from .evidence import digest
 from .intelligence import runtime_inventory, consistency, evidence_details
+from .research_policy import is_research, research_record, research_state, ABSENT, PRESENT, validate_model_research
 
 
 def empty_decisions(bundle, rubric):
@@ -80,6 +81,16 @@ def assess(bundle: EvidenceBundle, rubric: Rubric, decisions: DecisionSet|None=N
             possible=total*w/total_weight
             if c.id in excluded:
                 status='EXCLUDED';reason=d.rationale if d else 'Excluded by the teacher-defined rubric.'
+            elif is_research(c) and research_state(bundle)==ABSENT and not (d and d.source=='TEACHER' and d.action=='DEFER'):
+                record=research_record(bundle)
+                confirmed=bool(d and d.source=='TEACHER' and d.action=='SCORE' and d.level_id==c.levels[0].id and d.evidence_ids==[record.id])
+                if d and not confirmed and not (d.action=='DEFER' and d.source=='MODEL'):
+                    raise ValueError('RESEARCH_ABSENCE_REQUIRES_REVIEW_NOT_MODEL_SCORE')
+                f=Decimal(0);level=c.levels[0].id;ids=[record.id]
+                status='TEACHER_REVIEWED' if confirmed else 'OBJECTIVE_PROVISIONAL';reason=(d.rationale+' | ' if confirmed else '')+record.text
+                objective={'method':'RESEARCH_ABSENCE','state':ABSENT,'scope':'EXTRACTED_REPORT_AND_MATCHED_NATIVE_RESEARCH'}
+                flags=[] if confirmed else ['RESEARCH_ABSENCE_HEURISTIC_TEACHER_REVIEW_REQUIRED']
+                feedback=Feedback(strength='Report available for review.',limitation='No required research sources detected in the extracted report.',improvement='Add relevant sources and link them to the report claims; review any extraction limitations.',observed_failure=False)
             elif d and d.action=='DEFER':reason=d.rationale
             elif c.method=='JUDGMENT':
                 if d:
@@ -94,11 +105,13 @@ def assess(bundle: EvidenceBundle, rubric: Rubric, decisions: DecisionSet|None=N
                     if len({(e.artifact_sha256,e.locator) for e in refs})<c.minimum_evidence:raise ValueError('DUPLICATE_SOURCE_COVERAGE')
                     if d.source=='MODEL':
                         if c.feedback_required and d.feedback is None:raise ValueError('STRUCTURED_FEEDBACK_REQUIRED')
+                        validate_model_research(bundle,c,refs,d.rationale,d.feedback)
                         flags=consistency(bundle,c,matching[0],refs,d.rationale,d.feedback)
                     feedback=d.feedback
                     f=D(matching[0].fraction);level=matching[0].id;ids=d.evidence_ids;reason=d.rationale
                     status='TEACHER_REVIEWED' if d.source=='TEACHER' else 'PROPOSED'
                 else:
+                    if is_research(c) and research_state(bundle)!=PRESENT:reason='Native research evidence inconclusive or unavailable; teacher review required.'
                     available=[e for e in bundle.items if e.eligible_for_review and e.kind in c.allowed_evidence]
                     if len(available)<c.minimum_evidence or not set(c.required_evidence)<={e.kind for e in available}:reason='Required evidence coverage unavailable.'
             elif c.method=='TEST_RATIO':

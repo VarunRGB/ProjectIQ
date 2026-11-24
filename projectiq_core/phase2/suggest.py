@@ -9,6 +9,7 @@ from ..contracts import StrictModel
 from .contracts import Decision, DecisionSet, Feedback
 from .intelligence import select_candidates, prompt_item, runtime_summary, focus
 from .scoring import assess, empty_decisions
+from .research_policy import is_research, research_state, research_record, required_kinds, ABSENT, PRESENT
 
 
 class Suggestion(StrictModel):
@@ -126,12 +127,18 @@ def prepare(bundle, rubric, *, criterion_ids=None, existing=None, max_chars=1800
             decisions=[d for d in base.decisions if not (d.criterion_id in criterion_ids and d.source=='MODEL' and d.action=='DEFER')])
     previous = {d.criterion_id: d for d in base.decisions}
     wanted = [c for c in rubric.criteria if c.method=='JUDGMENT' and c.applicability!='EXCLUDED'
+              and not (is_research(c) and research_state(bundle)==ABSENT)
               and c.id not in previous and (criterion_ids is None or c.id in criterion_ids)]
     if len(wanted)>12: raise ValueError('SELECT_AT_MOST_12_CRITERIA_PER_MODEL_CALL')
     request=[]; selected={}; deferred={}; shared={}; aliases={}; diagnostics={}
     for c in wanted:
+        if is_research(c) and research_state(bundle)!=PRESENT:
+            deferred[c.id]=_defer(c.id,'Native research evidence inconclusive or unavailable; no model judgment attempted.')
+            diagnostics[c.id]={'code':'RESEARCH_NATIVE_EVIDENCE_UNAVAILABLE','eligible_count':0}
+            continue
         allowed,best=select_candidates(bundle,c)
-        if len(best)<c.minimum_evidence or not set(c.required_evidence)<={e.kind for e in best}:
+        required=required_kinds(c)
+        if len(best)<c.minimum_evidence or not set(required)<={e.kind for e in best}:
             deferred[c.id]=_defer(c.id,'Required eligible evidence unavailable; no model judgment attempted.')
             diagnostics[c.id]={'code':'PRECHECK_COVERAGE_UNAVAILABLE','eligible_count':len(allowed)}
             continue
@@ -145,14 +152,17 @@ def prepare(bundle, rubric, *, criterion_ids=None, existing=None, max_chars=1800
         # Weights and marks play no role in deciding an achievement level.
         request.append({'criterion_alias':f'C{len(request)+1}','criterion_id':c.id,'description':c.title+': '+c.description,
             'levels':{f'L{i+1}':l.label+': '+l.descriptor for i,l in enumerate(c.levels) if not l.requires_failed_observation or any(e.kind=='TEST_OBSERVATION' and e.data.get('outcome')=='FAILED' for e in best)},'minimum_evidence':c.minimum_evidence,
-            'required_evidence':c.required_evidence,'candidate_evidence_ids':candidate_aliases,'feedback_required':c.feedback_required})
-        try:request[-1]['evidence_slots']=evidence_slots(list(zip(candidate_aliases,best)),c.required_evidence,c.minimum_evidence)
+            'required_evidence':required,'candidate_evidence_ids':candidate_aliases,'feedback_required':c.feedback_required})
+        try:request[-1]['evidence_slots']=evidence_slots(list(zip(candidate_aliases,best)),required,c.minimum_evidence)
         except ValueError:
             request.pop();selected.pop(c.id)
             deferred[c.id]=_defer(c.id,'Distinct required source coverage unavailable; no model judgment attempted.')
             diagnostics[c.id]={'code':'PRECHECK_COVERAGE_UNAVAILABLE','eligible_count':len(allowed)}
             continue
         if recovery_codes and c.id in recovery_codes:request[-1]['previous_validation_error']=recovery_codes[c.id]
+        if is_research(c):
+            request[-1]['description']+=' Grade ONLY use of research/technical sources and citation integration; never project functionality. Cite actual native reference records. Unverified metadata or older sources are not automatically invalid.'
+            request[-1]['research_inventory']=research_record(bundle).data
         if focus(c)=='FUNCTIONAL':request[-1]['runtime_inventory']=runtime_summary(bundle)
         diagnostics[c.id]={'code':'PREPARED','eligible_count':len(allowed),'candidate_aliases':candidate_aliases}
     used_aliases={a for c in request for a in c['candidate_evidence_ids']}
@@ -236,7 +246,7 @@ _RECOVERABLE=frozenset({'MISSING_MODEL_DECISION','DUPLICATE_MODEL_DECISION','EVI
     'DUPLICATE_EVIDENCE_REFERENCE','MISSING_RUBRIC_LEVEL','UNKNOWN_RUBRIC_LEVEL','SCORE_REQUIRES_EVIDENCE',
     'INVALID_DEFER_SHAPE','INVALID_DECISION_CONTRACT','EVIDENCE_COVERAGE_NOT_MET','DUPLICATE_SOURCE_COVERAGE',
     'STRUCTURED_FEEDBACK_REQUIRED','MINOR_FINDINGS_ONLY','UNSUPPORTED_OBSERVED_FAILURE','UNSUPPORTED_QUOTATION',
-    'UNSUPPORTED_RUNTIME_EXPLOIT_CLAIM','EMPTY_STRUCTURED_FEEDBACK','AMBIGUOUS_RUNTIME_EVIDENCE'})
+    'UNSUPPORTED_RUNTIME_EXPLOIT_CLAIM','EMPTY_STRUCTURED_FEEDBACK','AMBIGUOUS_RUNTIME_EVIDENCE','RESEARCH_REFERENCE_EVIDENCE_REQUIRED','RESEARCH_REPORT_EVIDENCE_IRRELEVANT','RESEARCH_FEEDBACK_OFF_TOPIC'})
 
 
 def recover_rejected(bundle,rubric,llm,decisions,log,*,max_chars=18000,seed=42,progress=lambda _:None):
@@ -267,7 +277,7 @@ def plan_batches(bundle,rubric,*,existing,criterion_ids=None,max_chars=18000,bat
     ids=criterion_ids if criterion_ids is not None else list(known)
     if retry_deferred and criterion_ids is None:raise ValueError('RETRY_REQUIRES_EXPLICIT_CRITERIA')
     previous={d.criterion_id:d for d in existing.decisions}
-    wanted=[i for i in ids if known[i].method=='JUDGMENT' and known[i].applicability!='EXCLUDED' and (i not in previous or retry_deferred and previous[i].source=='MODEL' and previous[i].action=='DEFER')]
+    wanted=[i for i in ids if known[i].method=='JUDGMENT' and known[i].applicability!='EXCLUDED' and not (is_research(known[i]) and research_state(bundle)==ABSENT) and (i not in previous or retry_deferred and previous[i].source=='MODEL' and previous[i].action=='DEFER')]
     batches=[];current=[]
     def check(group):return prepare(bundle,rubric,criterion_ids=group,existing=existing,max_chars=max_chars,retry_deferred=retry_deferred)
     for cid in wanted:

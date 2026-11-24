@@ -688,7 +688,8 @@
         "RESEARCH_RECORD"
       ],
       "required_evidence": [
-        "REPORT_EXCERPT"
+        "REPORT_EXCERPT",
+        "RESEARCH_RECORD"
       ],
       "feedback_required": true,
       "levels": [
@@ -739,7 +740,8 @@
         "RESEARCH_RECORD"
       ],
       "required_evidence": [
-        "REPORT_EXCERPT"
+        "REPORT_EXCERPT",
+        "RESEARCH_RECORD"
       ],
       "feedback_required": true,
       "levels": [
@@ -790,7 +792,8 @@
         "RESEARCH_RECORD"
       ],
       "required_evidence": [
-        "REPORT_EXCERPT"
+        "REPORT_EXCERPT",
+        "RESEARCH_RECORD"
       ],
       "feedback_required": true,
       "levels": [

@@ -1,6 +1,7 @@
 """Deterministic evidence intelligence; no inference, no automatic severity deductions."""
 from collections import Counter, defaultdict
 import re
+from .research_policy import is_research, required_kinds, reference_item, relevant_report
 
 _STOP=set('the and for with from that this are was were assess assessment project report evidence relevant whether quality'.split())
 _SEVERITY={'CRITICAL':4,'HIGH':3,'MEDIUM':2,'LOW':1,'INFO':0,'WARNING':2,'ERROR':3}
@@ -71,6 +72,9 @@ def static_group(e):
 def select_candidates(bundle,c):
     allowed=[e for e in bundle.items if e.eligible_for_review and e.kind in c.allowed_evidence]
     f=focus(c);
+    if is_research(c):
+        f='RESEARCH'
+        allowed=[e for e in allowed if reference_item(e) or relevant_report(e)]
     if f=='FUNCTIONAL':
         inventory,_,_=runtime_inventory(bundle);valid={e.id for e in inventory.values()}
         allowed=[e for e in allowed if e.kind!='TEST_OBSERVATION' or e.id in valid]
@@ -89,7 +93,8 @@ def select_candidates(bundle,c):
                 if e.data.get('origin')=='readme':priority-=10
         elif f=='DESIGN':priority=(45 if e.kind=='REPORT_EXCERPT' else 35 if static_group(e) is None else 5)+heading*12
         elif f=='FUNCTIONAL':priority=100 if e.kind=='TEST_OBSERVATION' else 30+heading*10 if e.kind=='REPORT_EXCERPT' else 5
-        elif f in ('REPORT','RESEARCH','TEST_STRATEGY'):
+        elif f=='RESEARCH':priority=100 if reference_item(e) else 50+heading*12+relevance*3
+        elif f in ('REPORT','TEST_STRATEGY'):
             priority=30+heading*12+relevance*3 if e.kind=='REPORT_EXCERPT' else 20
             if f=='TEST_STRATEGY' and e.kind=='REPORT_EXCERPT' and any(x in section for x in ('test','validation')):priority+=60
         else:priority=0
@@ -117,13 +122,13 @@ def select_candidates(bundle,c):
             if len(best)>=20:break
             add(e)
         # Keep space for required non-runtime kinds (if any).
-        for kind in c.required_evidence:
+        for kind in required_kinds(c):
             if kind!='TEST_OBSERVATION' and not any(e.kind==kind for e in best):
                 if len(best)>=20:
                     removed=best.pop();locators.remove((removed.artifact_sha256,removed.locator))
                 item=next((e for e in ranked if e.kind==kind),None)
                 if item:add(item)
-    for kind in c.required_evidence:
+    for kind in required_kinds(c):
         if not any(e.kind==kind for e in best):
             item=next((e for e in ranked if e.kind==kind),None)
             if item:add(item)
@@ -161,6 +166,8 @@ def prompt_item(e,allowed,*,location_limit=6):
             # Representative locations do not turn duplicates into independent issues.
             result['source_locations']=[loc for x in matches for loc in x.data.get('source_locations',[])][:location_limit]
         elif e.data.get('source_locations'):result['source_locations']=e.data['source_locations'][:3]
+    if e.kind=='RESEARCH_RECORD':
+        result.update(e.data)
     if e.kind=='TEST_OBSERVATION':
         for k in ('scope','outcome','suite','category','check_id','test_id','target','expected_assertions','observation_details'):
             if e.data.get(k):result[k]=e.data[k]
@@ -219,7 +226,9 @@ def intelligence_report(bundle):
     for e in bundle.items:
         code=static_group(e)
         if code and e.eligible_for_review:findings[code].append(e)
-    return {'runtime':runtime_summary(bundle),'runtime_observations':[{'key':k,'evidence_id':e.id,'outcome':e.data['outcome'],'details':e.data} for k,e in sorted(inventory.items())],
+    integrity=bundle.observations.get('integrity',{})
+    advisory={k:integrity[k] for k in ('comparison_status','reference_overlap','references_compared','words_checked','advisory_only') if k in integrity}
+    return {'research':bundle.observations.get('research',{}).get('assessment'), 'integrity_advisory':advisory, 'runtime':runtime_summary(bundle),'runtime_observations':[{'key':k,'evidence_id':e.id,'outcome':e.data['outcome'],'details':e.data} for k,e in sorted(inventory.items())],
         'static_finding_groups':[{'code':k,'instances':len(es),'native_severities':sorted({str(e.data.get('severity') or 'UNSPECIFIED') for e in es}),'evidence_ids':[e.id for e in es]} for k,es in sorted(findings.items())],
         'limitations':['Static findings are not confirmed vulnerabilities; severity prioritizes review rather than directly deducting marks.','Report text extraction may omit figures or tables.']}
 
@@ -237,6 +246,8 @@ def evidence_details(bundle,ids):
             row.update({k:v for k,v in prompt_item(e,[x for x in bundle.items if x.eligible_for_review]).items() if k not in ('kind','label','text','limitations')})
         elif e.kind=='TEST_OBSERVATION':
             row.update({k:e.data[k] for k in ('scope','outcome','suite','check_id','test_id','target','observation_details') if k in e.data})
+        elif e.kind=='RESEARCH_RECORD':
+            row.update(e.data)
         elif e.kind=='REPORT_EXCERPT':
             row.update({k:e.data[k] for k in ('section','start','end') if k in e.data})
         result.append(row)

@@ -111,7 +111,7 @@ def source_refs(row):
     return result
 
 
-def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=None):
+def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=None, legacy_research=False):
     path=Path(evaluation_path).absolute();root=path.parent
     original=read_bounded(path,MAX_JSON)
     # Reuse Phase 1 duplicate-key/nonfinite parsing and typed contract.
@@ -207,10 +207,22 @@ def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=
             'reference_entries':p1.get('reference_entries'),'recency_assessment':p4.get('recency_assessment'),
             'recent_reliable_percent':p4.get('recent_reliable_percent') if (p4.get('reliable_publication_year_count') or 0)>0 else None,
             'applicability':'TEACHER_RUBRIC_DECIDES'}
-        native_add('research','RESEARCH_RECORD','Bibliography extraction',f"Extracted entries: {p1.get('reference_entries')}; literature review found: {p1.get('literature_review_found')}",'/research_report/phase_1',True,['Extraction is heuristic; absence may be acceptable for this assignment.'])
-        for field in ('reference_overview',):
+        if legacy_research:native_add('research','RESEARCH_RECORD','Bibliography extraction',f"Extracted entries: {p1.get('reference_entries')}; literature review found: {p1.get('literature_review_found')}",'/research_report/phase_1',True,['Extraction is heuristic; absence may be acceptable for this assignment.'])
+        for field in (('reference_overview',) if legacy_research else ()):
             for i,row in enumerate(rows(r.get(field))[:MAX_ROWS]):
                 native_add('research','RESEARCH_RECORD','Reference observation',canonical(row).decode()[:1500],f'/research_report/{field}/{i}',True,['Metadata, relevance and factual claim support are different.'])
+    if 'research' in raws and not legacy_research:
+        from .research_policy import normalize_research
+        raw=raws['research'];r=raw['research_report']
+        research=normalize_research(raw,report,text,extraction,ev.submission.repository_url)
+        observations['research']['assessment']=research
+        native_add('research','RESEARCH_RECORD','Native research assessment',research['reason'], '/research_report',True,
+            research['limitations'],{'record_type':'research_assessment',**research})
+        if len(rows(r.get('reference_overview')))>MAX_ROWS:notes.append('Research reference details capped; aggregate counts retained, not full citation coverage.')
+        for i,row in enumerate(rows(r.get('reference_overview'))[:MAX_ROWS]):
+            if not isinstance(row,dict):continue
+            native_add('research','RESEARCH_RECORD','Reference '+str(i+1)+': '+clip(row.get('title'),160),canonical(row).decode()[:1500],f'/research_report/reference_overview/{i}',True,
+                ['Native metadata and heuristic relevance; not proof of citation-to-claim support.'],{'record_type':'reference','reference_number':i+1,**{k:row[k] for k in ('verification_status','relevance_classification','confidence','publication_year','year_source','age_band','cited_in_literature_review') if k in row}})
     if 'executioner' in raws:
         raw=raws['executioner'];p=obj(raw.get('project_intelligence'));quality=obj(raw.get('code_quality'));matrix=obj(raw.get('test_case_matrix'));source=obj(raw.get('source'));commit=source.get('commit_sha')
         hold=raw.get('status')=='SECURITY_HOLD' or raw.get('effective_mode') not in ('REVIEWED','RESUME') or not isinstance(commit,str) or not re.fullmatch(r'[0-9a-f]{40}',commit)

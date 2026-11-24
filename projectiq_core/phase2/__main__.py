@@ -26,7 +26,7 @@ def main(argv=None):
     for name in ('report','out'):c.add_argument('--'+name,type=Path,required=True)
     for name in ('title','submission-id'):c.add_argument('--'+name,required=True)
     c.add_argument('--repo');c.add_argument('--ref');c.add_argument('--references',type=Path)
-    c.add_argument('--agents',nargs='+',choices=AGENTS,default=AGENTS);c.add_argument('--verify-research',action='store_true')
+    c.add_argument('--agents',nargs='+',choices=AGENTS,default=None);c.add_argument('--verify-research',action='store_true')
     for name in ('assess','propose','propose-all','reweight'):
         q=sub.add_parser(name,help='Rebuild evidence from saved run; no agent rerun')
         q.add_argument('--evaluation',type=Path,required=True);q.add_argument('--rubric',type=Path,required=True)
@@ -48,7 +48,9 @@ def main(argv=None):
         if args.command=='collect':
             submission,data=make_submission(args.report,args.title,args.submission_id,args.repo,args.ref)
             if args.references and not args.references.is_dir():raise ValueError('REFERENCE_DIRECTORY_NOT_FOUND')
-            sources=live_sources(submission,references=args.references,agents=args.agents,verify_research=args.verify_research,summary_only=True)
+            agents=args.agents if args.agents is not None else ['summarizer','integrity','executioner']+(['research'] if args.verify_research else [])
+            if args.verify_research and 'research' not in agents:raise ValueError('VERIFY_RESEARCH_REQUIRES_RESEARCH_AGENT')
+            sources=live_sources(submission,references=args.references,agents=agents,verify_research=args.verify_research,summary_only=True)
             if not sources:raise ValueError('NO_AGENT_INPUTS')
             r=collect(submission=submission,report_bytes=data,out=args.out,mode='LIVE',sources=sources)
             print('Evaluation:',args.out/'evaluation.json')

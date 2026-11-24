@@ -273,7 +273,8 @@
         "RESEARCH_RECORD"
       ],
       "required_evidence": [
-        "REPORT_EXCERPT"
+        "REPORT_EXCERPT",
+        "RESEARCH_RECORD"
       ],
       "minimum_evidence": 1,
       "levels": [

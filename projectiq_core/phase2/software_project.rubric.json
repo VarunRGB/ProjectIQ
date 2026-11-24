@@ -2,7 +2,7 @@
   "schema_version": "2.0",
   "id": "software-project",
   "revision": "1",
-  "title": "Software Project \u2014 Faculty Rubric (editable example)",
+  "title": "Software Project — Faculty Rubric (editable example)",
   "total_points": 100,
   "criteria": [
     {
@@ -262,7 +262,8 @@
         "RESEARCH_RECORD"
       ],
       "required_evidence": [
-        "REPORT_EXCERPT"
+        "REPORT_EXCERPT",
+        "RESEARCH_RECORD"
       ],
       "minimum_evidence": 1,
       "levels": [
