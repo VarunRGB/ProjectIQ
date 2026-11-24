@@ -1,0 +1,363 @@
+{
+  "$defs": {
+    "AIAnalysis": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": "NOT_AVAILABLE",
+          "enum": [
+            "NOT_AVAILABLE",
+            "COMPLETED",
+            "INCONCLUSIVE",
+            "FAILED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "estimated_percent": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Estimated Percent"
+        },
+        "interpretation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Interpretation"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "flagged_passages": {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Flagged Passages",
+          "type": "array"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        }
+      },
+      "title": "AIAnalysis",
+      "type": "object"
+    },
+    "AgentResult": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "enum": [
+            "summarizer",
+            "integrity",
+            "research",
+            "executioner"
+          ],
+          "title": "Agent",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "COMPLETED",
+            "PARTIAL",
+            "FAILED",
+            "NOT_RUN",
+            "REVIEW_REQUIRED"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "native_status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Native Status"
+        },
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/Metric"
+          },
+          "title": "Metrics",
+          "type": "array"
+        },
+        "details": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Details",
+          "type": "object"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "native": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Receipt"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ai_detection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AIAnalysis"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "agent",
+        "status"
+      ],
+      "title": "AgentResult",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "Metric": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Value"
+        },
+        "unit": {
+          "title": "Unit",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "value",
+        "unit",
+        "scope"
+      ],
+      "title": "Metric",
+      "type": "object"
+    },
+    "Receipt": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "origin": {
+          "enum": [
+            "LIVE",
+            "IMPORTED"
+          ],
+          "title": "Origin",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "origin"
+      ],
+      "title": "Receipt",
+      "type": "object"
+    },
+    "Submission": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "project_title": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Project Title",
+          "type": "string"
+        },
+        "report_name": {
+          "title": "Report Name",
+          "type": "string"
+        },
+        "report_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Report Sha256",
+          "type": "string"
+        },
+        "repository_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repository Url"
+        },
+        "requested_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requested Ref"
+        }
+      },
+      "required": [
+        "id",
+        "project_title",
+        "report_name",
+        "report_sha256"
+      ],
+      "title": "Submission",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "submission": {
+      "$ref": "#/$defs/Submission"
+    },
+    "created_utc": {
+      "title": "Created Utc",
+      "type": "string"
+    },
+    "mode": {
+      "enum": [
+        "LIVE",
+        "IMPORTED"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "agents": {
+      "additionalProperties": {
+        "$ref": "#/$defs/AgentResult"
+      },
+      "propertyNames": {
+        "enum": [
+          "summarizer",
+          "integrity",
+          "research",
+          "executioner"
+        ]
+      },
+      "title": "Agents",
+      "type": "object"
+    },
+    "final_assessment": {
+      "default": null,
+      "title": "Final Assessment",
+      "type": "null"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "submission",
+    "created_utc",
+    "mode",
+    "agents"
+  ],
+  "title": "Evaluation",
+  "type": "object"
+}
