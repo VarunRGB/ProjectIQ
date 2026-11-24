@@ -1,0 +1,146 @@
+{
+  "$defs": {
+    "Decision": {
+      "additionalProperties": false,
+      "properties": {
+        "criterion_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$",
+          "title": "Criterion Id",
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "SCORE",
+            "EXCLUDE",
+            "DEFER",
+            "CONFIRM_TEST_RATIO"
+          ],
+          "title": "Action",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "TEACHER",
+            "MODEL"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "level_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Level Id"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "rationale": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "feedback": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Feedback"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "criterion_id",
+        "action",
+        "source",
+        "rationale"
+      ],
+      "title": "Decision",
+      "type": "object"
+    },
+    "Feedback": {
+      "additionalProperties": false,
+      "properties": {
+        "strength": {
+          "maxLength": 220,
+          "minLength": 1,
+          "title": "Strength",
+          "type": "string"
+        },
+        "limitation": {
+          "maxLength": 220,
+          "minLength": 1,
+          "title": "Limitation",
+          "type": "string"
+        },
+        "improvement": {
+          "maxLength": 220,
+          "minLength": 1,
+          "title": "Improvement",
+          "type": "string"
+        },
+        "observed_failure": {
+          "title": "Observed Failure",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "strength",
+        "limitation",
+        "improvement",
+        "observed_failure"
+      ],
+      "title": "Feedback",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "evidence_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Evidence Sha256",
+      "type": "string"
+    },
+    "rubric_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Rubric Sha256",
+      "type": "string"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/Decision"
+      },
+      "maxItems": 40,
+      "title": "Decisions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "evidence_sha256",
+    "rubric_sha256"
+  ],
+  "title": "DecisionSet",
+  "type": "object"
+}

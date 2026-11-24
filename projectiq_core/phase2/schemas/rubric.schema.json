@@ -1,0 +1,254 @@
+{
+  "$defs": {
+    "Criterion": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "group": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$",
+          "title": "Group",
+          "type": "string"
+        },
+        "weight": {
+          "exclusiveMinimum": 0,
+          "maximum": 1000000,
+          "title": "Weight",
+          "type": "number"
+        },
+        "applicability": {
+          "default": "REQUIRED",
+          "enum": [
+            "REQUIRED",
+            "OPTIONAL",
+            "EXCLUDED"
+          ],
+          "title": "Applicability",
+          "type": "string"
+        },
+        "method": {
+          "default": "JUDGMENT",
+          "enum": [
+            "JUDGMENT",
+            "TEST_RATIO",
+            "REVIEWED_RATIO",
+            "REQUIREMENT_COVERAGE"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "allowed_evidence": {
+          "items": {
+            "enum": [
+              "REPORT_EXCERPT",
+              "STATIC_SOURCE",
+              "RESEARCH_RECORD",
+              "TEST_OBSERVATION"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Allowed Evidence",
+          "type": "array"
+        },
+        "required_evidence": {
+          "items": {
+            "enum": [
+              "REPORT_EXCERPT",
+              "STATIC_SOURCE",
+              "RESEARCH_RECORD",
+              "TEST_OBSERVATION"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "title": "Required Evidence",
+          "type": "array"
+        },
+        "minimum_evidence": {
+          "default": 1,
+          "maximum": 20,
+          "minimum": 1,
+          "title": "Minimum Evidence",
+          "type": "integer"
+        },
+        "levels": {
+          "items": {
+            "$ref": "#/$defs/Level"
+          },
+          "maxItems": 10,
+          "title": "Levels",
+          "type": "array"
+        },
+        "test_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Test Ids",
+          "type": "array"
+        },
+        "requirement_map": {
+          "maxProperties": 100,
+          "patternProperties": {
+            "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "title": "Requirement Map",
+          "type": "object"
+        },
+        "feedback_required": {
+          "default": false,
+          "title": "Feedback Required",
+          "type": "boolean"
+        },
+        "focus": {
+          "default": "GENERAL",
+          "enum": [
+            "GENERAL",
+            "REPORT",
+            "DESIGN",
+            "IMPLEMENTATION",
+            "FUNCTIONAL",
+            "RESEARCH",
+            "TEST_STRATEGY",
+            "STYLE",
+            "MAINTAINABILITY",
+            "SECURITY"
+          ],
+          "title": "Focus",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "group",
+        "weight"
+      ],
+      "title": "Criterion",
+      "type": "object"
+    },
+    "Level": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "fraction": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Fraction",
+          "type": "number"
+        },
+        "descriptor": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Descriptor",
+          "type": "string"
+        },
+        "requires_failed_observation": {
+          "default": false,
+          "title": "Requires Failed Observation",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "fraction",
+        "descriptor"
+      ],
+      "title": "Level",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$",
+      "title": "Id",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 2000,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "revision": {
+      "default": "1",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$",
+      "title": "Revision",
+      "type": "string"
+    },
+    "total_points": {
+      "exclusiveMinimum": 0,
+      "maximum": 1000000,
+      "title": "Total Points",
+      "type": "number"
+    },
+    "group_weights": {
+      "maxProperties": 40,
+      "patternProperties": {
+        "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$": {
+          "type": "number"
+        }
+      },
+      "title": "Group Weights",
+      "type": "object"
+    },
+    "criteria": {
+      "items": {
+        "$ref": "#/$defs/Criterion"
+      },
+      "maxItems": 40,
+      "minItems": 1,
+      "title": "Criteria",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "title",
+    "total_points",
+    "criteria"
+  ],
+  "title": "Rubric",
+  "type": "object"
+}

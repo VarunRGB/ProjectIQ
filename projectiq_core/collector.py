@@ -122,8 +122,9 @@ def collect(*, submission: Submission, report_bytes: bytes, out: Path, mode: str
 
 
 def live_sources(submission, *, references: Path|None=None, agents=AGENTS, rubric: Path|None=None,
-                 samples: int=1, verify_research=False):
+                 samples: int=1, verify_research=False, summary_only: bool=False):
     """Lazy imports keep missing model dependencies isolated. No reviewed VM path."""
+    if summary_only and rubric is not None: raise ValueError('LEGACY_RUBRIC_NOT_ALLOWED_IN_SUMMARY_ONLY')
     if not 1<=samples<=5: raise ValueError('JUDGE_SAMPLES_OUT_OF_RANGE')
     # Local model weights should be prepared by the operator; don't silently download.
     os.environ['HF_HUB_OFFLINE']='1';os.environ['TRANSFORMERS_OFFLINE']='1'
@@ -131,8 +132,6 @@ def live_sources(submission, *, references: Path|None=None, agents=AGENTS, rubri
         from projectiq_summarizer.config import Settings
         from projectiq_summarizer.llm import OllamaClient
         from projectiq_summarizer.loaders import load_text
-        from projectiq_summarizer.pipeline import evaluate
-        from projectiq_summarizer.rubric import load_rubric
         s=Settings(judge_samples=samples)
         if urlparse(s.ollama_url).hostname not in ('localhost','127.0.0.1','::1'): raise AdapterError('OLLAMA_MUST_BE_LOCAL')
         from .resources import release_ollama_model
@@ -140,7 +139,21 @@ def live_sources(submission, *, references: Path|None=None, agents=AGENTS, rubri
         checked=False
         try:
             llm.check();checked=True
-            raw=evaluate(load_text(report),report.name,llm,s,load_rubric(str(rubric) if rubric else None),progress=print).model_dump(mode='json')
+            if summary_only:
+                from time import perf_counter
+                from projectiq_summarizer.summariser import summarise
+                start=perf_counter()
+                text=load_text(report)
+                if not text.strip(): raise ValueError('EMPTY_REPORT_TEXT')
+                print('summarising (summary-only; no legacy judge)',flush=True)
+                summary,n_chunks=summarise(text,llm,s)
+                raw={'result_kind':'SUMMARY_ONLY','name':report.name,'model':s.model,
+                     'summary':summary.model_dump(mode='json'),'word_count':len(text.split()),
+                     'chunks':n_chunks,'elapsed_s':round(perf_counter()-start,1)}
+            else:
+                from projectiq_summarizer.pipeline import evaluate
+                from projectiq_summarizer.rubric import load_rubric
+                raw=evaluate(load_text(report),report.name,llm,s,load_rubric(str(rubric) if rubric else None),progress=print).model_dump(mode='json')
         finally:
             release=release_ollama_model(llm) if checked else 'RELEASE_NOT_ATTEMPTED'
             print('summarizer: Ollama '+release,flush=True)

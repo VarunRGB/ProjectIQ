@@ -1,0 +1,379 @@
+{
+  "schema_version": "2.0",
+  "id": "minicollab-hybrid-showcase",
+  "title": "MiniCollab — scoped hybrid showcase (faculty policy example)",
+  "revision": "1",
+  "total_points": 100,
+  "group_weights": {
+    "problem": 15,
+    "report": 15,
+    "design": 20,
+    "implementation": 20,
+    "validation": 20,
+    "research": 10
+  },
+  "criteria": [
+    {
+      "id": "problem_scope",
+      "title": "Problem and scope",
+      "description": "Assess the problem, intended users, objectives, constraints and coherent scope.",
+      "group": "problem",
+      "weight": 100,
+      "applicability": "REQUIRED",
+      "method": "JUDGMENT",
+      "allowed_evidence": [
+        "REPORT_EXCERPT"
+      ],
+      "required_evidence": [
+        "REPORT_EXCERPT"
+      ],
+      "minimum_evidence": 1,
+      "levels": [
+        {
+          "id": "insufficient",
+          "label": "Insufficient",
+          "fraction": 0.0,
+          "descriptor": "Reviewed evidence shows no coherent problem or objectives."
+        },
+        {
+          "id": "developing",
+          "label": "Developing",
+          "fraction": 0.25,
+          "descriptor": "Problem is vague or objectives largely unclear."
+        },
+        {
+          "id": "adequate",
+          "label": "Adequate",
+          "fraction": 0.5,
+          "descriptor": "Problem and main objectives understandable; important constraints or users omitted."
+        },
+        {
+          "id": "strong",
+          "label": "Strong",
+          "fraction": 0.75,
+          "descriptor": "Clear problem, objectives and scope with only minor gaps."
+        },
+        {
+          "id": "excellent",
+          "label": "Excellent",
+          "fraction": 1.0,
+          "descriptor": "Precise and justified problem, user needs, measurable objectives and realistic constraints."
+        }
+      ],
+      "focus": "REPORT",
+      "feedback_required": true
+    },
+    {
+      "id": "report_quality",
+      "title": "Report quality and clarity",
+      "description": "Assess organization, clarity, specificity, and accurate separation of claims, plans and measured results.",
+      "group": "report",
+      "weight": 100,
+      "applicability": "REQUIRED",
+      "method": "JUDGMENT",
+      "allowed_evidence": [
+        "REPORT_EXCERPT"
+      ],
+      "required_evidence": [
+        "REPORT_EXCERPT"
+      ],
+      "minimum_evidence": 1,
+      "levels": [
+        {
+          "id": "insufficient",
+          "label": "Insufficient",
+          "fraction": 0.0,
+          "descriptor": "Reviewed report is substantially incoherent or misrepresents critical results."
+        },
+        {
+          "id": "developing",
+          "label": "Developing",
+          "fraction": 0.25,
+          "descriptor": "Major organization or clarity gaps make understanding difficult."
+        },
+        {
+          "id": "adequate",
+          "label": "Adequate",
+          "fraction": 0.5,
+          "descriptor": "Readable and structured, but limited specificity or evidence presentation."
+        },
+        {
+          "id": "strong",
+          "label": "Strong",
+          "fraction": 0.75,
+          "descriptor": "Clear, organized, specific report with minor gaps."
+        },
+        {
+          "id": "excellent",
+          "label": "Excellent",
+          "fraction": 1.0,
+          "descriptor": "Excellent organization, precise technical communication, and transparent evidence and limitations."
+        }
+      ],
+      "focus": "REPORT",
+      "feedback_required": true
+    },
+    {
+      "id": "technical_design",
+      "title": "Architecture and technical design",
+      "description": "Assess design decisions, appropriate technology, interfaces/data model and explanation of trade-offs.",
+      "group": "design",
+      "weight": 100,
+      "applicability": "REQUIRED",
+      "method": "JUDGMENT",
+      "allowed_evidence": [
+        "REPORT_EXCERPT",
+        "STATIC_SOURCE"
+      ],
+      "required_evidence": [
+        "REPORT_EXCERPT"
+      ],
+      "minimum_evidence": 1,
+      "levels": [
+        {
+          "id": "insufficient",
+          "label": "Insufficient",
+          "fraction": 0.0,
+          "descriptor": "Reviewed design is incoherent or unsuitable for the stated problem."
+        },
+        {
+          "id": "developing",
+          "label": "Developing",
+          "fraction": 0.25,
+          "descriptor": "Major unexplained design choices or missing components."
+        },
+        {
+          "id": "adequate",
+          "label": "Adequate",
+          "fraction": 0.5,
+          "descriptor": "Reasonable architecture with basic component/data explanation."
+        },
+        {
+          "id": "strong",
+          "label": "Strong",
+          "fraction": 0.75,
+          "descriptor": "Coherent design with justified choices and relevant trade-offs."
+        },
+        {
+          "id": "excellent",
+          "label": "Excellent",
+          "fraction": 1.0,
+          "descriptor": "Well-justified architecture, interfaces and data model with explicit constraints and trade-offs."
+        }
+      ],
+      "focus": "DESIGN",
+      "feedback_required": true
+    },
+    {
+      "id": "implementation_quality",
+      "title": "Implementation and engineering quality",
+      "description": "Assess source-supported implementation, maintainability, appropriate structure and security/reliability handling; do not equate heuristic indicators to marks.",
+      "group": "implementation",
+      "weight": 100,
+      "applicability": "REQUIRED",
+      "method": "JUDGMENT",
+      "allowed_evidence": [
+        "REPORT_EXCERPT",
+        "STATIC_SOURCE"
+      ],
+      "required_evidence": [
+        "STATIC_SOURCE",
+        "REPORT_EXCERPT"
+      ],
+      "minimum_evidence": 2,
+      "levels": [
+        {
+          "id": "insufficient",
+          "label": "Insufficient",
+          "fraction": 0.0,
+          "descriptor": "Reviewed source demonstrates substantial implementation deficiencies."
+        },
+        {
+          "id": "developing",
+          "label": "Developing",
+          "fraction": 0.25,
+          "descriptor": "Major source-supported engineering problems or incomplete design realization."
+        },
+        {
+          "id": "adequate",
+          "label": "Adequate",
+          "fraction": 0.5,
+          "descriptor": "Core implementation is plausible with significant engineering gaps."
+        },
+        {
+          "id": "strong",
+          "label": "Strong",
+          "fraction": 0.75,
+          "descriptor": "Source-supported implementation is coherent, with minor or bounded concerns."
+        },
+        {
+          "id": "excellent",
+          "label": "Excellent",
+          "fraction": 1.0,
+          "descriptor": "Source-supported implementation demonstrates strong structure and robust handling of relevant concerns."
+        }
+      ],
+      "focus": "IMPLEMENTATION",
+      "feedback_required": true
+    },
+    {
+      "id": "verified_behavior",
+      "title": "Selected functional scenario success",
+      "description": "Score the outcomes of the explicitly selected reviewed scenarios only. Attribution and scope require teacher review.",
+      "group": "validation",
+      "weight": 60,
+      "method": "REVIEWED_RATIO",
+      "allowed_evidence": [
+        "TEST_OBSERVATION"
+      ],
+      "required_evidence": [
+        "TEST_OBSERVATION"
+      ],
+      "test_ids": [
+        "api:OC-3CB38E63233A37C1",
+        "auth:REGISTRATION",
+        "auth:LOGIN",
+        "auth:AUTHENTICATED",
+        "dependent_workflow:WORKFLOW",
+        "crud:CRUD_WORKFLOW"
+      ],
+      "focus": "FUNCTIONAL"
+    },
+    {
+      "id": "negative_access",
+      "title": "Selected unauthenticated access check",
+      "description": "Score the outcomes of the explicitly selected reviewed scenarios only. Attribution and scope require teacher review.",
+      "group": "validation",
+      "weight": 20,
+      "method": "REVIEWED_RATIO",
+      "allowed_evidence": [
+        "TEST_OBSERVATION"
+      ],
+      "required_evidence": [
+        "TEST_OBSERVATION"
+      ],
+      "test_ids": [
+        "auth:UNAUTHENTICATED"
+      ],
+      "focus": "FUNCTIONAL"
+    },
+    {
+      "id": "state_verification",
+      "title": "Selected database postcondition check",
+      "description": "Score the outcomes of the explicitly selected reviewed scenarios only. Attribution and scope require teacher review.",
+      "group": "validation",
+      "weight": 10,
+      "method": "REVIEWED_RATIO",
+      "allowed_evidence": [
+        "TEST_OBSERVATION"
+      ],
+      "required_evidence": [
+        "TEST_OBSERVATION"
+      ],
+      "test_ids": [
+        "db_postconditions:PC-ABDC90DD364F48F8"
+      ],
+      "focus": "FUNCTIONAL"
+    },
+    {
+      "id": "testing_strategy",
+      "title": "Testing strategy and limitations",
+      "description": "Assess the documented validation strategy, including clear expected outcomes, negative checks and honest limitations. Do not score executed correctness or penalize missing execution here.",
+      "group": "validation",
+      "weight": 10,
+      "focus": "TEST_STRATEGY",
+      "method": "JUDGMENT",
+      "applicability": "REQUIRED",
+      "allowed_evidence": [
+        "REPORT_EXCERPT"
+      ],
+      "required_evidence": [
+        "REPORT_EXCERPT"
+      ],
+      "feedback_required": true,
+      "levels": [
+        {
+          "id": "insufficient",
+          "label": "Insufficient",
+          "fraction": 0.0,
+          "descriptor": "Reviewed text contains no meaningful validation strategy or substantially misrepresents what was tested."
+        },
+        {
+          "id": "developing",
+          "label": "Developing",
+          "fraction": 0.25,
+          "descriptor": "Very limited scenarios or no clear expected outcomes."
+        },
+        {
+          "id": "adequate",
+          "label": "Adequate",
+          "fraction": 0.5,
+          "descriptor": "Useful scenarios and some expected outcomes, but incomplete negative cases or reproducibility details."
+        },
+        {
+          "id": "strong",
+          "label": "Strong",
+          "fraction": 0.75,
+          "descriptor": "Clear representative scenarios and expected outcomes with explicit limitations and some negative checks."
+        },
+        {
+          "id": "excellent",
+          "label": "Excellent",
+          "fraction": 1.0,
+          "descriptor": "Comprehensive requirements-linked strategy with concrete oracles, negative cases, reproducibility details and honest limitations."
+        }
+      ]
+    },
+    {
+      "id": "research",
+      "title": "Research and use of sources",
+      "description": "Assess the assignment-required literature or documented technical sources, their relevance and use. If the assignment does not require this, explicitly exclude.",
+      "group": "research",
+      "weight": 100,
+      "applicability": "EXCLUDED",
+      "method": "JUDGMENT",
+      "allowed_evidence": [
+        "REPORT_EXCERPT",
+        "RESEARCH_RECORD"
+      ],
+      "required_evidence": [
+        "REPORT_EXCERPT"
+      ],
+      "minimum_evidence": 1,
+      "levels": [
+        {
+          "id": "insufficient",
+          "label": "Insufficient",
+          "fraction": 0.0,
+          "descriptor": "Required sources are demonstrably absent or irrelevant after review."
+        },
+        {
+          "id": "developing",
+          "label": "Developing",
+          "fraction": 0.25,
+          "descriptor": "Minimal or poorly connected source use."
+        },
+        {
+          "id": "adequate",
+          "label": "Adequate",
+          "fraction": 0.5,
+          "descriptor": "Relevant sources cited but synthesis or coverage limited."
+        },
+        {
+          "id": "strong",
+          "label": "Strong",
+          "fraction": 0.75,
+          "descriptor": "Relevant sources integrated and limitations understood."
+        },
+        {
+          "id": "excellent",
+          "label": "Excellent",
+          "fraction": 1.0,
+          "descriptor": "Well-chosen, critically synthesized sources supporting the project with transparent provenance."
+        }
+      ],
+      "focus": "RESEARCH",
+      "feedback_required": true
+    }
+  ]
+}

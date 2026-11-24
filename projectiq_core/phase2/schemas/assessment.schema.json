@@ -1,0 +1,306 @@
+{
+  "$defs": {
+    "CriterionResult": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "group": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$",
+          "title": "Group",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "applicability": {
+          "title": "Applicability",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "UNASSESSED",
+            "EXCLUDED",
+            "PROPOSED",
+            "TEACHER_REVIEWED",
+            "OBJECTIVE_PROVISIONAL"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "configured_weight": {
+          "title": "Configured Weight",
+          "type": "number"
+        },
+        "effective_weight_percent": {
+          "title": "Effective Weight Percent",
+          "type": "number"
+        },
+        "max_points": {
+          "title": "Max Points",
+          "type": "number"
+        },
+        "earned_points": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Earned Points"
+        },
+        "fraction": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fraction"
+        },
+        "level_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Level Id"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "feedback": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Feedback"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "review_flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Review Flags",
+          "type": "array"
+        },
+        "objective_details": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Objective Details",
+          "type": "object"
+        },
+        "evidence_details": {
+          "items": {
+            "additionalProperties": {
+              "$ref": "#/$defs/JsonValue"
+            },
+            "type": "object"
+          },
+          "title": "Evidence Details",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "group",
+        "title",
+        "applicability",
+        "status",
+        "configured_weight",
+        "effective_weight_percent",
+        "max_points",
+        "earned_points",
+        "fraction",
+        "reason"
+      ],
+      "title": "CriterionResult",
+      "type": "object"
+    },
+    "Feedback": {
+      "additionalProperties": false,
+      "properties": {
+        "strength": {
+          "maxLength": 220,
+          "minLength": 1,
+          "title": "Strength",
+          "type": "string"
+        },
+        "limitation": {
+          "maxLength": 220,
+          "minLength": 1,
+          "title": "Limitation",
+          "type": "string"
+        },
+        "improvement": {
+          "maxLength": 220,
+          "minLength": 1,
+          "title": "Improvement",
+          "type": "string"
+        },
+        "observed_failure": {
+          "title": "Observed Failure",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "strength",
+        "limitation",
+        "improvement",
+        "observed_failure"
+      ],
+      "title": "Feedback",
+      "type": "object"
+    },
+    "JsonValue": {}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "evidence_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Evidence Sha256",
+      "type": "string"
+    },
+    "rubric_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Rubric Sha256",
+      "type": "string"
+    },
+    "decisions_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Decisions Sha256",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "INSUFFICIENT_EVIDENCE",
+        "READY_FOR_TEACHER_REVIEW",
+        "TEACHER_REVIEWED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "max_points": {
+      "title": "Max Points",
+      "type": "number"
+    },
+    "proposed_points": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Proposed Points"
+    },
+    "reviewed_points": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Reviewed Points"
+    },
+    "assessed_subtotal_points": {
+      "title": "Assessed Subtotal Points",
+      "type": "number"
+    },
+    "assessed_max_points": {
+      "title": "Assessed Max Points",
+      "type": "number"
+    },
+    "assessed_weight_percent": {
+      "title": "Assessed Weight Percent",
+      "type": "number"
+    },
+    "reviewed_weight_percent": {
+      "title": "Reviewed Weight Percent",
+      "type": "number"
+    },
+    "unresolved_criterion_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unresolved Criterion Ids",
+      "type": "array"
+    },
+    "criteria": {
+      "items": {
+        "$ref": "#/$defs/CriterionResult"
+      },
+      "title": "Criteria",
+      "type": "array"
+    },
+    "groups": {
+      "items": {
+        "additionalProperties": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "type": "object"
+      },
+      "title": "Groups",
+      "type": "array"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "evidence_sha256",
+    "rubric_sha256",
+    "decisions_sha256",
+    "status",
+    "max_points",
+    "proposed_points",
+    "reviewed_points",
+    "assessed_subtotal_points",
+    "assessed_max_points",
+    "assessed_weight_percent",
+    "reviewed_weight_percent",
+    "unresolved_criterion_ids",
+    "criteria",
+    "groups",
+    "limitations"
+  ],
+  "title": "Assessment",
+  "type": "object"
+}

@@ -1,0 +1,196 @@
+{
+  "$defs": {
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "agent": {
+          "enum": [
+            "report",
+            "summarizer",
+            "integrity",
+            "research",
+            "executioner"
+          ],
+          "title": "Agent",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "REPORT_EXCERPT",
+            "STATIC_SOURCE",
+            "RESEARCH_RECORD",
+            "TEST_OBSERVATION",
+            "TEST_PLAN",
+            "REPORT_SUMMARY",
+            "LEGACY_JUDGEMENT",
+            "INTEGRITY_ADVISORY",
+            "METRIC"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "artifact_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Artifact Sha256",
+          "type": "string"
+        },
+        "locator": {
+          "title": "Locator",
+          "type": "string"
+        },
+        "provenance": {
+          "enum": [
+            "REPORT_SNAPSHOT",
+            "NATIVE_RECEIPT_MATCHED",
+            "IMPORTED_ACKNOWLEDGED",
+            "IMPORTED_UNCONFIRMED"
+          ],
+          "title": "Provenance",
+          "type": "string"
+        },
+        "eligible_for_review": {
+          "default": false,
+          "title": "Eligible For Review",
+          "type": "boolean"
+        },
+        "limitations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Limitations",
+          "type": "array"
+        },
+        "data": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Data",
+          "type": "object"
+        }
+      },
+      "required": [
+        "id",
+        "agent",
+        "kind",
+        "label",
+        "text",
+        "artifact_sha256",
+        "locator",
+        "provenance"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "JsonValue": {}
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "evaluation_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Evaluation Sha256",
+      "type": "string"
+    },
+    "submission_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$",
+      "title": "Submission Id",
+      "type": "string"
+    },
+    "report_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Report Sha256",
+      "type": "string"
+    },
+    "extracted_text_sha256": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extracted Text Sha256"
+    },
+    "report_extraction": {
+      "enum": [
+        "COMPLETE",
+        "TRUNCATED",
+        "UNAVAILABLE"
+      ],
+      "title": "Report Extraction",
+      "type": "string"
+    },
+    "repository_commit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Repository Commit"
+    },
+    "agent_checks": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Agent Checks",
+      "type": "object"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "observations": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Observations",
+      "type": "object"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    }
+  },
+  "required": [
+    "evaluation_sha256",
+    "submission_id",
+    "report_sha256",
+    "report_extraction",
+    "agent_checks",
+    "items",
+    "observations",
+    "limitations"
+  ],
+  "title": "EvidenceBundle",
+  "type": "object"
+}

@@ -26,6 +26,21 @@ def skipped(agent, status='NOT_RUN', code=None, note=None, native=None):
         limitations=[note] if note else [],ai_detection=AIAnalysis() if agent=='integrity' else None)
 
 def summarizer(d, receipt):
+    if d.get('result_kind')=='SUMMARY_ONLY':
+        summary=obj(d.get('summary'))
+        if (not isinstance(summary.get('summary'),str) or not summary['summary'].strip() or
+            not isinstance(summary.get('key_points'),list) or any(not isinstance(p,str) for p in summary['key_points'])):
+            raise AdapterError('INVALID_SUMMARY_ONLY_RESULT')
+        if any(key in d for key in ('weighted_score','criteria','recommendation','confidence')):
+            raise AdapterError('SUMMARY_ONLY_CONTAINS_LEGACY_JUDGEMENT')
+        notes=['Generated report summary only; model claims are not independently verified.',
+               'All project grading is performed separately by the unified rubric engine.']
+        if isinstance(d.get('collector_resource_lifecycle'),dict) and d['collector_resource_lifecycle'].get('ollama_release')=='RELEASE_NOT_VERIFIED':
+            notes.append('Ollama model release not verified; inspect resource usage before VM work.')
+        return AgentResult(agent='summarizer',status='COMPLETED',native_status='SUMMARY_GENERATED',native=receipt,
+            metrics=[metric('word_count','Report words',d.get('word_count'),'count','Whitespace-delimited extracted report text',integer=True)],
+            details=subset(d,('result_kind','summary','model','word_count','chunks','elapsed_s','collector_resource_lifecycle')),
+            limitations=notes)
     obj(d.get('summary')); conf=obj(d.get('confidence'))
     criteria=d.get('criteria')
     if not isinstance(criteria,list) or not criteria or any(not isinstance(c,dict) for c in criteria):
