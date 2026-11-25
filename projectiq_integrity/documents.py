@@ -12,12 +12,21 @@ from typing import Dict, List, Optional
 from .ria.evidence_analyzer import Passage, ReferenceCorpus
 from .ria.pdf_extractor import Document, Page, Section, Sentence, extract_document
 from .ria.preprocessing import split_sentences
+from projectiq_research.section_detector import REFERENCES_ALIASES  # read-only: same headings as the research agent
 
 logger = logging.getLogger(__name__)
 
 DOCUMENT_SUFFIXES = {".pdf", ".docx", ".txt", ".md"}
-_REF_HEADING = re.compile(r"^\s*(?:\d+\.?\s*)?(references|bibliography|works cited|reference list)\s*:?\s*$",
-                          re.IGNORECASE)
+
+
+def is_references_heading(line: str) -> bool:
+    """True for a References / Bibliography heading ("6. References", "VII. REFERENCES:").
+
+    Uses the research agent's list of heading names, so both agents agree on where
+    the reference list starts. The research agent's code is not changed."""
+    text = re.sub(r"^\s*(?:\d+(?:\.\d+)*|[ivxlcdm]+)[.)]?\s+", "", line.strip(), flags=re.IGNORECASE)
+    text = re.sub(r"[^a-z ]", " ", text.lower())
+    return " ".join(text.split()) in REFERENCES_ALIASES
 
 
 def _text_document(text: str, name: str) -> Document:
@@ -27,7 +36,7 @@ def _text_document(text: str, name: str) -> Document:
     sentences: List[Sentence] = []
     section = "Body"
     for para_no, para in enumerate(paragraphs, start=1):
-        if _REF_HEADING.match(para):
+        if is_references_heading(para):
             section = "References"   # the reference list is never compared
             continue
         for sent in split_sentences(" ".join(para.split())):
