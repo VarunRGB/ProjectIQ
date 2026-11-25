@@ -92,6 +92,16 @@ def collect(*, submission: Submission, report_bytes: bytes, out: Path, mode: str
     native=out/'native';native.mkdir()
     snapshot=out/'input';snapshot.mkdir();report=snapshot/submission.report_name
     write_new(report,report_bytes)
+    
+    from .ieee_integration import run_ieee_check
+
+    ieee_result = run_ieee_check(report)
+
+    write_new(
+        out / "ieee_format.json",
+        json_bytes(ieee_result)
+    )
+
     results={}
     cancelled=False
     for agent in AGENTS:

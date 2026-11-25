@@ -1,0 +1,239 @@
+{
+  "module": "projectiq_ieee",
+  "layout_verdict": "Two-column layout detected",
+  "template_profile": "Generic IEEE two-column conference paper (heuristic)",
+  "filename": "demo_two_column.pdf",
+  "pages": 1,
+  "source_format": "PDF",
+  "analysis_method": "PDF visual-layout inspection",
+  "assessment_scope": "layout_and_structure",
+  "score": 100.0,
+  "max_score": 100,
+  "evaluated_weight": 90,
+  "rubric_weight": 100,
+  "rating": "Strong formatting match",
+  "categories": [
+    {
+      "category": "Page layout",
+      "rubric_weight": 25,
+      "earned": 25.0,
+      "possible": 25,
+      "status": "pass"
+    },
+    {
+      "category": "Typography",
+      "rubric_weight": 20,
+      "earned": 20.0,
+      "possible": 20,
+      "status": "pass"
+    },
+    {
+      "category": "Title and authors",
+      "rubric_weight": 10,
+      "earned": 10.0,
+      "possible": 10,
+      "status": "pass"
+    },
+    {
+      "category": "Abstract and keywords",
+      "rubric_weight": 15,
+      "earned": 15.0,
+      "possible": 15,
+      "status": "pass"
+    },
+    {
+      "category": "Section structure",
+      "rubric_weight": 10,
+      "earned": 10.0,
+      "possible": 10,
+      "status": "pass"
+    },
+    {
+      "category": "Figures and tables",
+      "rubric_weight": 10,
+      "earned": null,
+      "possible": 0,
+      "status": "not_applicable"
+    },
+    {
+      "category": "References and citations",
+      "rubric_weight": 10,
+      "earned": 10.0,
+      "possible": 10,
+      "status": "pass"
+    }
+  ],
+  "checks": [
+    {
+      "category": "Page layout",
+      "criterion": "A4 or US Letter page size",
+      "earned": 8.0,
+      "possible": 8,
+      "detail": "All 1 pages use A4 or US Letter dimensions.",
+      "suggestion": "Use the paper size specified by the target IEEE template.",
+      "page": null,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "Page layout",
+      "criterion": "Two-column body layout",
+      "earned": 14.0,
+      "possible": 14,
+      "detail": "Two-column body layout detected on 1 page(s).",
+      "suggestion": "Start from the IEEE two-column conference template. The title and author area may span both columns.",
+      "page": 1,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "Page layout",
+      "criterion": "Plausible and balanced outer margins",
+      "earned": 3.0,
+      "possible": 3,
+      "detail": "Approximate outer margins: left 50 pt, right 70 pt.",
+      "suggestion": "Compare the PDF visually with the selected IEEE template; avoid manually changing its margins.",
+      "page": null,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "Typography",
+      "criterion": "Body text near 10 pt",
+      "earned": 12.0,
+      "possible": 12,
+      "detail": "Predominant body font: Times-Roman, 10 pt.",
+      "suggestion": "Use the body style provided by the chosen IEEE conference template.",
+      "page": null,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "Typography",
+      "criterion": "Serif/Times-like body font",
+      "earned": 8.0,
+      "possible": 8,
+      "detail": "Dominant body font: Times-Roman.",
+      "suggestion": "Use the template font; do not replace it with a generic sans-serif font.",
+      "page": null,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "Title and authors",
+      "criterion": "Prominent first-page title",
+      "earned": 6.0,
+      "possible": 6,
+      "detail": "Large title text on page 1: A Simple IEEE-Style Layout Example",
+      "suggestion": "Use the IEEE template's title style and position.",
+      "page": 1,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "Title and authors",
+      "criterion": "Author / affiliation block",
+      "earned": 4.0,
+      "possible": 4,
+      "detail": "Text identified between title and abstract; author/affiliation block is plausible.",
+      "suggestion": "Confirm names, affiliations and email placement against the chosen template.",
+      "page": 1,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "Abstract and keywords",
+      "criterion": "Abstract label",
+      "earned": 8.0,
+      "possible": 8,
+      "detail": "Abstract label found on first page.",
+      "suggestion": "Include an 'Abstract—' paragraph in the first-page layout.",
+      "page": 1,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "Abstract and keywords",
+      "criterion": "Index Terms / Keywords label",
+      "earned": 7.0,
+      "possible": 7,
+      "detail": "Keywords/Index Terms found on first page.",
+      "suggestion": "Add an 'Index Terms—' line with relevant terms.",
+      "page": 1,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "Section structure",
+      "criterion": "Numbered main sections",
+      "earned": 6.0,
+      "possible": 6,
+      "detail": "3 numbered section heading(s) detected.",
+      "suggestion": "Use consistent IEEE-style section headings, such as 'I. INTRODUCTION'.",
+      "page": 1,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "Section structure",
+      "criterion": "Introduction section",
+      "earned": 4.0,
+      "possible": 4,
+      "detail": "Introduction heading found.",
+      "suggestion": "Add a numbered Introduction section if appropriate.",
+      "page": 1,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "Figures and tables",
+      "criterion": "Figure and table captions",
+      "earned": 0.0,
+      "possible": 10,
+      "detail": "No figure or table mentions were detected; this category was excluded from the score.",
+      "suggestion": "",
+      "page": null,
+      "applicable": false,
+      "status": "not_applicable"
+    },
+    {
+      "category": "References and citations",
+      "criterion": "References heading",
+      "earned": 4.0,
+      "possible": 4,
+      "detail": "References heading found on page 1.",
+      "suggestion": "Include a References section at the end of the paper.",
+      "page": 1,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "References and citations",
+      "criterion": "Numbered bibliography entries",
+      "earned": 4.0,
+      "possible": 4,
+      "detail": "1 numbered reference entry/entries found.",
+      "suggestion": "Format bibliography items as [1], [2], etc., following the selected IEEE reference style.",
+      "page": 1,
+      "applicable": true,
+      "status": "pass"
+    },
+    {
+      "category": "References and citations",
+      "criterion": "Bracketed in-text citations",
+      "earned": 2.0,
+      "possible": 2,
+      "detail": "14 line(s) containing bracketed citations found.",
+      "suggestion": "Use IEEE-style bracketed in-text citations and cross-check each number with the References list.",
+      "page": 1,
+      "applicable": true,
+      "status": "pass"
+    }
+  ],
+  "notes": [
+    "For a real submission, choose the exact conference/journal template and verify against its call for papers.",
+    "Figures, table caption placement, exact spacing and IEEE Xplore PDF compliance still require manual or dedicated validation.",
+    "Possible non-embedded PDF fonts: Times-Bold, Times-Roman. Validate using IEEE PDF Checker."
+  ],
+  "disclaimer": "This is a teaching/demo formatting score, not an official IEEE score, publication decision or replacement for a venue's template and IEEE PDF Checker."
+}
