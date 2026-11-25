@@ -1,0 +1,123 @@
+# ProjectIQ faculty frontend
+
+React + TypeScript + Vite interface for teachers: set up an evaluation, watch it run,
+review and approve marks, inspect every agent's evidence, and print a report.
+
+It is a separate package. It reads the backend's own artifacts and does not change
+any agent, the orchestrator or the rubric engine.
+
+## Run it
+
+```powershell
+cd frontend
+npm install
+npm run dev          # http://localhost:5173, demo backend with generated fixtures
+npm test             # scoring parity tests against the real engine
+npm run build
+```
+
+### Run it against the real backend
+
+```powershell
+# From the ProjectIQ root, in the environment where the agents and models are installed
+python frontend\bridge\server.py --root outputs\unified
+# Optional, enables REVIEWED and RESUME (operator-owned files only):
+python frontend\bridge\server.py --root outputs\unified --vm-config vm_config.json --review-root reviewed_catalogs
+
+# In another terminal
+cd frontend
+$env:VITE_BACKEND="http"; npm run dev
+```
+
+The bridge (`bridge/server.py`, Python standard library only, binds to 127.0.0.1) composes
+existing entry points; no agent or engine logic is changed:
+
+| UI action | Backend call |
+|---|---|
+| New evaluation (STATIC or report only) | `python -m projectiq_core evaluate --report ... --rubric ...` with live progress from the backend's own output |
+| REVIEWED / RESUME | `python -m projectiq_executioner.orchestration --request ... --vm-config ...`, then `projectiq_core collect` for the other agents, `projectiq_core bundle`, and `projectiq_core evaluate --evaluation ... --acknowledge-imported` |
+| Import an existing Executioner result | the same bundle path without a VM |
+| Approve, override, remarks, exclude optional | validated with the real `scoring.assess()`; rejected decisions come back with the engine's code (for example `EVIDENCE_COVERAGE_NOT_MET`) |
+| Change weights, total marks, applicability, levels | `orchestrator.reuse_decisions()` then `assess()`; only criteria whose policy changed lose their mark |
+| Reassess a criterion / retry a deferral | `python -m projectiq_core.phase2 propose --criteria ... [--retry-deferred]` (local Ollama) |
+
+Teacher work is saved beside each run in `faculty/` (`review.json`, `decisions.json`,
+`assessment.json`, `current.json` after a reassessment, `reassess_*/`). The original
+`result.json`, `rubric/` and `collection/` files are never modified. Put
+`faculty_meta.json` (`{"students": [...], "course": "..."}`) next to older runs to show names.
+
+REVIEWED and RESUME runs end up as one acknowledged imported evaluation, because the
+unified `evaluate()` itself still collects the Executioner in STATIC mode. The UI asks for the
+acknowledgment and labels this evidence as imported.
+
+## Where the data comes from
+
+| UI uses | Backend artifact | Contract |
+|---|---|---|
+| Grade, criteria, groups | `result.json` → `assessment` | `phase2/contracts.py` `Assessment` 2.0 |
+| Rubric | `result.json` → `rubric` | `Rubric` 2.0 |
+| Agent views | `result.json` → `agents` | `orchestrator._frontend_agents()`, native fields kept by `adapters.py` |
+| Evidence explorer, citations | `rubric/evidence.json` | `EvidenceBundle` 2.0 |
+| Model decisions (defer/retry) | `rubric/decisions.json` | `DecisionSet` 2.0 |
+| AI-writing estimate | `agents.integrity.ai_detection` | `AIAnalysis`, Desklib detector output (merged) |
+| Additional semantic matches | `agents.integrity.details.matches[].secondary_review` | advisory second NLI pass (merged), never counted |
+
+All types are mirrored in `src/api/types.ts`. No new data contract was invented.
+Teacher review state (approvals, overrides, remarks, rubric changes) is a
+frontend-side layer (`TeacherReview`) mapped onto `Decision` objects with
+`source: "TEACHER"`, the shape the engine already accepts.
+
+## Demo fixtures are produced by the real engine
+
+`tools/generate_fixtures.py` builds schema-faithful native outputs for three fictional
+projects, then runs the actual `collect()` → `build_evidence()` → `evaluate()` →
+Phase 2 rubric engine. Only the Ollama rubric model is replaced by a deterministic
+stand-in answering through the real constrained schema, so hardening still rejects or
+defers proposals like a live run. Regenerate with `npm run fixtures` (from `frontend/`,
+Python env with the root requirements). Add `--keep DIR` to also keep the full run
+directories so the bridge can serve and re-grade them.
+
+| Fixture | Shows |
+|---|---|
+| CampusConnect | Imported RESUME/REVIEWED Executioner evidence (fresh + reused suites, failed and blocked tests), research with metadata conflicts, integrity overlap and AI estimate, research criterion deferred so the grade is withheld |
+| MediTrack | Live STATIC run, Research agent failure, no reference corpus (similarity unavailable), AI detector missing |
+| Irrigation | Report-only submission, custom template, research excluded with weight redistribution, complete proposed grade |
+
+## Grading behaviour
+
+* Proposed (AI) marks are drawn dashed violet; approved marks solid teal; unassessed
+  criteria are hatched and never counted as zero. The complete grade is withheld until
+  every applicable criterion has a mark.
+* Changing weights, section weights, total marks or applicability recalculates instantly
+  with `src/lib/scoring.ts`, a port of `scoring.assess()`. `npm test` checks it against
+  the engine's own `reweight()` for all fixtures. No agent reruns.
+* Changing a criterion's levels, descriptors or evidence policy discards only that
+  criterion's mark (same rule as `orchestrator.reuse_decisions`) and offers a
+  rubric-model reassessment for that criterion only.
+* Model deferrals can be retried (`--retry-deferred`). Teacher overrides need a remark.
+* With the bridge, every teacher change is re-validated by the engine before it is saved.
+
+## Limits that remain
+
+* The unified `evaluate()` collects the Executioner in STATIC mode only, so REVIEWED and RESUME
+  go through the bridge's run-then-bundle path and are shown as acknowledged imported evidence.
+  They also need the operator's VM configuration and approved catalogs.
+* The bridge is a trusted local operator tool for one machine, not a multi-user service.
+* Reassessment needs the local Ollama model; if it is not running, the UI says so and the
+  criterion stays deferred for the teacher.
+
+## Layout
+
+```
+src/api/            types, Backend interface, mock and HTTP backends
+src/lib/            scoring port, rubric rules and templates, view model, labels
+src/components/     UI primitives, mark-sheet ledger, evidence cards
+src/features/       evaluations list, new-evaluation wizard, rubric library,
+                    run progress, results tabs, printable report
+src/mock/           generated fixtures and the backend's rubric files
+tools/              fixture generator and its input reports
+bridge/             local API over the backend (server.py)
+```
+
+Outputs contain confidential student work. Do not commit generated runs or expose the
+bridge beyond 127.0.0.1.

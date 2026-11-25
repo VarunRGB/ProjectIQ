@@ -1,0 +1,32 @@
+Feasibility Study: Soil-Moisture Based Smart Irrigation for the College Botanical Garden
+Mini-Project Report (report-only submission)
+
+Abstract
+This report studies whether a low-cost soil-moisture based irrigation controller can reduce water use in the college botanical garden. We surveyed the current watering schedule, compared three sensor options, designed a controller and estimated water savings. No hardware prototype or software repository is part of this submission.
+
+1. Introduction
+The botanical garden is watered by hand twice a day on a fixed schedule, regardless of rain or soil condition. Gardeners estimate that some beds are over-watered during the monsoon. A sensor-based controller could water each bed only when the soil is dry.
+
+2. Problem Statement
+The garden uses about 6,000 litres of water per day in summer. The fixed schedule wastes water on cool or rainy days and does not respond to differences between beds. The garden committee wants to know whether an automatic system is worth building.
+
+3. Objectives
+The objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period.
+
+4. Methodology
+We recorded the volume used per bed for fourteen days using the existing flow meter. We compared resistive, capacitive and tensiometer sensors on cost, accuracy and expected life. We designed a controller around an ESP32 board with one capacitive sensor and one solenoid valve per bed, and estimated savings using the measured data and a threshold rule.
+
+5. Design
+The system consists of three components: the sensor nodes, the controller and a logging module. Each bed has a capacitive sensor that reports a moisture reading every ten minutes. The controller opens the valve for a bed when the reading falls below the threshold for that bed and closes it when the reading rises above the upper threshold or after a maximum of fifteen minutes. A rain check skips watering when rainfall was recorded in the last six hours. The controller connects to each valve through a relay board and writes each watering event to an SD card log, so the logging module stores the bed, start time, duration and moisture readings that gardeners can review.
+
+6. Results
+Using the fourteen days of measured data, the threshold rule would have watered the beds 41% less often than the fixed schedule, saving an estimated 2,400 litres per day in summer. The estimated cost of the controller for six beds is 9,800 rupees, and the payback period is about seven months at the current water tariff.
+
+7. Validation
+We did not build or test the controller. For the proposed pilot we defined test scenarios with expected outcomes. Scenario 1: when the moisture reading of a bed falls below its threshold, the controller should open that valve within ten minutes and the log should record the event. Scenario 2: when the reading rises above the upper threshold, the valve should close. Scenario 3 (negative check): when rainfall was recorded in the last six hours, a watering request should be rejected and the valve must stay closed. Scenario 4: if a sensor returns an invalid reading, the controller should skip that bed and record an error instead of watering. The savings estimate depends on the threshold values, which should be calibrated for each bed. The estimate assumes that the fourteen recorded days are typical of the season. Independent verification is required before installation.
+
+8. Limitations
+The study covers only six beds and one season. Sensor drift over time was not measured. The estimate does not include maintenance cost.
+
+9. Conclusion
+A soil-moisture based controller appears feasible and could reduce water use by about 40% in summer. We recommend building a two-bed pilot before installing the full system.
