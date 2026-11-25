@@ -1,0 +1,4 @@
+# Real student text stays on this computer: only the README and this file are tracked.
+*
+!README.md
+!.gitignore

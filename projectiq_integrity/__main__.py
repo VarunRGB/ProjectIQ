@@ -26,7 +26,9 @@ def _check_one(doc: Path, refs: Path, sid: str, out: Path) -> dict:
     report = check_document(doc, refs)
     paths = write_outputs(report, out, sid)
     top = next(iter(report.percent_by_reference.items()), None)
-    ai = "AI-style writing flagged" if report.ai_findings else "no AI-style flag"
+    det = report.ai_detection
+    ai = (f"AI-like writing {det['estimated_percent']}%" if det["status"] == "COMPLETED"
+          else f"AI % {det['status'].lower().replace('_', ' ')}")
     print(f"{sid}: {report.overall_percent}% overlap "
           f"({', '.join(f'{c} {p}%' for c, p in report.percent_by_category.items())}); "
           f"{len(report.chunks)} copied chunk(s)" + (f"; most from {top[0]} ({top[1]}%)" if top else "")
@@ -37,7 +39,8 @@ def _check_one(doc: Path, refs: Path, sid: str, out: Path) -> dict:
             **{f"{c}_percent": p for c, p in report.percent_by_category.items()},
             "percent_in_chunks": report.percent_in_chunks, "chunks": len(report.chunks),
             "top_reference": top[0] if top else "", "top_reference_percent": top[1] if top else "",
-            "ai_style_flag": bool(report.ai_findings), "html_report": str(paths["report_html"])}
+            "ai_percent": det["estimated_percent"] if det["status"] == "COMPLETED" else "",
+            "ai_status": det["status"], "html_report": str(paths["report_html"])}
 
 
 def _write_csv(path: Path, rows: list) -> None:
