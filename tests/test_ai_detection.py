@@ -1,8 +1,8 @@
 """AI percentage (projectiq_integrity/ai_detection.py) with a stand-in scorer.
 
-The stand-in gives a low (AI-like) Binoculars score to text containing stock AI
-phrases and a high (human-like) score otherwise, so the logic can be tested without
-the two Qwen models. Real thresholds are checked with scripts/check_ai_thresholds.py.
+The stand-in gives a high AI probability to text containing stock AI phrases and a
+low one otherwise, so the logic can be tested without loading the Desklib model.
+Real thresholds are checked with scripts/check_ai_thresholds.py.
 """
 import sys
 from dataclasses import replace
@@ -14,20 +14,17 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tests"))
 
 from projectiq_integrity import ai_detection  # noqa: E402
-from projectiq_integrity.config import DEFAULT  # noqa: E402
+from projectiq_integrity.config import DEFAULT, ai_detector_info  # noqa: E402
 
 FIX = ROOT / "tests" / "fixtures"
 AI_TEXT = (FIX / "ai_calibration" / "01_ai_chatgpt_buzzwords.txt").read_text(encoding="utf-8")
 NO_PHRASE_TEXT = (FIX / "ai_calibration" / "05_ai_imitating_typos.txt").read_text(encoding="utf-8")
+THRESHOLD = ai_detector_info(DEFAULT)["threshold"]
 
 
-# Tests name their detector, so changing the default in config.py cannot break them.
-BINOCULARS = replace(DEFAULT, ai_detector="binoculars")
-
-
-def fake_scorer(text):
-    """Stand-in Binoculars: LOW score = AI-like."""
-    return (0.70 if ai_detection.stock_phrases(text) else 1.10), 100
+def fake_probability(text):
+    """Stand-in classifier: HIGH probability = AI-like."""
+    return (0.99 if ai_detection.stock_phrases(text) else 0.05), 100
 
 
 def as_sentences(*paragraphs, start=0):
@@ -42,18 +39,18 @@ def as_sentences(*paragraphs, start=0):
     return out
 
 
-def test_ai_paragraph_is_flagged_and_human_is_not():
-    det, _ = ai_detection.estimate(as_sentences(AI_TEXT, NO_PHRASE_TEXT), scorer=fake_scorer, settings=BINOCULARS)
+def test_ai_paragraph_is_flagged_and_other_is_not():
+    det, _ = ai_detection.estimate(as_sentences(AI_TEXT, NO_PHRASE_TEXT), scorer=fake_probability)
     assert det["status"] == "COMPLETED"
     assert 30 < det["estimated_percent"] < 70           # about half the words are the AI paragraph
-    assert det["flagged_passages"] and det["flagged_passages"][0]["location"].startswith("para 1")
-    assert "leverag" in " ".join(det["flagged_passages"][0]["stock_phrases"])
+    [p] = det["flagged_passages"]
+    assert p["location"].startswith("para 1") and p["score"] == 0.99 and p["rule"] == ">="
+    assert "leverag" in " ".join(p["stock_phrases"])
     assert det["confidence"] in {"low", "medium"}        # never "high" while provisional
 
 
-def test_all_human_gives_zero_percent():
-    det, _ = ai_detection.estimate(as_sentences(NO_PHRASE_TEXT, NO_PHRASE_TEXT), scorer=fake_scorer,
-                                   settings=BINOCULARS)
+def test_low_probability_gives_zero_percent():
+    det, _ = ai_detection.estimate(as_sentences(NO_PHRASE_TEXT, NO_PHRASE_TEXT), scorer=fake_probability)
     assert det["status"] == "COMPLETED"
     assert det["estimated_percent"] == 0.0
     assert det["flagged_passages"] == []
@@ -61,14 +58,13 @@ def test_all_human_gives_zero_percent():
 
 def test_short_text_is_inconclusive_not_zero():
     det, _ = ai_detection.estimate(as_sentences("This is a short note. It has two sentences only."),
-                                   scorer=fake_scorer)
+                                   scorer=fake_probability)
     assert det["status"] == "INCONCLUSIVE"
     assert det["estimated_percent"] is None
 
 
-def test_missing_models_is_not_available(tmp_path):
-    settings = replace(DEFAULT, ai_observer_model="no-such-model", ai_performer_model="no-such-model-2")
-    det, _ = ai_detection.estimate(as_sentences(AI_TEXT), settings=settings)
+def test_missing_model_is_not_available():
+    det, _ = ai_detection.estimate(as_sentences(AI_TEXT), settings=replace(DEFAULT, classifier_model="nope"))
     assert det["status"] == "NOT_AVAILABLE"
     assert det["estimated_percent"] is None
     assert "setup_offline" in det["limitations"][0]
@@ -99,9 +95,9 @@ def test_output_matches_orchestrator_contract(status):
     interpretation; every other status must have no value."""
     texts = {"COMPLETED": (AI_TEXT, NO_PHRASE_TEXT), "INCONCLUSIVE": ("Too short. Really.",),
              "NOT_AVAILABLE": (AI_TEXT,), "FAILED": (AI_TEXT, NO_PHRASE_TEXT)}[status]
-    kwargs = {"scorer": fake_scorer, "settings": BINOCULARS}
+    kwargs = {"scorer": fake_probability}
     if status == "NOT_AVAILABLE":
-        kwargs = {"settings": replace(DEFAULT, ai_observer_model="x", ai_performer_model="y")}
+        kwargs = {"settings": replace(DEFAULT, classifier_model="nope")}
     if status == "FAILED":
         kwargs = {"scorer": lambda _: 1 / 0}
     det, _ = ai_detection.estimate(as_sentences(*texts), **kwargs)
@@ -120,72 +116,44 @@ def test_check_document_reports_ai_percentage(monkeypatch):
 
     fake_models.install(monkeypatch)
     rep = check_document(FIX / "research" / "S201_report.txt", FIX / "research" / "references",
-                         ai_scorer=fake_scorer, settings=BINOCULARS)
+                         ai_scorer=fake_probability)
     assert rep.ai_detection["status"] == "COMPLETED"
     assert rep.to_dict()["ai_detection"]["estimated_percent"] is not None
     result = to_agent_result(rep, "S201")
     assert any(rep.ai_detection["interpretation"] in n for n in result.notes)
 
 
+def test_without_the_model_the_ai_section_says_not_available(monkeypatch):
+    import fake_models
+    from projectiq_integrity.document_check import check_document
+
+    fake_models.install(monkeypatch)
+    rep = check_document(FIX / "research" / "S201_report.txt", FIX / "research" / "references")
+    assert rep.ai_detection["status"] == "NOT_AVAILABLE"
+    assert rep.ai_findings == []                       # no guess from anything else
+
+
 def test_finding_only_from_report_percent():
     det = {"status": "COMPLETED", "estimated_percent": 15.0, "interpretation": "x", "confidence": "medium",
-           "flagged_passages": [{"location": "para 1", "words": 60, "score": 0.8, "threshold": 0.9,
+           "flagged_passages": [{"location": "para 1", "words": 120, "score": 0.97, "threshold": THRESHOLD,
                                  "stock_phrases": [], "text": "some text"}], "limitations": []}
-    assert ai_detection.to_signal(det, "doc", BINOCULARS) == []        # under 20%: no finding
+    assert ai_detection.to_signal(det, "doc") == []                    # under 20%: no finding
     det["estimated_percent"] = 45.0
-    [sig] = ai_detection.to_signal(det, "doc", BINOCULARS)
+    [sig] = ai_detection.to_signal(det, "doc")
     assert sig.kind == "ai_generated_share"
+    assert sig.scores["margin"] > 0
+    assert f"AI probability 0.970 (flagged at >= {THRESHOLD})" in sig.evidence[0].location
 
 
-# --------------------------------------------------------------------------- #
-# Classifier (Desklib): HIGHER probability = more AI-like
-# --------------------------------------------------------------------------- #
-CLASSIFIER = replace(DEFAULT, ai_detector="classifier")
+def test_make_detector_is_the_classifier():
+    assert isinstance(ai_detection.make_detector(DEFAULT), ai_detection.Classifier)
 
 
-def fake_probability(text):
-    return (0.95 if ai_detection.stock_phrases(text) else 0.05), 100
-
-
-def test_classifier_flags_high_probability():
-    det, _ = ai_detection.estimate(as_sentences(AI_TEXT, NO_PHRASE_TEXT), scorer=fake_probability,
-                                   settings=CLASSIFIER)
-    assert det["status"] == "COMPLETED"
-    assert 30 < det["estimated_percent"] < 70
-    [p] = det["flagged_passages"]
-    assert p["rule"] == ">=" and p["detector"] == "classifier" and p["score"] == 0.95
-
-
-def test_classifier_low_probability_is_not_flagged():
-    det, _ = ai_detection.estimate(as_sentences(NO_PHRASE_TEXT, NO_PHRASE_TEXT), scorer=fake_probability,
-                                   settings=CLASSIFIER)
-    assert det["estimated_percent"] == 0.0
-
-
-def test_classifier_missing_model_is_not_available():
-    det, _ = ai_detection.estimate(as_sentences(AI_TEXT), settings=replace(CLASSIFIER, classifier_model="nope"))
-    assert det["status"] == "NOT_AVAILABLE"
-    assert "--ai-detector classifier" in det["limitations"][0]
-
-
-def test_make_detector_follows_config():
-    assert isinstance(ai_detection.make_detector(CLASSIFIER), ai_detection.Classifier)
-    assert isinstance(ai_detection.make_detector(BINOCULARS), ai_detection.Binoculars)
-
-
-def test_classifier_finding_margin_direction():
-    det, _ = ai_detection.estimate(as_sentences(AI_TEXT, AI_TEXT), scorer=fake_probability, settings=CLASSIFIER)
-    [sig] = ai_detection.to_signal(det, "doc", CLASSIFIER)
-    assert sig.scores["margin"] > 0                                  # 0.95 is above 0.5
-    threshold = ai_detection.ai_detector_info(CLASSIFIER)["threshold"]
-    assert f"AI probability 0.950 (flagged at >= {threshold})" in sig.evidence[0].location
-
-
-def test_threshold_script_runs_for_classifier(capsys):
+def test_threshold_script_runs(capsys):
     sys.path.insert(0, str(ROOT / "scripts"))
     import check_ai_thresholds
 
-    assert check_ai_thresholds.main(["--detector", "classifier"], scorer=fake_probability) == 0
+    folder = FIX / "ai_calibration"
+    assert check_ai_thresholds.main(["--folder", str(folder)], scorer=fake_probability) == 0
     out = capsys.readouterr().out
-    threshold = ai_detection.ai_detector_info(CLASSIFIER)["threshold"]
-    assert "Desklib classifier" in out and f"AI probability >= {threshold}" in out
+    assert "Desklib" in out and f"AI probability >= {THRESHOLD}" in out

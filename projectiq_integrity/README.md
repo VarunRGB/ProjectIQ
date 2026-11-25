@@ -25,28 +25,24 @@ sentence in the reference papers.
   citation but no quotation marks is labelled "cited, not quoted".
 - **AI percentage** (`ai_detection.py`): the share of the student's OWN words (copied
   sentences left out) that read as machine-written. The text is split into passages of
-  about 100 to 300 words, and each passage is scored by one of two local detectors
-  (`PROJECTIQ_AI_DETECTOR`):
-  - `classifier`: Desklib's AI-text detector (DeBERTa-v3-large trained on the RAID
-    benchmark, MIT licence; one model, 1.75 GB, about 2.5 GB RAM). Gives the probability
-    that a passage is AI; high means machine-like.
-  - `binoculars`: two Qwen2.5 models (base and Instruct; 0.5B by default, 1.5B or 3B
-    with `PROJECTIQ_AI_MODEL_SIZE`); a low score means machine-like. AI % = words in flagged passages / words scored. Stock AI phrases are
+  about 100 to 300 words, and each passage is scored by Desklib's AI-text classifier
+  (DeBERTa-v3-large trained on the RAID benchmark, MIT licence; 1.75 GB, about 2.5 GB
+  RAM, run locally). It gives the probability that a passage is AI; high means
+  machine-like. AI % = words in flagged passages / words scored. Stock AI phrases are
   shown for each flagged passage as the "why". Output is the `ai_detection` block the
   orchestrator expects (status, estimated_percent, interpretation, confidence,
   flagged_passages, limitations). A finding goes to the Rubric Agent from 20%.
-  The thresholds (`CLASSIFIER_THRESHOLD`, and `AI_THRESHOLDS` per Binoculars size, in
-  config.py) are PROVISIONAL:
-  set them with `python scripts/check_ai_thresholds.py` on REAL paragraphs in
-  `tests/fixtures/ai_calibration_real/` (kept off GitHub). Advisory only.
-- **Fallback:** if the two Qwen models are missing, the older yes/no check runs (style
-  measures and distilgpt2 perplexity must both agree).
+  If the model is not installed, the AI section says NOT_AVAILABLE; nothing is guessed.
+- **AI threshold** (`CLASSIFIER_THRESHOLD` in config.py, now 0.91) is PROVISIONAL: it was
+  set from 30 labelled paragraphs. Recheck it with `python scripts/check_ai_thresholds.py`
+  on more REAL paragraphs in `tests/fixtures/ai_calibration_real/` (kept off GitHub).
+  Advisory only: it catches clearly AI-written text and misses text edited to sound human.
 
 ## 1. One-time setup
 
 ```bash
 pip install -r requirements.txt
-python scripts/setup_offline.py          # 5 models into models/ (about 700 MB), online once
+python scripts/setup_offline.py          # 5 models into models/ (about 2.2 GB), online once
 python scripts/setup_offline.py --check  # everything should say [ok]
 ```
 
@@ -91,14 +87,7 @@ Sample: `tests/fixtures/research/` holds a report with a copied 4-sentence chunk
 paraphrases (`S201_report.txt`), an original report (`S202_original.txt`), and two
 reference papers.
 
-## 4. Benchmark: how well does it work?
-
-`tests/fixtures/benchmark/` has a student paper with 25 planted cases (verbatim,
-near-verbatim, paraphrase, and traps that must not be flagged), 4 reference papers and
-an answer key. Run `python -m projectiq_integrity.benchmark`, or pick "Benchmark paper"
-in the app, to see what the tool gets right. Details in that folder's README.
-
-## 5. From other ProjectIQ code
+## 4. From other ProjectIQ code
 
 ```python
 from projectiq_integrity import run_integrity
@@ -110,7 +99,7 @@ for finding in result.findings:          # Finding: kind, summary, evidence, con
 
 `result` is the shared `AgentResult` from `contracts.py`.
 
-## 6. Validate (plan Days 5 to 8)
+## 5. Validate (plan Days 5 to 8)
 
 ```bash
 python scripts/validate.py --marks marks.csv --split test
@@ -125,20 +114,19 @@ detection rate, precision and false flags per finding type.
 **Before reporting any number:** tune the thresholds marked PROVISIONAL in
 `projectiq_integrity/config.py` on the dev split only, then report the test split.
 
-## 7. Files
+## 6. Files
 
 | File | Purpose |
 |---|---|
 | `document_check.py` | Matching, types, copied chunks, percentages, HTML report |
 | `documents.py` | Reading the document and reference papers (PDF, Word, text) |
-| `ai_indicators.py` | Style measures plus perplexity, agreement rule |
+| `ai_detection.py` | AI percentage: passages scored by the Desklib classifier |
 | `evidence.py` | Evidence builder (no quote, no finding) and confidence estimator |
 | `contracts.py` | `Evidence`, `Finding`, `AgentResult`: the shared result object |
 | `agent.py`, `__main__.py` | `run_integrity()` and the command line |
 | `app.py` | Temporary demo screen (Streamlit) |
-| `benchmark.py` | Compares a check with an answer key |
 | `config.py` | Thresholds |
 | `ria/` | Sentence matching, PDF reading and model loading (Research Integrity Analyzer) |
 | `../scripts/validate.py` | Agreement with faculty and planted-control metrics |
 | `../scripts/setup_offline.py` | One-time model download |
-| `../scripts/make_benchmark.py` | Builds the benchmark paper, references and answer key |
+| `../scripts/check_ai_thresholds.py` | Checks the AI threshold on labelled paragraphs |

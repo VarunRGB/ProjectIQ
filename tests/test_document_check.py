@@ -139,7 +139,8 @@ def test_runs_with_the_real_model_classes():
 
     # candidate threshold 0: every sentence goes to the NLI step, so its code path always runs
     rep = dc.check_document(DOC, REFS, settings=IntegritySettings(paraphrase_candidate_cosine=0.0),
-                            ria_settings=DEFAULT_SETTINGS.with_overrides(allow_model_fallback=True))
+                            ria_settings=DEFAULT_SETTINGS.with_overrides(allow_model_fallback=True),
+                            check_ai=False)       # similarity only: never load the AI model here
     assert rep.sentences_checked > 0
     assert len(rep.chunks) == 1                       # word overlap alone finds the copied chunk
     if "not neural" in rep.backends["nli"]:           # models not installed: lexical fallback

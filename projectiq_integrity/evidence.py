@@ -15,7 +15,7 @@ MAX_EVIDENCE = 8
 
 @dataclass
 class Signal:
-    kind: str                      # "similar_report_text" | "copied_chunk" | "ai_style_text" | "ai_generated_share"
+    kind: str                      # "similar_report_text" | "copied_chunk" | "ai_generated_share"
     summary: str
     evidence: List[Evidence]
     scores: Dict[str, float] = field(default_factory=dict)
@@ -40,14 +40,6 @@ def report_confidence(s: Dict[str, float]) -> float:
     return round(_clip(conf, 0.05, 0.95), 2)
 
 
-def ai_confidence(s: Dict[str, float]) -> float:
-    """How far past BOTH thresholds the text is. Capped at 0.7: AI-text detection
-    is probabilistic and must never look certain."""
-    style = _clip(s.get("style_margin", 0.0) / 0.3)
-    ppl = _clip(s.get("perplexity_margin", 0.0) / 0.5)
-    return round(_clip(0.3 + 0.2 * style + 0.2 * ppl, 0.05, 0.7), 2)
-
-
 def ai_share_confidence(s: Dict[str, float]) -> float:
     """Larger AI share and scores further below the threshold give more confidence.
     Capped at 0.7, and lower still when few words could be scored."""
@@ -60,7 +52,6 @@ def ai_share_confidence(s: Dict[str, float]) -> float:
 ESTIMATORS = {
     "similar_report_text": report_confidence,
     "copied_chunk": report_confidence,
-    "ai_style_text": ai_confidence,
     "ai_generated_share": ai_share_confidence,
 }
 

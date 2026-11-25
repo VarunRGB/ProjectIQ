@@ -29,8 +29,8 @@ One line per file:
 
 ## Run
 
-    python scripts/check_ai_thresholds.py --folder tests/fixtures/ai_calibration_real --sizes 0.5B,1.5B
+    python scripts/check_ai_thresholds.py --folder tests/fixtures/ai_calibration_real
 
-At the end it prints the highest threshold that flags no human passage for each model
-size, and how much AI text that catches. Put the value in `AI_THRESHOLDS` in
+At the end it prints the lowest threshold that flags no human passage, and how much AI
+text that catches. Put the value in `CLASSIFIER_THRESHOLD` in
 `projectiq_integrity/config.py`.

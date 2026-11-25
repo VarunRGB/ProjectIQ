@@ -1,38 +1,16 @@
 """AI-generated text: how much of the student's OWN writing reads as machine-written.
 
-Two local detectors, chosen with `ai_detector` in config.py (PROJECTIQ_AI_DETECTOR):
-
-A. "classifier": Desklib's AI-text detector (desklib/ai-text-detector-v1.01, MIT licence),
-   a DeBERTa-v3-large model fine-tuned on the RAID benchmark (human vs AI text from 11
-   generators, 8 domains, 11 attacks such as paraphrasing). One model, about 1.75 GB on
-   disk and 2.5 GB RAM. Gives a probability that a passage is AI: HIGH = machine-like.
-
-B. "binoculars": below. Two models, LOW score = machine-like.
-
-Method B: Binoculars (Hans et al., 2024, "Spotting LLMs With Binoculars"), run locally.
-Two small language models that share a tokenizer read the same passage:
-
-    observer   = a base model      (models/Qwen2.5-0.5B, or 1.5B / 3B)
-    performer  = its chat version  (models/Qwen2.5-0.5B-Instruct, ...)
-
-The size is chosen with PROJECTIQ_AI_MODEL_SIZE (config.AI_MODEL_PAIRS). Bigger models
-read AI text better, which the method depends on, but are slower and need more memory.
-
-    score = log-perplexity of the passage under the performer
-            -----------------------------------------------------
-            cross-perplexity: how surprised the performer is, on average,
-            by what the observer expected at each position
-
-Machine text is predictable to both models in the same way, so its score is LOW.
-Dividing by the cross-perplexity cancels out how predictable the TOPIC is, which is
-what made plain perplexity (distilgpt2) swing between 36 and 95 on AI text alone.
+Detector: Desklib's AI-text classifier (desklib/ai-text-detector-v1.01, MIT licence), a
+DeBERTa-v3-large model fine-tuned on the RAID benchmark (human vs AI text from 11
+generators, 8 domains and 11 attacks such as paraphrasing). It runs locally from
+models/ai-text-detector-v1.01 (1.75 GB on disk, about 2.5 GB RAM) and gives the
+probability that a passage is AI-written: HIGH = machine-like.
 
 How the percentage is built:
 1. Copied sentences are removed first (they are someone else's writing).
 2. The remaining sentences are grouped into passages of about 100 to 300 words,
    following the document's paragraphs (or pages, for PDFs).
-3. Each passage gets a score from the chosen detector and is flagged past its threshold
-   (classifier: probability >= threshold; Binoculars: score <= threshold).
+3. Each passage gets an AI probability; at or above CLASSIFIER_THRESHOLD it is flagged.
 4. AI % = words in flagged passages / words in scored passages.
 
 Output matches the orchestrator's `ai_detection` contract (projectiq_core AIAnalysis):
@@ -41,8 +19,7 @@ status, estimated_percent, interpretation, confidence, flagged_passages, limitat
 Stock AI phrases (projectiq_summarizer.signals, read only) are shown per flagged
 passage as the "why". They never decide on their own.
 
-If the detector's model is not in models/, status is NOT_AVAILABLE and the older
-distilgpt2 check (ai_indicators.py) still runs as before.
+If the model is not in models/, status is NOT_AVAILABLE: nothing is guessed.
 """
 from __future__ import annotations
 
@@ -54,7 +31,7 @@ from typing import Callable, List, Optional, Sequence
 
 from projectiq_summarizer.signals import _AI_RES
 
-from .config import DEFAULT, MODELS_DIR, IntegritySettings, ai_detector_info, ai_models
+from .config import DEFAULT, MODELS_DIR, IntegritySettings, ai_detector_info
 from .contracts import Evidence
 from .evidence import Signal
 
@@ -67,7 +44,7 @@ LIMITATIONS = [
     "Passages under the minimum length are not scored.",
 ]
 
-# passage -> (score, tokens scored); None when the passage is too short to score
+# passage -> (AI probability, tokens scored); None when the passage is too short to score
 PassageScorer = Callable[[str], Optional[tuple]]
 
 
@@ -82,66 +59,9 @@ class Passage:
 
 
 # --------------------------------------------------------------------------- #
-# The two local models
+# The local model
 # --------------------------------------------------------------------------- #
-_LOADED: dict = {}   # (observer path, performer path, dtype) -> (tokenizer, observer, performer)
-
-
-class Binoculars:
-    """Observer and performer from models/, CPU only, loaded on first use and then kept
-    in memory for the rest of the run (loading takes seconds and a few GB). Never downloads."""
-
-    def __init__(self, settings: IntegritySettings = DEFAULT, models_dir: Path = MODELS_DIR):
-        self.settings = settings
-        observer, performer, self.dtype, self.threshold = ai_models(settings)
-        self.observer_path = Path(models_dir) / observer
-        self.performer_path = Path(models_dir) / performer
-        self.available = self.observer_path.exists() and self.performer_path.exists()
-        self._tok = self._observer = self._performer = None
-
-    def missing(self) -> List[str]:
-        return [str(p) for p in (self.observer_path, self.performer_path) if not p.exists()]
-
-    def _load(self) -> None:
-        if self._observer is not None:
-            return
-        key = (str(self.observer_path), str(self.performer_path), self.dtype)
-        if key in _LOADED:
-            self._tok, self._observer, self._performer = _LOADED[key]
-            return
-        import torch
-
-        torch.set_num_threads(self.settings.ai_threads)   # leave cores free for the rest of the laptop
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        import transformers
-
-        # transformers 4.56+ calls the argument "dtype"; older versions "torch_dtype".
-        major, minor = (int(x) for x in transformers.__version__.split(".")[:2])
-        key = "dtype" if (major, minor) >= (4, 56) else "torch_dtype"
-        kwargs = {"local_files_only": True, key: getattr(torch, self.dtype)}
-        self._tok = AutoTokenizer.from_pretrained(self.observer_path, local_files_only=True)
-        self._observer = AutoModelForCausalLM.from_pretrained(self.observer_path, **kwargs).eval()
-        self._performer = AutoModelForCausalLM.from_pretrained(self.performer_path, **kwargs).eval()
-        _LOADED.clear()                                    # keep one pair in memory, not several
-        _LOADED[key] = (self._tok, self._observer, self._performer)
-
-    def __call__(self, text: str) -> Optional[tuple]:
-        import torch
-        import torch.nn.functional as F
-
-        self._load()
-        ids = self._tok(text, return_tensors="pt", truncation=True,
-                        max_length=self.settings.ai_max_tokens).input_ids
-        if ids.shape[1] < 16:
-            return None
-        with torch.no_grad():
-            obs = self._observer(ids).logits[0, :-1].float()
-            perf = self._performer(ids).logits[0, :-1].float()
-        targets = ids[0, 1:]
-        log_ppl = F.cross_entropy(perf, targets)                                  # performer surprise
-        x_ppl = (F.softmax(obs, dim=-1) * -F.log_softmax(perf, dim=-1)).sum(-1).mean()
-        return float(log_ppl / x_ppl), int(targets.numel())
+_LOADED: dict = {}   # model path -> (tokenizer, model): loaded once per run
 
 
 _DESKLIB_CLASS = None
@@ -217,9 +137,8 @@ class Classifier:
         return float(torch.sigmoid(logit).item()), int(enc["input_ids"].shape[1])
 
 
-def make_detector(settings: IntegritySettings = DEFAULT):
-    """The detector chosen in config.py: Classifier or Binoculars."""
-    return Classifier(settings) if ai_detector_info(settings)["name"] == "classifier" else Binoculars(settings)
+def make_detector(settings: IntegritySettings = DEFAULT) -> Classifier:
+    return Classifier(settings)
 
 
 # --------------------------------------------------------------------------- #
@@ -294,7 +213,7 @@ def estimate(sentences: Sequence[tuple], scorer: Optional[PassageScorer] = None,
             return ({"status": "NOT_AVAILABLE", "estimated_percent": None, "interpretation": None,
                      "confidence": None, "flagged_passages": [],
                      "limitations": [f"AI-percentage model not found: {', '.join(model.missing())}. "
-                                     f"Run: python scripts/setup_offline.py --ai-detector {info['name']}"]},
+                                     "Run: python scripts/setup_offline.py"]},
                     passages)
         scorer = model
 
@@ -306,7 +225,7 @@ def estimate(sentences: Sequence[tuple], scorer: Optional[PassageScorer] = None,
             if result is None:
                 continue
             p.score = round(result[0], 4)
-            p.flagged = p.score >= threshold if info["higher_is_ai"] else p.score <= threshold
+            p.flagged = p.score >= threshold
             if p.flagged:
                 p.stock_phrases = stock_phrases(p.text)
     except Exception as exc:  # noqa: BLE001 - a failed AI estimate must not stop the similarity check
@@ -341,7 +260,7 @@ def estimate(sentences: Sequence[tuple], scorer: Optional[PassageScorer] = None,
                 "threshold": threshold, "detector": info["name"], "score_name": info["score_name"],
                 "rule": info["rule"], "stock_phrases": p.stock_phrases,
                 "text": p.text[:600]}
-               for p in sorted(scored, key=lambda p: p.score, reverse=info["higher_is_ai"])
+               for p in sorted(scored, key=lambda p: p.score, reverse=True)
                if p.flagged][:settings.ai_max_passages_shown]
     return ({"status": "COMPLETED", "estimated_percent": pct, "interpretation": interpretation,
              "confidence": confidence, "flagged_passages": flagged, "limitations": limits}, passages)
@@ -352,13 +271,12 @@ def to_signal(detection: dict, location_prefix: str, settings: IntegritySettings
     if detection.get("status") != "COMPLETED" or detection["estimated_percent"] < settings.ai_report_percent:
         return []
     evidence = [Evidence(source="report",
-                         location=(f"{location_prefix} {p['location']}, {p.get('score_name', 'score')} "
-                                   f"{p['score']:.3f} (flagged at {p.get('rule', '<=')} {p['threshold']})"
+                         location=(f"{location_prefix} {p['location']}, AI probability "
+                                   f"{p['score']:.3f} (flagged at >= {p['threshold']})"
                                    + (f", stock phrases: {', '.join(p['stock_phrases'])}" if p["stock_phrases"] else "")),
                          quote=p["text"])
                 for p in detection["flagged_passages"]]
-    margin = max((p["score"] - p["threshold"]) if p.get("rule") == ">=" else (p["threshold"] - p["score"])
-                 for p in detection["flagged_passages"])
+    margin = max(p["score"] - p["threshold"] for p in detection["flagged_passages"])
     return [Signal(kind="ai_generated_share", summary=detection["interpretation"], evidence=evidence,
                    scores={"share": detection["estimated_percent"] / 100, "margin": margin,
                            "low_confidence": float(detection["confidence"] == "low")},

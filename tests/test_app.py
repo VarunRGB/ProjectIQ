@@ -28,12 +28,4 @@ def test_document_tab_runs_on_sample(app):
     assert metrics["Overlap with references"] == "32.9%"
     assert metrics["Inside copied chunks"] == "18.4%"
     assert any("Chunk 1" in e.label for e in app.expander)
-    assert any("Not flagged" in s.value for s in app.success)   # AI-style section shown
-
-
-def test_benchmark_mode_shows_answer_key(app):
-    app.radio[0].set_value("Benchmark paper (with answer key)").run()
-    app.button(key="run_doc").click().run()
-    assert not app.exception
-    labels = {m.label for m in app.metric}
-    assert {"Copied sentences caught", "False alarms", "Chunks found"} <= labels
+    assert any("AI percentage" in i.value for i in app.info)    # AI section shown (model not loaded in tests)

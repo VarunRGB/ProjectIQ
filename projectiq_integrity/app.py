@@ -28,7 +28,7 @@ from projectiq_integrity.document_check import (COLOURS, COPY_CATEGORIES, PARA, 
 SAMPLES = ROOT / "tests" / "fixtures"
 DOC_TYPES = ["pdf", "docx", "txt", "md"]
 KIND_LABELS = {"copied_chunk": "Copied chunk", "similar_report_text": "Overlap with a reference",
-               "ai_style_text": "AI-style writing", "ai_generated_share": "AI-generated share"}
+               "ai_generated_share": "AI-generated share"}
 
 st.set_page_config(page_title="ProjectIQ · Integrity Agent", layout="wide")
 st.markdown("""<style>
@@ -51,7 +51,6 @@ def environment_status() -> list:
         ("DeBERTa (confirms paraphrase)", (MODELS_DIR / "nli-deberta-v3-small").exists()),
         (f"{ai_detector_info(DEFAULT)['label']} (AI percentage)",
          all((MODELS_DIR / m).exists() for m in ai_detector_info(DEFAULT)["folders"])),
-        ("distilgpt2 (AI fallback check)", (MODELS_DIR / "distilgpt2").exists()),
     ]
     return items
 
@@ -91,17 +90,10 @@ def quote(container, text: str) -> None:
 
 
 st.markdown("#### How much of a research document was taken from its references, and from where")
-mode = st.radio("Input", ["Use the sample report", "Benchmark paper (with answer key)",
-                         "Upload a document and its references"],
+mode = st.radio("Input", ["Use the sample report", "Upload a document and its references"],
                 horizontal=True, label_visibility="collapsed")
 doc_path = refs_dir = None
-BENCH = SAMPLES / "benchmark"
-if mode == "Benchmark paper (with answer key)":
-    doc_path, refs_dir = BENCH / "student_paper.pdf", BENCH / "references"
-    st.caption("A student paper with 25 planted cases (verbatim, near-verbatim, paraphrase and traps that "
-               "must NOT be flagged) and 4 reference papers, one unrelated. After the check, the answer key "
-               "shows what the tool got right.")
-elif mode == "Use the sample report":
+if mode == "Use the sample report":
     doc_path, refs_dir = SAMPLES / "research" / "S201_report.txt", SAMPLES / "research" / "references"
     st.caption(f"Sample: `{doc_path.name}` checked against "
                f"{', '.join(p.name for p in sorted(refs_dir.iterdir()))}.")
@@ -120,36 +112,11 @@ if st.button("Run similarity check", type="primary", disabled=doc_path is None, 
     with st.spinner("Reading documents and comparing every sentence with the references..."):
         try:
             st.session_state["doc_report"] = check_document(doc_path, refs_dir)
-            st.session_state["doc_is_benchmark"] = mode.startswith("Benchmark")
         except Exception as exc:  # noqa: BLE001 - show any failure on screen
             st.session_state.pop("doc_report", None)
             st.error(f"The check failed: {exc}")
 
 rep = st.session_state.get("doc_report")
-if rep and st.session_state.get("doc_is_benchmark"):
-    from projectiq_integrity.benchmark import evaluate
-
-    res = evaluate(rep, BENCH / "answer_key.csv", BENCH / "expected_chunks.csv")
-    st.divider()
-    st.markdown("#### Answer key check")
-    b1, b2, b3, b4 = st.columns(4)
-    b1.metric("Copied sentences caught", f"{res.copied_caught} / {res.copied_total}")
-    b2.metric("Exactly right", f"{res.right_type} / {len(res.planted)}")
-    b3.metric("False alarms", len(res.false_alarms),
-              help="Counted as copying although the answer key says it is not")
-    b4.metric("Chunks found", f"{len(res.chunks_found)} / {len(res.chunks_expected)}")
-    st.caption(f"Overall copying: tool {res.tool_percent}%, answer key {res.expected_percent}%.")
-    table = pd.DataFrame([{"Case": c.case, "Expected": c.expected, "Got": c.got,
-                           "Right": "yes" if c.ok else "NO", "What it tests": c.note,
-                           "Sentence": c.sentence} for c in res.planted])
-    st.dataframe(table.style.apply(lambda row: ["background-color:#fbe3e3" if row["Right"] == "NO" else ""]
-                                   * len(row), axis=1), hide_index=True, width="stretch")
-    own_bad = [c for c in res.cases if c.case == "own" and c.got not in ("none", "not checked (quoted)")]
-    if own_bad:
-        st.warning("Student's own sentences flagged: " + "; ".join(f"{c.got}: {c.sentence}" for c in own_bad))
-    for s_ in res.missing_sentences:
-        st.error(f"Not checked at all (PDF reading problem?): {s_}")
-
 if rep:
     st.divider()
     m1, m2, m3, m4 = st.columns(4)
@@ -216,27 +183,14 @@ if rep:
         a3.metric("Confidence", det["confidence"])
         (st.warning if det["estimated_percent"] >= DEFAULT.ai_report_percent else st.info)(det["interpretation"])
         for p in det["flagged_passages"]:
-            st.caption(f"{p['location']} · {p['words']} words · {p.get('score_name', 'score')} {p['score']:.3f} "
-                       f"(flagged at {p.get('rule', '<=')} {p['threshold']})"
+            st.caption(f"{p['location']} · {p['words']} words · AI probability {p['score']:.3f} "
+                       f"(flagged at >= {p['threshold']})"
                        + (f" · stock phrases: {', '.join(p['stock_phrases'])}" if p["stock_phrases"] else ""))
             quote(st, p["text"])
         for n in det["limitations"]:
             st.caption(n)
     else:
-        st.caption(f"AI percentage: {det['status'].replace('_', ' ').lower()}. "
-                   + " ".join(det["limitations"][:1]))
-        if rep.ai_findings:
-            ai = rep.ai_findings[0]
-            st.warning(f"{ai['summary']} Confidence {ai['confidence']:.2f}.")
-            for ev in ai["evidence"]:
-                st.caption(ev["location"])
-                quote(st, ev["quote"])
-            st.caption(ai["limitations"])
-        else:
-            st.success("Not flagged by the fallback check (style measures and distilgpt2 did not both "
-                       "point to AI-style text).")
-        for n in rep.ai_notes[1:] if det["limitations"] else rep.ai_notes:
-            st.caption(n)
+        st.info(f"AI percentage {det['status'].replace('_', ' ').lower()}. " + " ".join(det["limitations"][:1]))
 
     result = to_agent_result(rep, Path(rep.document).stem)
     with st.expander(f"What the Integrity Agent sends to the Rubric Agent ({len(result.findings)} findings)"):

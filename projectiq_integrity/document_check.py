@@ -32,7 +32,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from . import ai_detection
-from .ai_indicators import SentenceScorer, ai_signals
 from .config import DEFAULT, IntegritySettings
 from .contracts import AgentResult, Evidence, Finding
 from .documents import build_corpus, load_document, load_folder, location_label, source_sentences
@@ -275,8 +274,7 @@ def _rescue_front_matter(doc: Document, notes: List[str]) -> Document:
 
 
 def check_document(document: Path, references_dir: Path, settings: IntegritySettings = DEFAULT,
-                   ria_settings: RiaSettings = RIA_DEFAULTS, scorer: Optional[SentenceScorer] = None,
-                   check_ai: bool = True,
+                   ria_settings: RiaSettings = RIA_DEFAULTS, check_ai: bool = True,
                    ai_scorer: Optional[ai_detection.PassageScorer] = None) -> DocumentReport:
     """The whole integrity check for one document: overlap with its references, then the
     AI-style check on the sentences the student wrote themselves."""
@@ -308,18 +306,13 @@ def check_document(document: Path, references_dir: Path, settings: IntegritySett
         copied_idx = {m.index for m in copied}
         own_sentences = [(s.index, location_label(doc, s), s.text) for s in doc.body_sentences()
                          if s.index not in copied_idx]
-        # 1. AI percentage (Binoculars), when its two models are installed.
         detection, _ = ai_detection.estimate(own_sentences, scorer=ai_scorer, settings=settings)
         if detection["status"] == "COMPLETED":
             ai_findings = [f.model_dump() for f in
                            build_findings(ai_detection.to_signal(detection, doc.source, settings))]
             ai_notes = [detection["interpretation"]]
         else:
-            # 2. Otherwise the older yes/no check (distilgpt2), as before.
-            own = " ".join(t for _, _, t in own_sentences)
-            signals, ai_notes = ai_signals(own, f"{doc.source}", scorer=scorer, settings=settings)
-            ai_findings = [f.model_dump() for f in build_findings(signals)]
-            ai_notes = detection["limitations"][:1] + ai_notes
+            ai_notes = detection["limitations"][:1]
     return DocumentReport(
         document=doc.source, references=sorted(refs), sentences_checked=len(matches), words_checked=total,
         overall_percent=_pct(sum(m.words for m in copied), total),
@@ -421,22 +414,16 @@ def to_html(report: DocumentReport) -> str:
     det = report.ai_detection
     if det.get("status") == "COMPLETED":
         passages = "".join(
-            f"<li><small>{e(p['location'])}, {p['words']} words, {e(p.get('score_name', 'score'))} "
-            f"{p['score']:.3f} (flagged at {e(p.get('rule', '<='))} {p['threshold']})"
+            f"<li><small>{e(p['location'])}, {p['words']} words, AI probability "
+            f"{p['score']:.3f} (flagged at &gt;= {p['threshold']})"
             + (f", stock phrases: {e(', '.join(p['stock_phrases']))}" if p["stock_phrases"] else "")
             + f"</small><br>{e(p['text'])}</li>" for p in det["flagged_passages"])
         ai_html = (f"<p class='big'>{det['estimated_percent']}%</p><p>{e(det['interpretation'])} "
                    f"Confidence: {e(det['confidence'])}.</p><ul>{passages}</ul>"
                    + "".join(f"<p class='note'>{e(n)}</p>" for n in det["limitations"]))
-    elif report.ai_findings:
-        ai = report.ai_findings[0]
-        quotes = "".join(f"<li><small>{e(ev['location'])}</small><br>{e(ev['quote'])}</li>" for ev in ai["evidence"])
-        ai_html = (f"<p><b>Flagged (advisory).</b> {e(ai['summary'])} Confidence {ai['confidence']:.2f}.</p>"
-                   f"<ul>{quotes}</ul><p class='note'>{e(ai['limitations'])}</p>")
     else:
-        ai_html = "<p>Not flagged: style measures and the local language model did not both point to AI-style text.</p>"
-    if det.get("status") != "COMPLETED":
-        ai_html += "".join(f"<p class='note'>{e(n)}</p>" for n in report.ai_notes)
+        ai_html = (f"<p>AI percentage {e(det.get('status', 'NOT_AVAILABLE').replace('_', ' ').lower())}.</p>"
+                   + "".join(f"<p class='note'>{e(n)}</p>" for n in det.get("limitations", [])[:1]))
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <title>Similarity report: {e(report.document)}</title>
 <style>

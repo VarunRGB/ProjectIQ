@@ -21,7 +21,7 @@ class Evidence(BaseModel):
 
 class Finding(BaseModel):
     claim_id: Optional[str] = Field(default=None, description='"C3", issued by the Summarizer')
-    kind: str = Field(description='"copied_chunk", "similar_report_text" or "ai_style_text"')
+    kind: str = Field(description='"copied_chunk", "similar_report_text" or "ai_generated_share"')
     summary: str
     evidence: List[Evidence]
     confidence: float = Field(ge=0.0, le=1.0)
