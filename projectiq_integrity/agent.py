@@ -9,7 +9,7 @@ It gathers evidence only. It never assigns or changes a mark.
 from pathlib import Path
 from typing import Optional, Union
 
-from .ai_indicators import SentenceScorer
+from .ai_detection import PassageScorer
 from .config import DEFAULT, IntegritySettings
 from .contracts import AgentResult
 from .document_check import check_document, to_agent_result
@@ -19,9 +19,9 @@ AGENT_NAME = "integrity"
 
 def run_integrity(document: Union[str, Path], references_dir: Union[str, Path],
                   submission_id: Optional[str] = None, settings: IntegritySettings = DEFAULT,
-                  scorer: Optional[SentenceScorer] = None) -> AgentResult:
+                  ai_scorer: Optional[PassageScorer] = None) -> AgentResult:
     """Overlap with the references (verbatim, near-verbatim, DeBERTa-confirmed paraphrase,
-    copied chunks) plus the AI-style check on the student's own sentences."""
+    copied chunks) plus the AI percentage of the student's own sentences."""
     document = Path(document)
-    report = check_document(document, Path(references_dir), settings=settings, scorer=scorer)
+    report = check_document(document, Path(references_dir), settings=settings, ai_scorer=ai_scorer)
     return to_agent_result(report, submission_id or document.stem, settings)

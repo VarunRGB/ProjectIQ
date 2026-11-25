@@ -3,5 +3,5 @@ S201,copied_chunk,1
 S201,similar_report_text,1
 S202,copied_chunk,0
 S202,similar_report_text,0
-S201,ai_style_text,0
-S202,ai_style_text,0
+S201,ai_generated_share,0
+S202,ai_generated_share,0

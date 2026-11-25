@@ -1,0 +1,11 @@
+file,expected,what_it_tests
+01_ai_chatgpt_buzzwords.txt,ai,Typical ChatGPT output full of stock phrases
+02_ai_plain_no_buzzwords.txt,ai,AI asked to write plainly with specific details (hard to catch)
+03_ai_technical_methods.txt,ai,AI-written technical methods section with many numbers
+04_ai_run_through_paraphraser.txt,ai,AI text passed through a synonym-swapping paraphraser
+05_ai_imitating_typos.txt,ai,AI imitating casual student writing with typos
+06_ai_imitating_simple.txt,ai,AI imitating very short simple sentences
+07_ai_imitating_long_sentences.txt,ai,AI imitating very long complex sentences
+08_ai_imitating_nonnative.txt,ai,AI imitating Indian English grammar patterns
+09_ai_imitating_formal_lab.txt,ai,AI imitating formal precise lab writing
+10_ai_imitating_mixed.txt,ai,AI imitating student writing followed by a stock-phrase paragraph

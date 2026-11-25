@@ -21,14 +21,15 @@ import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 import streamlit.components.v1 as components  # noqa: E402
 
-from projectiq_integrity.config import MODELS_DIR  # noqa: E402
+from projectiq_integrity.ai_detection import check_document_ai  # noqa: E402
+from projectiq_integrity.config import DEFAULT, MODELS_DIR, ai_detector_info  # noqa: E402
 from projectiq_integrity.document_check import (COLOURS, COPY_CATEGORIES, PARA, SIMILAR,  # noqa: E402
                                                 check_document, highlighted_document, to_agent_result, to_html)
 
 SAMPLES = ROOT / "tests" / "fixtures"
 DOC_TYPES = ["pdf", "docx", "txt", "md"]
 KIND_LABELS = {"copied_chunk": "Copied chunk", "similar_report_text": "Overlap with a reference",
-               "ai_style_text": "AI-style writing"}
+               "ai_generated_share": "AI-generated share"}
 
 st.set_page_config(page_title="ProjectIQ · Integrity Agent", layout="wide")
 st.markdown("""<style>
@@ -49,7 +50,8 @@ def environment_status() -> list:
     items = [
         ("MiniLM (meaning similarity)", (MODELS_DIR / "all-MiniLM-L6-v2").exists()),
         ("DeBERTa (confirms paraphrase)", (MODELS_DIR / "nli-deberta-v3-small").exists()),
-        ("distilgpt2 (AI-style check)", (MODELS_DIR / "distilgpt2").exists()),
+        (f"{ai_detector_info(DEFAULT)['label']} (AI percentage)",
+         all((MODELS_DIR / m).exists() for m in ai_detector_info(DEFAULT)["folders"])),
     ]
     return items
 
@@ -88,18 +90,93 @@ def quote(container, text: str) -> None:
     container.markdown(f"<div class='quote'>{html.escape(text)}</div>", unsafe_allow_html=True)
 
 
+AI_ONLY = "AI check only (one document, no references)"
+
 st.markdown("#### How much of a research document was taken from its references, and from where")
-mode = st.radio("Input", ["Use the sample report", "Benchmark paper (with answer key)",
-                         "Upload a document and its references"],
+mode = st.radio("Input", ["Use the sample report", "Upload a document and its references", AI_ONLY],
                 horizontal=True, label_visibility="collapsed")
 doc_path = refs_dir = None
-BENCH = SAMPLES / "benchmark"
-if mode == "Benchmark paper (with answer key)":
-    doc_path, refs_dir = BENCH / "student_paper.pdf", BENCH / "references"
-    st.caption("A student paper with 25 planted cases (verbatim, near-verbatim, paraphrase and traps that "
-               "must NOT be flagged) and 4 reference papers, one unrelated. After the check, the answer key "
-               "shows what the tool got right.")
-elif mode == "Use the sample report":
+
+
+# --------------------------------------------------------------------------- #
+# AI check only: one document, no reference papers
+# --------------------------------------------------------------------------- #
+def show_ai_only() -> None:
+    info = ai_detector_info(DEFAULT)
+    st.caption(f"Upload just the research paper. Every body sentence (title page, contents and "
+               f"reference list left out) is split into passages of {DEFAULT.ai_passage_min_words} to "
+               f"{DEFAULT.ai_passage_max_words} words, and each passage gets an AI probability from the "
+               f"{info['label']}, run on this computer. Text only: images are skipped and scanned PDFs refused.")
+    use_sample = st.checkbox("Use the sample report instead of an upload", key="ai_sample")
+    path = None
+    if use_sample:
+        path = SAMPLES / "research" / "S201_report.txt"
+        st.caption(f"Sample: `{path.name}`")
+    else:
+        up = st.file_uploader("Research paper", type=DOC_TYPES, key="ai_upload")
+        if up:
+            work = Path(tempfile.gettempdir()) / "projectiq_ai_only"
+            shutil.rmtree(work, ignore_errors=True)
+            path = save_uploads([up], work)[0]
+
+    if st.button("Run AI check", type="primary", disabled=path is None, key="run_ai"):
+        with st.spinner("Scoring each passage (the first run also loads the model, about 30 seconds)..."):
+            try:
+                st.session_state["ai_only"] = check_document_ai(path)
+            except Exception as exc:  # noqa: BLE001 - show any failure on screen
+                st.session_state.pop("ai_only", None)
+                st.error(f"The AI check failed: {exc}")
+
+    result = st.session_state.get("ai_only")
+    if not result:
+        return
+    det, passages, doc_info = result
+    st.divider()
+    st.markdown(f"**{doc_info['document']}**: {doc_info['sentences']} sentences, {doc_info['words']} words read")
+    if det["status"] != "COMPLETED":
+        st.info(f"AI percentage {det['status'].replace('_', ' ').lower()}. " + " ".join(det["limitations"][:1]))
+        return
+
+    scored = [p for p in passages if p.score is not None]
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("AI-like share of the writing", f"{det['estimated_percent']}%")
+    m2.metric("Passages flagged", f"{sum(p.flagged for p in scored)} / {len(scored)}")
+    m3.metric("Words scored", sum(p.words for p in scored))
+    m4.metric("Confidence", det["confidence"])
+    (st.warning if det["estimated_percent"] >= DEFAULT.ai_report_percent else st.success)(det["interpretation"])
+
+    st.markdown("**Every passage**")
+    df = pd.DataFrame([{"#": i, "Where": p.location, "Words": p.words,
+                        "AI probability": "" if p.score is None else round(p.score, 3),
+                        "Result": ("FLAGGED" if p.flagged else "not flagged") if p.score is not None
+                        else "too short, not scored",
+                        "Starts with": p.text[:90] + ("..." if len(p.text) > 90 else "")}
+                       for i, p in enumerate(passages, 1)])
+    st.dataframe(df.style.apply(lambda r: ["background-color:#fbe3e3" if r["Result"] == "FLAGGED" else ""]
+                                * len(r), axis=1), hide_index=True, width="stretch")
+    st.caption(f"A passage is flagged at AI probability >= {info['threshold']} (higher = more machine-like).")
+
+    flagged = [p for p in scored if p.flagged]
+    if flagged:
+        st.markdown("**Flagged passages**")
+        for p in sorted(flagged, key=lambda p: -p.score):
+            phrases = f" · stock phrases: {', '.join(p.stock_phrases)}" if p.stock_phrases else ""
+            with st.expander(f"{p.location} · {p.words} words · AI probability {p.score:.3f}{phrases}"):
+                quote(st, p.text)
+    for n in det["limitations"]:
+        st.caption(n)
+    out = {"ai_detection": det, "document": doc_info,
+           "passages": [{"location": p.location, "words": p.words, "ai_probability": p.score,
+                         "flagged": p.flagged, "text": p.text} for p in passages]}
+    st.download_button("Download AI check (JSON)", json.dumps(out, indent=2),
+                       file_name=f"{Path(doc_info['document']).stem}_ai_check.json", mime="application/json")
+
+
+if mode == AI_ONLY:
+    show_ai_only()
+    st.stop()
+
+if mode == "Use the sample report":
     doc_path, refs_dir = SAMPLES / "research" / "S201_report.txt", SAMPLES / "research" / "references"
     st.caption(f"Sample: `{doc_path.name}` checked against "
                f"{', '.join(p.name for p in sorted(refs_dir.iterdir()))}.")
@@ -118,36 +195,11 @@ if st.button("Run similarity check", type="primary", disabled=doc_path is None, 
     with st.spinner("Reading documents and comparing every sentence with the references..."):
         try:
             st.session_state["doc_report"] = check_document(doc_path, refs_dir)
-            st.session_state["doc_is_benchmark"] = mode.startswith("Benchmark")
         except Exception as exc:  # noqa: BLE001 - show any failure on screen
             st.session_state.pop("doc_report", None)
             st.error(f"The check failed: {exc}")
 
 rep = st.session_state.get("doc_report")
-if rep and st.session_state.get("doc_is_benchmark"):
-    from projectiq_integrity.benchmark import evaluate
-
-    res = evaluate(rep, BENCH / "answer_key.csv", BENCH / "expected_chunks.csv")
-    st.divider()
-    st.markdown("#### Answer key check")
-    b1, b2, b3, b4 = st.columns(4)
-    b1.metric("Copied sentences caught", f"{res.copied_caught} / {res.copied_total}")
-    b2.metric("Exactly right", f"{res.right_type} / {len(res.planted)}")
-    b3.metric("False alarms", len(res.false_alarms),
-              help="Counted as copying although the answer key says it is not")
-    b4.metric("Chunks found", f"{len(res.chunks_found)} / {len(res.chunks_expected)}")
-    st.caption(f"Overall copying: tool {res.tool_percent}%, answer key {res.expected_percent}%.")
-    table = pd.DataFrame([{"Case": c.case, "Expected": c.expected, "Got": c.got,
-                           "Right": "yes" if c.ok else "NO", "What it tests": c.note,
-                           "Sentence": c.sentence} for c in res.planted])
-    st.dataframe(table.style.apply(lambda row: ["background-color:#fbe3e3" if row["Right"] == "NO" else ""]
-                                   * len(row), axis=1), hide_index=True, width="stretch")
-    own_bad = [c for c in res.cases if c.case == "own" and c.got not in ("none", "not checked (quoted)")]
-    if own_bad:
-        st.warning("Student's own sentences flagged: " + "; ".join(f"{c.got}: {c.sentence}" for c in own_bad))
-    for s_ in res.missing_sentences:
-        st.error(f"Not checked at all (PDF reading problem?): {s_}")
-
 if rep:
     st.divider()
     m1, m2, m3, m4 = st.columns(4)
@@ -205,18 +257,23 @@ if rep:
         else:
             st.caption("No sentence matched a reference.")
 
-    st.markdown("**AI-style writing** (the student's own sentences only; copied ones are left out)")
-    if rep.ai_findings:
-        ai = rep.ai_findings[0]
-        st.warning(f"{ai['summary']} Confidence {ai['confidence']:.2f}.")
-        for ev in ai["evidence"]:
-            st.caption(ev["location"])
-            quote(st, ev["quote"])
-        st.caption(ai["limitations"])
+    st.markdown("**AI-generated writing** (the student's own sentences only; copied ones are left out)")
+    det = rep.ai_detection
+    if det["status"] == "COMPLETED":
+        a1, a2, a3 = st.columns(3)
+        a1.metric("AI-like share of own writing", f"{det['estimated_percent']}%")
+        a2.metric("Passages flagged", len(det["flagged_passages"]))
+        a3.metric("Confidence", det["confidence"])
+        (st.warning if det["estimated_percent"] >= DEFAULT.ai_report_percent else st.info)(det["interpretation"])
+        for p in det["flagged_passages"]:
+            st.caption(f"{p['location']} · {p['words']} words · AI probability {p['score']:.3f} "
+                       f"(flagged at >= {p['threshold']})"
+                       + (f" · stock phrases: {', '.join(p['stock_phrases'])}" if p["stock_phrases"] else ""))
+            quote(st, p["text"])
+        for n in det["limitations"]:
+            st.caption(n)
     else:
-        st.success("Not flagged. Style measures and the local language model did not both point to AI-style text.")
-    for n in rep.ai_notes:
-        st.caption(n)
+        st.info(f"AI percentage {det['status'].replace('_', ' ').lower()}. " + " ".join(det["limitations"][:1]))
 
     result = to_agent_result(rep, Path(rep.document).stem)
     with st.expander(f"What the Integrity Agent sends to the Rubric Agent ({len(result.findings)} findings)"):

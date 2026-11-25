@@ -1,12 +1,12 @@
 """One-time setup for fully offline ProjectIQ runs. Run ONCE while online:
 
-    python scripts/setup_offline.py           # everything (about 700 MB)
+    python scripts/setup_offline.py           # everything (about 2.2 GB)
     python scripts/setup_offline.py --check   # list what is present
 
 Downloads into the project's models/ folder:
   models/all-MiniLM-L6-v2               embeddings (summariser + finding similar sentences)
   models/nli-deberta-v3-small           NLI (confirms paraphrases)
-  models/distilgpt2                     perplexity for the AI-text check
+  models/ai-text-detector-v1.01         AI percentage: Desklib AI-text classifier
   models/en_core_web_sm, models/nltk_data   sentence splitting and stop-words
 
 After this nothing is downloaded at run time (HF_HUB_OFFLINE=1 is set by the code).
@@ -25,12 +25,10 @@ from projectiq_integrity.config import MODELS_DIR  # noqa: E402
 MODELS = {
     "all-MiniLM-L6-v2": ("sentence-transformers", "sentence-transformers/all-MiniLM-L6-v2", "90 MB"),
     "nli-deberta-v3-small": ("cross-encoder", "cross-encoder/nli-deberta-v3-small", "280 MB"),
-    "distilgpt2": ("causal-lm", "distilbert/distilgpt2", "330 MB"),
     "en_core_web_sm": ("spacy", "en_core_web_sm", "15 MB"),
     "nltk_data": ("nltk", "stopwords", "1 MB"),
+    "ai-text-detector-v1.01": ("desklib", "desklib/ai-text-detector-v1.01", "1.75 GB"),
 }
-
-
 def present(path: Path) -> bool:
     return path.is_file() or (path.is_dir() and any(path.iterdir()))
 
@@ -41,12 +39,18 @@ def fetch_model(folder: str, kind: str, name: str) -> None:
         from sentence_transformers import SentenceTransformer
 
         SentenceTransformer(name, device="cpu").save(str(target))
-    elif kind in ("cross-encoder", "causal-lm"):
-        from transformers import AutoModelForCausalLM, AutoModelForSequenceClassification, AutoTokenizer
+    elif kind == "cross-encoder":
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-        cls = AutoModelForSequenceClassification if kind == "cross-encoder" else AutoModelForCausalLM
         AutoTokenizer.from_pretrained(name).save_pretrained(target)
-        cls.from_pretrained(name).save_pretrained(target)
+        AutoModelForSequenceClassification.from_pretrained(name).save_pretrained(target)
+    elif kind == "desklib":
+        from transformers import AutoTokenizer
+
+        from projectiq_integrity.ai_detection import desklib_model_class
+
+        AutoTokenizer.from_pretrained(name).save_pretrained(target)
+        desklib_model_class().from_pretrained(name).save_pretrained(target)
     elif kind == "spacy":
         import spacy
         from spacy.cli import download
