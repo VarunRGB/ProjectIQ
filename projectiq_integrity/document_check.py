@@ -37,6 +37,7 @@ from .contracts import AgentResult, Evidence, Finding
 from .documents import build_corpus, load_document, load_folder, location_label, source_sentences
 from .evidence import Signal, build_findings
 from .ria import models as ria_models
+from projectiq_research.citation_extractor import extract_citations  # one citation parser for ProjectIQ
 from .ria.citation_analyzer import strip_citations
 from .ria.config import DEFAULT_SETTINGS as RIA_DEFAULTS, Settings as RiaSettings
 from .ria.overlap_analyzer import analyze_overlap, lexical_overlap, ngram_jaccard, remove_quoted
@@ -190,7 +191,7 @@ def match_sentences(doc: Document, references: Dict[str, Document], settings: In
             words=words, category=None, reference=r.reference_file,
             reference_location=location_label(references[r.reference_file], ref_sent) if ref_sent else "?",
             reference_text=r.reference_text, reference_position=pos, lexical=round(lexical, 3),
-            semantic=round(r.embedding_cosine, 3), cited=strip_citations(r.paper_text) != r.paper_text)
+            semantic=round(r.embedding_cosine, 3), cited=bool(extract_citations(r.paper_text)))
         if verbatim:
             m.category = VERBATIM
         elif lexical >= ria_settings.near_verbatim_jaccard:
