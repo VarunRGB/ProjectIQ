@@ -44,9 +44,20 @@ def _build_result(paper: PaperReference, metadata: Optional[AcademicPaperMetadat
     author_match = _author_match(paper.authors, metadata.authors)
     doi_match = bool(submitted_doi and metadata.doi and submitted_doi.casefold() == metadata.doi.casefold())
     title_match = score >= VERIFIED_TITLE_THRESHOLD if paper.title and metadata.title else None
+    # A provider may drop a subtitle. Accept only a substantial main-title
+    # match plus exact DOI/year corroboration and no conflicting author signal.
+    # A similar title or matching DOI alone is not sufficient.
+    submitted_main = re.split(r"[:\u2013\u2014]", paper.title or "", maxsplit=1)[0]
+    resolved_main = re.split(r"[:\u2013\u2014]", metadata.title or "", maxsplit=1)[0]
+    a, b = normalise_title(submitted_main), normalise_title(resolved_main)
+    subtitle_match = bool(a and a == b and len(a.split()) >= 5 and len(a) >= 25
+                          and doi_match and year_match is True and author_match is not False
+                          and (submitted_main != (paper.title or "") or resolved_main != (metadata.title or "")))
+    if subtitle_match:title_match = True
     contaminated_title = bool(_title_contained(paper.title, metadata.title) and author_match is True)
 
     notes = []
+    if subtitle_match:notes.append("Main title, DOI and publication year corroborate identity; provider/submitted subtitle differs or is omitted.")
     if contaminated_title and not title_match:
         notes.append("Matched a long title embedded in an apparently contaminated extracted reference title.")
     elif title_match is False:

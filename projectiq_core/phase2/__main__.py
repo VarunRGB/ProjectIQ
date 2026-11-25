@@ -93,6 +93,8 @@ def main(argv=None):
                         decisions,recovery_failed=recover_rejected(bundle,rubric,llm,decisions,log,max_chars=budget,seed=settings.seed,progress=common['progress'])
                         if recovery_failed:
                             diagnostics['status']='INFERENCE_FAILED';failure='RECOVERY_INFERENCE_FAILED';break
+            except KeyboardInterrupt:
+                diagnostics['status']='CANCELLED';failure='CANCELLED'
             except (ValueError,RuntimeError,OSError) as exc:
                 diagnostics['status']='INFERENCE_FAILED';failure=type(exc).__name__
                 # Save completed decisions and partial assessment, even if a later batch fails.
@@ -115,7 +117,7 @@ def main(argv=None):
         # Incomplete marks are an ordinary result, not a CLI exception.
         if failure:
             print('Rubric inference failed; completed decisions and diagnostics saved:',failure,file=sys.stderr)
-            return 1
+            return 130 if failure=='CANCELLED' else 1
         return 0
     except (ValueError,OSError,RuntimeError,ImportError) as exc:
         # Avoid echoing arbitrary student text in exception messages.

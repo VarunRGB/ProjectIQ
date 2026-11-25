@@ -139,7 +139,7 @@ class Phase2(unittest.TestCase):
         mods={'projectiq_summarizer.config':NS(Settings=lambda **kw:NS(model='test',ollama_url='http://localhost:11434')),'projectiq_summarizer.llm':NS(OllamaClient=lambda s:llm),'projectiq_summarizer.loaders':NS(load_text=lambda p:TEXT),'projectiq_summarizer.summariser':NS(summarise=summarise),'projectiq_summarizer.pipeline':NS(evaluate=legacy)}
         with patch.dict(sys.modules,mods),patch('projectiq_core.resources.release_ollama_model',return_value='UNLOAD_VERIFIED'):
             out=self.root/'mock';out.mkdir();raw=live_sources(self.sub,agents=['summarizer'],summary_only=True)['summarizer'](self.report,out)
-        summarise.assert_called_once();legacy.assert_not_called();self.assertEqual(raw['result_kind'],'SUMMARY_ONLY');self.assertEqual(json.loads((out/'ollama_release.json').read_text())['status'],'UNLOAD_VERIFIED')
+        summarise.assert_not_called();legacy.assert_not_called();self.assertEqual(raw['result_kind'],'SUMMARY_ONLY');self.assertEqual(json.loads((out/'ollama_release.json').read_text())['status'],'NOT_USED')
     def test_example_rubric_valid(self):
         p=Path(__file__).resolve().parents[1]/'projectiq_core/phase2/software_project.rubric.json';r=Rubric.model_validate_json(p.read_text());self.assertEqual(sum(c.weight for c in r.criteria),100)
     def test_schema_cli(self):

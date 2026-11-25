@@ -125,6 +125,8 @@ def reuse_decisions(old_bundle, old_rubric, old_decisions, new_bundle, new_rubri
         cid = d.criterion_id
         if cid not in new or new[cid].applicability == 'EXCLUDED':
             dropped[cid] = 'CRITERION_EXCLUDED_OR_REMOVED'
+        elif d.source=='MODEL' and old_bundle.observations.get('evaluation_policy')!=new_bundle.observations.get('evaluation_policy'):
+            dropped[cid]='AUTOMATIC_GRADING_POLICY_UPGRADED'
         elif _policy(old[cid]) != _policy(new[cid]):
             dropped[cid] = 'CRITERION_POLICY_CHANGED'
         elif _projection(old_bundle, old[cid]) != _projection(new_bundle, new[cid]):
@@ -256,7 +258,23 @@ def _frontend_agents(ev, bundle, rubric, *, acknowledge_imported=False):
             row['metrics'] = [m for m in row['metrics'] if m['id'] == 'word_count']
             row['details'] = {k: v for k, v in row['details'].items()
                               if k in ('summary', 'result_kind', 'model', 'word_count', 'chunks', 'elapsed_s')}
-            row['limitations'] = ['Summary-only overview; generated content is advisory and never contributes to the project grade. A missing historical summary is unavailable until separately collected.']
+            row['limitations'] = ['Summary-only overview; report claims are not independently verified and never contribute to the project grade. A missing historical summary is unavailable until separately collected.']
+            safe_summary=bundle.observations.get('summarizer',{}).get('grounded_summary')
+            if safe_summary is not None:
+                row['details']['summary']=safe_summary
+                row['details']['summary_display_method']='EXTRACTIVE_REPORT_CLAIMS'
+                row['details']['summary_display_policy']=bundle.observations.get('evaluation_policy',{}).get('version')
+                row['details']['collection_model']=row['details'].get('model')
+                row['details']['collection_elapsed_s']=row['details'].get('elapsed_s')
+            elif check=='MATCHED':
+                row['details'].pop('summary',None)
+                row['details']['summary_display_method']='UNAVAILABLE_EXTRACTION_REVIEW_REQUIRED'
+        if name=='integrity' and check=='MATCHED' and bundle.observations.get('integrity',{}).get('comparison_status')=='NOT_AVAILABLE':
+            row['details']['percent_by_category']={k:None for k in row['details'].get('percent_by_category',{})}
+            row['details']['percent_by_reference']={}
+            row['details']['notes']=[n for n in row['details'].get('notes',[]) if not ('MiniLM was not used' in n or 'DeBERTa was not used' in n)]+['Reference comparison unavailable: no usable corpus or comparison denominator.']
+        if name=='executioner' and check=='MATCHED':
+            row['metrics']=[m for m in row['metrics'] if m['id']!='maintainability' or bundle.observations.get('executioner',{}).get('source_analysis',{}).get('overall_score') is not None]
         if name == 'research':
             row['required_by_rubric'] = research_needed(rubric)
         cards[name] = row
@@ -330,12 +348,17 @@ def evaluate(*, out: Path, rubric: Rubric, report=None, title=None, submission_i
             if old_decisions.evidence_sha256 != digest(old_bundle):
                 # Rebuild the exact previous normalization from verified receipts.
                 # No arbitrary digest rewrite or trust in a saved evidence JSON.
-                legacy = build_evidence(collection/'evaluation.json', acknowledge_imported=acknowledge_imported, legacy_research=True)
+                legacy = build_evidence(collection/'evaluation.json', acknowledge_imported=acknowledge_imported, legacy_l1=True)
+                legacy_research = False
+                if old_decisions.evidence_sha256 != digest(legacy):
+                    legacy = build_evidence(collection/'evaluation.json', acknowledge_imported=acknowledge_imported, legacy_l=True)
+                    legacy_research = old_decisions.evidence_sha256 != digest(legacy)
+                    if legacy_research:legacy = build_evidence(collection/'evaluation.json', acknowledge_imported=acknowledge_imported, legacy_research=True)
                 if old_decisions.evidence_sha256 != digest(legacy) or old_decisions.rubric_sha256 != digest(old_rubric):
                     raise ValueError('STALE_DECISIONS')
                 # Old research judgments lacked the new policy; invalidate them,
                 # preserving only independently revalidated unrelated decisions.
-                research_ids={c.id for c in old_rubric.criteria if is_research(c)}
+                research_ids={c.id for c in old_rubric.criteria if is_research(c)} if legacy_research else set()
                 migrated_research={d.criterion_id:'RESEARCH_POLICY_UPGRADED' for d in old_decisions.decisions if d.criterion_id in research_ids}
                 old_decisions=DecisionSet(evidence_sha256=digest(legacy),rubric_sha256=digest(old_rubric),decisions=[d for d in old_decisions.decisions if d.criterion_id not in research_ids])
                 old_bundle=legacy
@@ -395,8 +418,10 @@ def evaluate(*, out: Path, rubric: Rubric, report=None, title=None, submission_i
               'rubric':rubric.model_dump(mode='json'), 'assessment':final.model_dump(mode='json'),
               'evidence_intelligence':load_json(grade_out/'evidence_intelligence.json'),
               'decision_reuse':reuse, 'research_required':research_needed(rubric),
+              'evaluation_policy':bundle.observations.get('evaluation_policy',{}).get('version'),
+              'criterion_review_states':{c.id:('EXCLUDED' if c.status=='EXCLUDED' else 'PREVIEW_PENDING' if preview and c.status=='UNASSESSED' else 'REVIEW_REQUIRED' if c.status=='UNASSESSED' else c.status) for c in final.criteria},
               'legacy_judge_executed':False, 'rubric_mode':'PREVIEW' if preview else 'OBJECTIVE_ONLY' if objective_only else 'AUTOMATIC',
-              'workflow_status':'PARTIAL_ERROR' if grade_code or failures else 'COMPLETE' if not final.unresolved_criterion_ids else 'INCOMPLETE_ASSESSMENT',
+              'workflow_status':'CANCELLED' if grade_code==130 else 'PARTIAL_ERROR' if grade_code or failures else 'COMPLETE' if not final.unresolved_criterion_ids else 'INCOMPLETE_ASSESSMENT',
               'agent_failures':failures, 'rubric_exit_code':grade_code,
               'elapsed_seconds':round(perf_counter()-start,4),
               'artifacts':{'evaluation':'collection/evaluation.json','assessment':'rubric/assessment.json','rubric':'rubric/rubric.json',
@@ -407,7 +432,7 @@ def evaluate(*, out: Path, rubric: Rubric, report=None, title=None, submission_i
                   'Legacy judge never executed by this workflow. Imported historical summaries may have been produced by that judge.']))}
     write_new(out/'result.json', json_bytes(result))
     print('Unified result:', out/'result.json', flush=True)
-    return 1 if grade_code else 2 if failures else 0
+    return 130 if grade_code==130 else 1 if grade_code else 2 if failures else 0
 
 
 def add_evaluate_parser(sub):

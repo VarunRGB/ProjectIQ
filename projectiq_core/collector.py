@@ -93,6 +93,7 @@ def collect(*, submission: Submission, report_bytes: bytes, out: Path, mode: str
     snapshot=out/'input';snapshot.mkdir();report=snapshot/submission.report_name
     write_new(report,report_bytes)
     results={}
+    cancelled=False
     for agent in AGENTS:
         progress(f'{agent}: starting' if agent in sources else f'{agent}: not requested')
         if agent not in sources:
@@ -108,16 +109,26 @@ def collect(*, submission: Submission, report_bytes: bytes, out: Path, mode: str
             receipt=Receipt(path=f'native/{agent}.json',sha256=sha256(data).hexdigest(),origin=mode)
             result=normalize(agent,raw,receipt)
             results[agent]=result
+        except KeyboardInterrupt:
+            cancelled=True
+            results[agent]=skipped(agent,'FAILED','CANCELLED','Agent interrupted; completed native receipts remain available.',receipt)
+            break
         except Exception as exc:
             # No arbitrary exception text in teacher-facing JSON.
             code=str(exc) if isinstance(exc,AdapterError) and re.fullmatch('[A-Z0-9_]{1,80}',str(exc)) else type(exc).__name__
             results[agent]=skipped(agent,'FAILED',code,'Agent result unavailable or incompatible; inspect locally.',receipt)
         progress(f'{agent}: {results[agent].status}')
+    if cancelled:
+        for agent in AGENTS:
+            results.setdefault(agent,skipped(agent,note='Collection cancelled before this agent started.'))
     limitations=['No final project grade is calculated in Phase 1.', 'Native receipts attest saved bytes only, not agent correctness or authenticity.',
                  'Private evaluation contains student text and code evidence; do not publish the output directory.']
     if mode=='IMPORTED': limitations.append('Imported results are operator-associated by filename/repository; report bytes at their original execution are not independently established.')
     result=Evaluation(submission=submission,created_utc=datetime.now(timezone.utc).isoformat(),mode=mode,agents=results,limitations=limitations)
     write_new(out/'evaluation.json',json_bytes(result.model_dump(mode='json')))
+    if cancelled:
+        write_new(out/'collection_cancelled.json',json_bytes({'state':'CANCELLED','completed_receipts':[a for a,v in results.items() if v.status not in ('NOT_RUN','FAILED')],'recovery':'Use saved evaluation in a new output directory; unavailable agents require explicit recollection.'}))
+        raise KeyboardInterrupt
     return result
 
 
@@ -129,6 +140,17 @@ def live_sources(submission, *, references: Path|None=None, agents=AGENTS, rubri
     # Local model weights should be prepared by the operator; don't silently download.
     os.environ['HF_HUB_OFFLINE']='1';os.environ['TRANSFORMERS_OFFLINE']='1'
     def summarize(report,out):
+        if summary_only:
+            from time import perf_counter
+            from projectiq_summarizer.loaders import load_text
+            from .phase2.hardening import grounded_summary
+            start=perf_counter();text=load_text(report)
+            if not isinstance(text,str) or not text.strip():raise ValueError('EMPTY_REPORT_TEXT')
+            print('summarizer: grounded extractive summary (no legacy judge or model request)',flush=True)
+            write_new(out/'ollama_release.json',json_bytes({'status':'NOT_USED'}))
+            return {'result_kind':'SUMMARY_ONLY','name':report.name,'model':'grounded-extractive-L1',
+                    'summary':grounded_summary(text),'word_count':len(text.split()),'chunks':1,
+                    'elapsed_s':round(perf_counter()-start,4),'collector_resource_lifecycle':{'ollama_release':'NOT_USED'}}
         from projectiq_summarizer.config import Settings
         from projectiq_summarizer.llm import OllamaClient
         from projectiq_summarizer.loaders import load_text
@@ -139,21 +161,9 @@ def live_sources(submission, *, references: Path|None=None, agents=AGENTS, rubri
         checked=False
         try:
             llm.check();checked=True
-            if summary_only:
-                from time import perf_counter
-                from projectiq_summarizer.summariser import summarise
-                start=perf_counter()
-                text=load_text(report)
-                if not text.strip(): raise ValueError('EMPTY_REPORT_TEXT')
-                print('summarising (summary-only; no legacy judge)',flush=True)
-                summary,n_chunks=summarise(text,llm,s)
-                raw={'result_kind':'SUMMARY_ONLY','name':report.name,'model':s.model,
-                     'summary':summary.model_dump(mode='json'),'word_count':len(text.split()),
-                     'chunks':n_chunks,'elapsed_s':round(perf_counter()-start,1)}
-            else:
-                from projectiq_summarizer.pipeline import evaluate
-                from projectiq_summarizer.rubric import load_rubric
-                raw=evaluate(load_text(report),report.name,llm,s,load_rubric(str(rubric) if rubric else None),progress=print).model_dump(mode='json')
+            from projectiq_summarizer.pipeline import evaluate
+            from projectiq_summarizer.rubric import load_rubric
+            raw=evaluate(load_text(report),report.name,llm,s,load_rubric(str(rubric) if rubric else None),progress=print).model_dump(mode='json')
         finally:
             release=release_ollama_model(llm) if checked else 'RELEASE_NOT_ATTEMPTED'
             print('summarizer: Ollama '+release,flush=True)

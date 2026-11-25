@@ -69,6 +69,9 @@ class SentenceMatch:
     entail_forward: float = -1.0   # P(document sentence implies reference sentence); -1 = not checked
     entail_backward: float = -1.0
     cited: bool = False            # the sentence carries a citation marker
+    # Additional low-threshold retrieval is advisory only. It must not modify
+    # category, primary entailment, chunks, copied words or headline overlap.
+    secondary_review: Optional[dict] = None
 
 
 @dataclass
@@ -178,7 +181,7 @@ def match_sentences(doc: Document, references: Dict[str, Document], settings: In
     positions = {name: {s.text: (k, s) for k, s in enumerate(source_sentences(d))} for name, d in references.items()}
     by_index = {s.index: s for s in doc.sentences}
 
-    matches, to_confirm = [], []
+    matches, to_confirm, secondary = [], [], []
     for r in results:
         sent = by_index.get(r.sentence_index)
         cleaned, _ = remove_quoted(strip_citations(r.paper_text))
@@ -197,7 +200,14 @@ def match_sentences(doc: Document, references: Dict[str, Document], settings: In
             m.category = NEAR
         elif r.embedding_cosine >= settings.paraphrase_candidate_cosine:
             to_confirm.append((m, cleaned))
+        elif (r.embedding_cosine >= settings.secondary_candidate_cosine and r.reference_text
+              and r.embedding_backend == "sentence-transformers"):
+            secondary.append((m,cleaned))
         matches.append(m)
+
+    # Keep primary and experimental candidates on independent code paths.
+    # Do not alter primary NLI batch composition or established categories.
+    secondary.sort(key=lambda row:(-row[0].semantic,row[0].index))
 
     verdicts, nli_backend = _confirm_paraphrases([(c, m.reference_text) for m, c in to_confirm], ria_settings)
     for (m, _), v in zip(to_confirm, verdicts):
@@ -207,8 +217,29 @@ def match_sentences(doc: Document, references: Dict[str, Document], settings: In
         m.entail_forward, m.entail_backward = round(v[0], 3), round(v[1], 3)
         mutual = min(v) >= settings.paraphrase_entailment
         m.category = PARA if mutual else SIMILAR
+    # Secondary NLI results are separately reviewable, not confirmed overlap.
+    # An experimental lookup error must not erase primary comparison results.
+    selected = secondary[:max(0,settings.max_secondary_candidates)]
+    secondary_backend = "not run"
+    for m,_ in secondary:
+        m.secondary_review = {"status": "NOT_REVIEWED_BUDGET", "counted_in_overlap": False}
+    if selected:
+        try:
+            sv, secondary_backend = _confirm_paraphrases([(c,m.reference_text) for m,c in selected], ria_settings)
+            if len(sv) != len(selected):
+                raise ValueError("SECONDARY_NLI_RESULT_COUNT")
+            for (m,_),v in zip(selected,sv):
+                m.secondary_review = {"status": "MODEL_UNAVAILABLE" if v is None else
+                    "MUTUAL_ENTAILMENT_CANDIDATE" if min(v)>=settings.paraphrase_entailment else "NOT_MUTUALLY_ENTAILED",
+                    "counted_in_overlap": False,
+                    "entail_forward": None if v is None else round(v[0],3),
+                    "entail_backward": None if v is None else round(v[1],3)}
+        except Exception as exc:
+            secondary_backend = "review unavailable: " + type(exc).__name__
+            for m,_ in selected:
+                m.secondary_review = {"status":"REVIEW_UNAVAILABLE", "counted_in_overlap":False}
     emb_backend = results[0].embedding_backend if results else "not run"
-    return matches, {"embeddings": emb_backend, "nli": nli_backend}
+    return matches, {"embeddings": emb_backend, "nli": nli_backend, "secondary_nli": secondary_backend}
 
 
 # --------------------------------------------------------------------------- #
@@ -287,11 +318,13 @@ def check_document(document: Path, references_dir: Path, settings: IntegritySett
     by_ref: Dict[str, int] = {}
     for m in copied:
         by_ref[m.reference] = by_ref.get(m.reference, 0) + m.words
-    if backends.get("embeddings") != "sentence-transformers":
+    if refs and backends.get("embeddings") != "sentence-transformers":
         notes.append("MiniLM was not used, so sentences with different words cannot be found. "
                      "Run scripts/setup_offline.py.")
-    if "not neural" in backends.get("nli", "") or "unavailable" in backends.get("nli", ""):
+    if refs and ("not neural" in backends.get("nli", "") or "unavailable" in backends.get("nli", "")):
         notes.append("DeBERTa was not used, so no paraphrase was confirmed or counted.")
+    if refs:
+        notes.append("Secondary semantic candidates are advisory only and excluded from headline overlap, categories and copied chunks. Calibration is required.")
     notes.append("Percentages are shares of the document's words (quoted text and the reference "
                   "list excluded). They measure overlap for review, not misconduct.")
 

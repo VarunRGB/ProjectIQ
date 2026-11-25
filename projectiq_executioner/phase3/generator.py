@@ -280,7 +280,7 @@ def generate_test_plan(manifest: Mapping[str, Any],
     # This creates only a candidate, never an oracle or an approval.
     routes = reconcile_file_methods(manifest, routes)
     # Aggregate repeated server/client mentions for the same target.
-    by_route: dict[tuple[str, str], dict] = {}
+    by_route: dict[tuple[str, str, str], dict] = {}
     for route in routes[:MAX_RECORDS_PER_FIELD]:
         if not isinstance(route, Mapping):
             issues.add("INVALID_ROUTE_RECORD")
@@ -310,7 +310,13 @@ def generate_test_plan(manifest: Mapping[str, Any],
         if path is None:
             issues.add("UNSAFE_OR_UNRESOLVED_ROUTE_SKIPPED")
             continue
-        key = (method, path)
+        # Page requests and client API calls can target different services even
+        # with identical method/path. Keep roles separate; only local client/server
+        # mentions retain the original aggregation. No new external oracle.
+        external_api = any(isinstance(s,Mapping) and s.get("kind")=="external_dependency"
+                           for s in (manifest.get("services") or []))
+        scope = "external_client" if external_api and kind in _CLIENT_ROUTE_KINDS else "local_api"
+        key = (scope, method, path)
         record = by_route.setdefault(key, {"sources": set(), "evidence": []})
         record["sources"].add(kind)
         if route.get("_client_method_hint") is True and kind == "file_endpoint":
@@ -324,12 +330,12 @@ def generate_test_plan(manifest: Mapping[str, Any],
         if valid is None:
             issues.add("OPENAPI_UNSAFE_ROUTE_SKIPPED")
             continue
-        record = by_route.setdefault(("GET", valid), {"sources": set(), "evidence": []})
+        record = by_route.setdefault(("local_api", "GET", valid), {"sources": set(), "evidence": []})
         record["sources"].add("declared_api_contract")
         record["evidence"].append({"source": "repository", "path": contract["file"],
                                   "line": None, "reason": "Declared OpenAPI GET/200 response"})
 
-    for (method, path), record in sorted(by_route.items()):
+    for (scope, method, path), record in sorted(by_route.items()):
         kinds = record["sources"]
         has_server = bool(kinds & _SERVER_ROUTE_KINDS)
         is_page = bool(kinds & _PAGE_ROUTE_KINDS) and not has_server
@@ -347,7 +353,7 @@ def generate_test_plan(manifest: Mapping[str, Any],
             blockers.append("SUPPORTED_PHASE2_ADAPTER_NOT_ESTABLISHED")
         elif category == "UI_PAGE" and adapter not in {"static_html_v1", "node_vite_offline_v1", "node_fullstack_offline_v1", "php_mysql_v1", "python_web_offline_v1"}:
             blockers.append("PAGE_RUNNER_NOT_ESTABLISHED")
-        contract = contract_by_path.get(path) if method == "GET" else None
+        contract = contract_by_path.get(path) if method == "GET" and scope=="local_api" else None
         oracle_allowed = bool(contract and contract["assertable"] and has_server
                               and not _unbound(path) and adapter)
         assertions = ([{"kind": "HTTP_STATUS_EQUALS", "expected": 200}]
@@ -371,7 +377,7 @@ def generate_test_plan(manifest: Mapping[str, Any],
         # Do not count readiness and a route declaration for the same GET
         # endpoint as two independent test cases. Preserve all evidence.
         readiness_key = ("HTTP_READINESS", "GET", path)
-        if method == "GET" and readiness_key in cases:
+        if method == "GET" and readiness_key in cases and scope!="external_client" and (has_server or is_page):
             ready = cases[readiness_key]
             merged = {(x["source"], x["path"], x["line"], x["reason"]): x
                       for x in ready["evidence"] + case["evidence"]}
@@ -382,7 +388,12 @@ def generate_test_plan(manifest: Mapping[str, Any],
             # Its missing inputs/oracle are not blockers for an independent
             # trusted readiness assertion.
             continue
-        register((category, method, path), case)
+        if scope=="external_client":
+            case["id"] = _identifier("EXTERNAL_CLIENT:"+category, method, path)
+            case["blockers"] = sorted(set(case["blockers"] + ["EXTERNAL_SERVICE_ORIGIN_NOT_VERIFIED"]))
+            register((category+":external_client", method, path), case)
+        else:
+            register((category, method, path), case)
 
     # Non-test metadata is still available to faculty, but must not inflate
     # test counts. Keep discovered artifacts in separate, bounded inventories.

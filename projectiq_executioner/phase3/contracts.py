@@ -151,7 +151,14 @@ def validate_test_plan(plan: Mapping[str, Any]) -> None:
             if (not _http_path(path) or (method is not None and method not in _METHODS)
                     or label is not None):
                 _fail('Unsafe or malformed HTTP test target')
-            marker = (method, path)
+            # A separate unresolved external-service observation is not a second
+            # runnable local HTTP target. Keep strict local duplicate rejection.
+            external = 'EXTERNAL_SERVICE_ORIGIN_NOT_VERIFIED' in blockers
+            if external and (category != 'HTTP_ROUTE' or case['status'] != 'NEEDS_ORACLE'
+                    or assertions or 'SERVER_ROUTE_NOT_VERIFIED' not in blockers
+                    or oracle.get('status') != 'NOT_ESTABLISHED'):
+                _fail('External service target must remain advisory')
+            marker = ('external_advisory' if external else 'local', method, path)
             if marker in http_targets:
                 _fail('Duplicate HTTP target across scenarios')
             http_targets.add(marker)

@@ -75,6 +75,10 @@ def build_research_report(extraction: ResearchExtraction, summary: RecencySummar
     if summary.possible_version_groups:
         findings.append("Some publications have matching resolved titles but different publication records; potential versions were left separate for review.")
 
+    if getattr(summary,"unresolved_citation_mention_count",0) and not refs:
+        findings.append("In-text citations were detected without extracted bibliography entries; citation identities require review.")
+    if summary.distinct_references:
+        findings.append(f"Confirmed publication-year coverage: {summary.reliable_year_count} of {summary.distinct_references} distinct references.")
     attention = []
     reference_overview = []
     for i, paper in enumerate(refs):
@@ -93,6 +97,8 @@ def build_research_report(extraction: ResearchExtraction, summary: RecencySummar
             "year_source": getattr(recency, "year_source", "unknown"),
             "age_band": getattr(recency, "age_band", "unknown"),
             "cited_in_literature_review": getattr(recency, "literature_review_cited", False),
+            "citation_context_linked": bool(getattr(r,"citation_lines",[])),
+            "supporting_engineering_connection": bool(getattr(r,"explanation","").startswith("Verified source and citation-independent report methodology share")),
         })
         reasons = []
         if status == "metadata_mismatch":
@@ -105,6 +111,8 @@ def build_research_report(extraction: ResearchExtraction, summary: RecencySummar
             reasons.append("Academic metadata needs manual review")
         if classification == "possibly_unrelated":
             reasons.append("May not substantively support the report topic or methods")
+        elif classification == "insufficient_evidence":
+            reasons.append("Relevance remains uncertain; inspect independent source metadata and citation context")
         if recency and recency.year_conflict:
             reasons.append(
                 f"Submitted publication year {recency.submitted_year} conflicts with resolved year "

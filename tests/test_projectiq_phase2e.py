@@ -54,7 +54,7 @@ def cited_research_fixture():
     # Synthetic full native shape; these sources are test records, not real papers.
     raw=raw_fixture()['research'];r=raw['research_report'];p=r['phase_1']
     p.update(reference_entries=1,references_found=True,literature_review_found=True,document_citation_mentions=1,literature_review_citation_mentions=1,reference_match_records=1,matched_reference_entries=1,hyperlinks_found=0)
-    r['reference_overview']=[{'reference_number':1,'title':'Task Systems Study','verification_status':'not_checked','relevance_classification':'methodologically_relevant','confidence':'medium','publication_year':2020,'year_source':'submitted_unverified','cited_in_literature_review':True}]
+    r['reference_overview']=[{'reference_number':1,'title':'Task Systems Study','verification_status':'verified','relevance_classification':'methodologically_relevant','confidence':'medium','publication_year':2020,'year_source':'submitted_unverified','cited_in_literature_review':True}]
     raw.update(papers=[{'title':'Task Systems Study'}],hyperlinks=[],document_citations=[{'text':'[1]'}],literature_citations=[{'text':'[1]'}],citation_reference_matches=[{'reference_number':1}],notes=[])
     return raw
 
@@ -184,22 +184,22 @@ class Workflow(unittest.TestCase):
         for m in (self.integrity,self.research,self.executioner,self.summary,self.legacy):m.assert_not_called()
     def test_fresh_default_runs_summary_integrity_executioner_and_rubric(self):
         self.assertEqual(self.live('new'),0);r=read(self.root/'new/result.json')
-        self.integrity.assert_called_once();self.executioner.assert_called_once();self.research.assert_not_called();self.summary.assert_called_once();self.legacy.assert_not_called()
+        self.integrity.assert_called_once();self.executioner.assert_called_once();self.research.assert_not_called();self.summary.assert_not_called();self.legacy.assert_not_called()
         self.assertEqual(self.executioner.call_args.args[0]['mode'],'STATIC');self.assertEqual(self.executioner.call_args.args[0]['max_vm_launches'],0)
-        self.assertGreater(self.llm.chat_json.call_count,0);self.assertEqual(self.llm.check.call_count,2);self.assertEqual(self.release.call_count,2)
+        self.assertGreater(self.llm.chat_json.call_count,0);self.assertEqual(self.llm.check.call_count,1);self.assertEqual(self.release.call_count,1)
         self.assertEqual(r['agents']['summarizer']['status'],'COMPLETED');self.assertEqual(r['agents']['research']['status'],'NOT_RUN');self.assertIn('functional_validation',r['assessment']['unresolved_criterion_ids']);self.assertIsNone(r['assessment']['proposed_points']);self.assertFalse(r['legacy_judge_executed'])
         self.assertEqual(r['workflow_status'],'INCOMPLETE_ASSESSMENT')
     def test_fresh_research_checkbox_enabled(self):
         self.assertEqual(self.live('new',configure_rubric(default(),research_required=True)),0)
-        self.research.assert_called_once();self.summary.assert_called_once();self.legacy.assert_not_called();r=read(self.root/'new/result.json')
+        self.research.assert_called_once();self.summary.assert_not_called();self.legacy.assert_not_called();r=read(self.root/'new/result.json')
         self.assertTrue(r['research_required']);self.assertEqual(r['agents']['research']['evidence_check'],'MATCHED')
         c=next(c for c in r['assessment']['criteria'] if c['id']=='research');self.assertEqual(c['status'],'PROPOSED')
         self.assertEqual({e['kind'] for e in c['evidence_details']},{'REPORT_EXCERPT','RESEARCH_RECORD'})
     def test_mandatory_summary_only_never_legacy(self):
-        summary=Mock();summary.model_dump.return_value={'summary':'Demo summary','key_points':['Task management']};self.summary.return_value=(summary,1)
         self.assertEqual(self.live('new',objective_only=True),0)
-        self.summary.assert_called_once();self.legacy.assert_not_called();self.llm.chat_json.assert_not_called();r=read(self.root/'new/result.json')
-        self.assertEqual(r['agents']['summarizer']['native_status'],'SUMMARY_GENERATED');self.assertEqual(r['agents']['summarizer']['details']['summary']['summary'],'Demo summary')
+        self.summary.assert_not_called();self.legacy.assert_not_called();self.llm.chat_json.assert_not_called();r=read(self.root/'new/result.json')
+        self.assertEqual(r['agents']['summarizer']['native_status'],'SUMMARY_GENERATED');self.assertEqual(r['agents']['summarizer']['details']['summary_display_method'],'EXTRACTIVE_REPORT_CLAIMS')
+        self.assertEqual(r['agents']['summarizer']['details']['model'],'grounded-extractive-L1')
     def test_saved_reviewed_full_hybrid_one_command(self):
         src=self.saved();self.assertEqual(evaluate(out=self.root/'new',rubric=load(),evaluation=src,acknowledge_imported=True),0)
         self.assert_no_agents();r=read(self.root/'new/result.json');self.assertEqual(r['assessment']['assessed_weight_percent'],100);self.assertEqual(r['workflow_status'],'COMPLETE');self.assertEqual(self.llm.chat_json.call_count,2)
@@ -272,10 +272,10 @@ class Workflow(unittest.TestCase):
         for fn,name in ((main,'core'),(phase2_main,'phase2')):
             rc=fn(['collect','--report',str(self.report),'--title','Demo','--submission-id','demo','--repo','https://github.com/example/project','--ref',SHA,'--out',str(self.root/name)])
             self.assertEqual(rc,0);ev=read(self.root/name/'evaluation.json');self.assertEqual(ev['agents']['summarizer']['status'],'COMPLETED');self.assertEqual(ev['agents']['research']['status'],'NOT_RUN')
-        self.assertEqual(self.summary.call_count,2);self.legacy.assert_not_called();self.assertEqual(self.llm.check.call_count,2);self.research.assert_not_called()
+        self.summary.assert_not_called();self.legacy.assert_not_called();self.llm.check.assert_not_called();self.research.assert_not_called()
     def test_fresh_preview_still_produces_summary_without_rubric_inference(self):
         self.assertEqual(self.live('new',preview=True),0)
-        self.summary.assert_called_once();self.legacy.assert_not_called();self.llm.chat_json.assert_not_called()
+        self.summary.assert_not_called();self.legacy.assert_not_called();self.llm.chat_json.assert_not_called()
         r=read(self.root/'new/result.json');self.assertEqual(r['agents']['summarizer']['status'],'COMPLETED');self.assertEqual(r['rubric_mode'],'PREVIEW')
     def test_saved_missing_summary_stays_unavailable_no_hidden_inference(self):
         src=self.saved(legacy=False)
@@ -283,8 +283,8 @@ class Workflow(unittest.TestCase):
         self.assert_no_agents();self.llm.check.assert_not_called();r=read(self.root/'new/result.json')
         self.assertEqual(r['agent_actions']['summarizer'],'NOT_AVAILABLE');self.assertEqual(r['agents']['summarizer']['status'],'NOT_RUN')
     def test_summary_failure_preserves_other_agent_evidence(self):
-        self.summary.side_effect=RuntimeError('summary unavailable')
-        self.assertEqual(self.live('new',objective_only=True),2)
+        with patch('projectiq_core.phase2.hardening.grounded_summary',side_effect=RuntimeError('summary unavailable')):
+            self.assertEqual(self.live('new',objective_only=True),2)
         r=read(self.root/'new/result.json');self.assertEqual(r['workflow_status'],'PARTIAL_ERROR');self.assertIn('summarizer',r['agent_failures']);self.assertEqual(r['agents']['executioner']['evidence_check'],'MATCHED');self.legacy.assert_not_called()
     def test_legacy_cli_flag_rejected_before_agents(self):
         rc=main(['collect','--report',str(self.report),'--title','Demo','--submission-id','demo','--samples','1','--out',str(self.root/'new')]);self.assertEqual(rc,1);self.assert_no_agents()

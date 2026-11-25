@@ -50,6 +50,9 @@ def main(argv=None):
         r=collect(submission=submission,report_bytes=data,out=args.out,mode=mode,sources=funcs)
         print('Evaluation:',args.out/'evaluation.json')
         return 2 if any(a.status=='FAILED' for a in r.agents.values()) else 0
+    except KeyboardInterrupt:
+        print('Workflow cancelled; completed artifacts retained. Use a new output path for recovery.',file=sys.stderr,flush=True)
+        return 130
     except (ValueError,OSError,RuntimeError,ImportError) as exc:
         msg=str(exc)
         print('Workflow failed:',msg if msg.isupper() and len(msg)<160 else type(exc).__name__,file=sys.stderr);return 1

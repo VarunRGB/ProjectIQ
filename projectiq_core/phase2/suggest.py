@@ -2,6 +2,8 @@
 from __future__ import annotations
 import json
 import re
+import threading
+from time import monotonic
 from collections import defaultdict
 from typing import Literal
 from pydantic import Field, create_model
@@ -10,6 +12,7 @@ from .contracts import Decision, DecisionSet, Feedback
 from .intelligence import select_candidates, prompt_item, runtime_summary, focus
 from .scoring import assess, empty_decisions
 from .research_policy import is_research, research_state, research_record, required_kinds, ABSENT, PRESENT
+from . import hardening
 
 
 class Suggestion(StrictModel):
@@ -132,6 +135,11 @@ def prepare(bundle, rubric, *, criterion_ids=None, existing=None, max_chars=1800
     if len(wanted)>12: raise ValueError('SELECT_AT_MOST_12_CRITERIA_PER_MODEL_CALL')
     request=[]; selected={}; deferred={}; shared={}; aliases={}; diagnostics={}
     for c in wanted:
+        policy_error=hardening.prerequisite(bundle,c)
+        if policy_error:
+            deferred[c.id]=_defer(c.id,policy_error+'; teacher review required.')
+            diagnostics[c.id]={'code':policy_error,'eligible_count':0}
+            continue
         if is_research(c) and research_state(bundle)!=PRESENT:
             deferred[c.id]=_defer(c.id,'Native research evidence inconclusive or unavailable; no model judgment attempted.')
             diagnostics[c.id]={'code':'RESEARCH_NATIVE_EVIDENCE_UNAVAILABLE','eligible_count':0}
@@ -151,7 +159,7 @@ def prepare(bundle, rubric, *, criterion_ids=None, existing=None, max_chars=1800
             candidate_aliases.append(aliases[e.id])
         # Weights and marks play no role in deciding an achievement level.
         request.append({'criterion_alias':f'C{len(request)+1}','criterion_id':c.id,'description':c.title+': '+c.description,
-            'levels':{f'L{i+1}':l.label+': '+l.descriptor for i,l in enumerate(c.levels) if not l.requires_failed_observation or any(e.kind=='TEST_OBSERVATION' and e.data.get('outcome')=='FAILED' for e in best)},'minimum_evidence':c.minimum_evidence,
+            'levels':{f'L{i+1}':l.label+': '+l.descriptor for i,l in enumerate(c.levels) if (not l.requires_failed_observation or any(e.kind=='TEST_OBSERVATION' and e.data.get('outcome')=='FAILED' for e in best)) and not (hardening.active(bundle) and focus(c)=='FUNCTIONAL' and l.fraction>=.75 and not bundle.observations.get('executioner',{}).get('requirements_mapping_verified',False))},'minimum_evidence':c.minimum_evidence,
             'required_evidence':required,'candidate_evidence_ids':candidate_aliases,'feedback_required':c.feedback_required})
         try:request[-1]['evidence_slots']=evidence_slots(list(zip(candidate_aliases,best)),required,c.minimum_evidence)
         except ValueError:
@@ -159,11 +167,32 @@ def prepare(bundle, rubric, *, criterion_ids=None, existing=None, max_chars=1800
             deferred[c.id]=_defer(c.id,'Distinct required source coverage unavailable; no model judgment attempted.')
             diagnostics[c.id]={'code':'PRECHECK_COVERAGE_UNAVAILABLE','eligible_count':len(allowed)}
             continue
+        if hardening.active(bundle) and focus(c)=='FUNCTIONAL':
+            groups=defaultdict(list)
+            for alias,e in zip(candidate_aliases,best):
+                if e.kind=='TEST_OBSERVATION':groups[str(e.data.get('suite') or e.data.get('category'))].append(alias)
+            if groups and len(groups)<=20:
+                slots=request[-1]['evidence_slots']
+                slots.pop('TEST_OBSERVATION',None)
+                for i,values in enumerate(groups.values()):slots['RUNTIME_SCOPE_'+str(i+1)]=values
+                # A scope slot can overlap other existing slots; enforce unique
+                # refs and minimum evidence in final deterministic validation.
         if recovery_codes and c.id in recovery_codes:request[-1]['previous_validation_error']=recovery_codes[c.id]
         if is_research(c):
             request[-1]['description']+=' Grade ONLY use of research/technical sources and citation integration; never project functionality. Cite actual native reference records. Unverified metadata or older sources are not automatically invalid.'
             request[-1]['research_inventory']=research_record(bundle).data
         if focus(c)=='FUNCTIONAL':request[-1]['runtime_inventory']=runtime_summary(bundle)
+        if hardening.active(bundle):
+            facts=hardening.report_facts(hardening.report_items(bundle))
+            request[-1]['verified_report_signals']={k:[aliases[eid] for eid in v if eid in aliases] for k,v in facts.items()}
+            if is_research(c):
+                request[-1]['description']+=' Do not require replication unless the teacher explicitly does; distinguish metadata, relevance, and use. A verified, linked supporting-engineering source can justify bounded credit even if its main research task differs. Do not claim direct relevance or full claim verification.'
+                research_facts=hardening.research_facts(bundle) or {}
+                request[-1]['verified_support_aliases']=[aliases[eid] for eid in research_facts.get('positive_verified_ids',[]) if eid in aliases]
+            if focus(c)=='FUNCTIONAL':request[-1]['description']+=' Cite at least one decisive observation from every available suite; include any observed failure; never infer full requirements coverage. Never claim an observed failure if failed count is zero.'
+            if focus(c)=='TEST_STRATEGY':
+                if facts['negative_checks']:request[-1]['description']+=' Negative scenarios ARE documented. Do not say they are absent; identify specific missing coverage or reproducibility instead.'
+                if facts['limitations']:request[-1]['description']+=' Limitations ARE documented. Do not say they are absent; identify a specific additional limitation if needed.'
         diagnostics[c.id]={'code':'PREPARED','eligible_count':len(allowed),'candidate_aliases':candidate_aliases}
     used_aliases={a for c in request for a in c['candidate_evidence_ids']}
     shared={a:e for a,e in shared.items() if a in used_aliases}
@@ -197,7 +226,15 @@ def propose(bundle,rubric,llm,*,criterion_ids=None,existing=None,max_chars=18000
     if preview:return original
     if selected:
         progress('Rubric: requesting local model; response is non-streaming.')
-        wire=llm.chat_json(SYSTEM+(' Correct the specified previous validation error; choose supporting references without inventing facts.' if recovery_codes else ''),prompt,schema,temperature=0.0,seed=seed)
+        stop=threading.Event();started=monotonic()
+        def heartbeat():
+            while not stop.wait(15):
+                progress(f'Rubric: local inference active ({int(monotonic()-started)}s elapsed; completion unknown).')
+        worker=threading.Thread(target=heartbeat,daemon=True);worker.start()
+        try:
+            wire=llm.chat_json(SYSTEM+(' Correct the specified previous validation error; choose supporting references without inventing facts.' if recovery_codes else ''),prompt,schema,temperature=0.0,seed=seed)
+        finally:
+            stop.set();worker.join()
         log['model_response']=wire.model_dump(mode='json')
         response=decode_response(wire,request,level_map)
         log['decoded_response']=response.model_dump(mode='json')
@@ -246,7 +283,7 @@ _RECOVERABLE=frozenset({'MISSING_MODEL_DECISION','DUPLICATE_MODEL_DECISION','EVI
     'DUPLICATE_EVIDENCE_REFERENCE','MISSING_RUBRIC_LEVEL','UNKNOWN_RUBRIC_LEVEL','SCORE_REQUIRES_EVIDENCE',
     'INVALID_DEFER_SHAPE','INVALID_DECISION_CONTRACT','EVIDENCE_COVERAGE_NOT_MET','DUPLICATE_SOURCE_COVERAGE',
     'STRUCTURED_FEEDBACK_REQUIRED','MINOR_FINDINGS_ONLY','UNSUPPORTED_OBSERVED_FAILURE','UNSUPPORTED_QUOTATION',
-    'UNSUPPORTED_RUNTIME_EXPLOIT_CLAIM','EMPTY_STRUCTURED_FEEDBACK','AMBIGUOUS_RUNTIME_EVIDENCE','RESEARCH_REFERENCE_EVIDENCE_REQUIRED','RESEARCH_REPORT_EVIDENCE_IRRELEVANT','RESEARCH_FEEDBACK_OFF_TOPIC'})
+    'UNSUPPORTED_RUNTIME_EXPLOIT_CLAIM','EMPTY_STRUCTURED_FEEDBACK','AMBIGUOUS_RUNTIME_EVIDENCE','RESEARCH_REFERENCE_EVIDENCE_REQUIRED','RESEARCH_REPORT_EVIDENCE_IRRELEVANT','RESEARCH_FEEDBACK_OFF_TOPIC','DESIGN_CITATION_NOT_SUBSTANTIVE','TEST_PLAN_CITATION_REQUIRED','NEGATIVE_CHECK_CONTRADICTION','LIMITATION_CONTRADICTION','TEST_STRATEGY_CONTRADICTION','IMPLEMENTATION_QUALITY_CITATION_REQUIRED','RUNTIME_SCOPE_NOT_REPRESENTED','MATERIAL_RUNTIME_FAILURE_NOT_CITED','REQUIREMENTS_MAPPING_NOT_ESTABLISHED','VERIFIED_RELEVANT_SOURCE_CITATION_REQUIRED','LITERATURE_REVIEW_CONTRADICTION','UNSPECIFIED_REPLICATION_REQUIREMENT','SCOPE_PENALTY_NOT_IN_RUBRIC','UNSPECIFIED_MISSING_COMPONENTS'})
 
 
 def recover_rejected(bundle,rubric,llm,decisions,log,*,max_chars=18000,seed=42,progress=lambda _:None):

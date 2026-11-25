@@ -59,6 +59,7 @@ def runtime_summary(bundle):
     for e in items.values():groups[str(e.data.get('suite') or e.data.get('category') or 'unknown')][e.data['outcome']]+=1
     return {'by_scope':by_scope,'scenario_groups':{k:dict(v) for k,v in sorted(groups.items())},'ambiguous_keys':ambiguous,'overlapping_keys':overlaps,
             'planned_counts':bundle.observations.get('executioner',{}).get('planned_counts'),
+            **({'planned_counts_scope':'NATIVE_REPORTED_NOT_ELIGIBILITY','unavailable_suites':bundle.observations.get('executioner',{}).get('unavailable_suites',[]),'readiness_passes_eligible':sum(e.kind=='TEST_PLAN' and e.data.get('scope')=='READINESS_ONLY' and e.data.get('reported_outcome')=='PASSED' and e.provenance!='IMPORTED_UNCONFIRMED' for e in bundle.items)} if bundle.observations.get('evaluation_policy') else {}),
             'requirements_coverage':None,'limitations':['Counts describe eligible scoped observations only; exact and reviewed scopes must not be summed as independent tests.','No agreed requirements mapping is implied. Untested does not mean failed.']}
 
 def severity(e):return _SEVERITY.get(str(e.data.get('severity','')).upper(),-1)
@@ -78,6 +79,8 @@ def select_candidates(bundle,c):
     if f=='FUNCTIONAL':
         inventory,_,_=runtime_inventory(bundle);valid={e.id for e in inventory.values()}
         allowed=[e for e in allowed if e.kind!='TEST_OBSERVATION' or e.id in valid]
+    from .hardening import candidate_filter
+    allowed=candidate_filter(bundle,c,allowed)
     terms=tokens(c.title+' '+c.description);hints=_SECTION_HINTS.get(f,())
     def rank(e):
         section=str(e.data.get('section','')).lower();relevance=len(terms & tokens(e.label+' '+e.text));heading=sum(h in section for h in hints)
@@ -228,7 +231,8 @@ def intelligence_report(bundle):
         if code and e.eligible_for_review:findings[code].append(e)
     integrity=bundle.observations.get('integrity',{})
     advisory={k:integrity[k] for k in ('comparison_status','reference_overlap','references_compared','words_checked','advisory_only') if k in integrity}
-    return {'research':bundle.observations.get('research',{}).get('assessment'), 'integrity_advisory':advisory, 'runtime':runtime_summary(bundle),'runtime_observations':[{'key':k,'evidence_id':e.id,'outcome':e.data['outcome'],'details':e.data} for k,e in sorted(inventory.items())],
+    from .hardening import active,report_facts,report_items,research_facts
+    return {**({'evaluation_policy':bundle.observations['evaluation_policy'],'report_signals':report_facts(report_items(bundle)),'research_facts':research_facts(bundle),'source_analysis':bundle.observations.get('executioner',{}).get('source_analysis')} if active(bundle) else {}),'research':bundle.observations.get('research',{}).get('assessment'), 'integrity_advisory':advisory, 'runtime':runtime_summary(bundle),'runtime_observations':[{'key':k,'evidence_id':e.id,'outcome':e.data['outcome'],'details':e.data} for k,e in sorted(inventory.items())],
         'static_finding_groups':[{'code':k,'instances':len(es),'native_severities':sorted({str(e.data.get('severity') or 'UNSPECIFIED') for e in es}),'evidence_ids':[e.id for e in es]} for k,es in sorted(findings.items())],
         'limitations':['Static findings are not confirmed vulnerabilities; severity prioritizes review rather than directly deducting marks.','Report text extraction may omit figures or tables.']}
 

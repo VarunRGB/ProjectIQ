@@ -46,7 +46,7 @@ def extraction_usable(report,text,extraction):
     return True
 
 
-def normalize_research(raw,report,text,extraction,repo):
+def normalize_research(raw,report,text,extraction,repo,*,legacy_l=False):
     r=raw['research_report'];p=r['phase_1'];v=r['phase_2'];rel=r['phase_3'];rec=r['phase_4']
     n=p.get('reference_entries');overview=r.get('reference_overview');papers=raw.get('papers');links=raw.get('hyperlinks')
     def count(x):return type(x) is int and x>=0
@@ -74,7 +74,19 @@ def normalize_research(raw,report,text,extraction,repo):
     recency=pick(rec,('recency_assessment','distinct_references','duplicate_reference_count','reliable_publication_year_count','recent_reliable_percent','verified_direct_count','verified_direct_recent_count','literature_review_reliable_count','literature_review_recent_percent'))
     if not count(rec.get('reliable_publication_year_count')) or rec['reliable_publication_year_count']==0:recency['recent_reliable_percent']=None
     if not count(rec.get('literature_review_reliable_count')) or rec['literature_review_reliable_count']==0:recency['literature_review_recent_percent']=None
-    return {'state':state,'reason':reason,'text_extraction_usable':usable,
+    diagnostics={}
+    if not legacy_l:
+        attention=[]
+        if usable and complete:
+            if p['document_citation_mentions'] and not n:attention.append('CITATIONS_WITHOUT_BIBLIOGRAPHY')
+            if n and not p['matched_reference_entries']:attention.append('BIBLIOGRAPHY_NOT_LINKED_TO_IN_TEXT_CITATIONS')
+            if state==UNKNOWN and n==0 and any(isinstance(x,dict) and not same_repo(x.get('url'),repo) for x in links or []):
+                attention.append('UNRESOLVED_SOURCE_LINK_OR_REPOSITORY_CONTEXT')
+                reason='Source-like links could not be associated with the supplied project repository; automatic absence cannot be established.'
+            if any(isinstance(x,dict) and x.get('verification_status')=='metadata_mismatch' for x in overview or []):attention.append('REFERENCE_METADATA_CONFLICT')
+            if any(isinstance(x,dict) and x.get('relevance_classification') in ('insufficient_evidence','possibly_unrelated') for x in overview or []):attention.append('REFERENCE_RELEVANCE_UNCERTAIN')
+        diagnostics={'attention_codes':attention,'citation_linkage':{'matched_reference_entries':p.get('matched_reference_entries'),'reference_entries':n},'recency_denominator':{'reliable_years':rec.get('reliable_publication_year_count'),'distinct_references':rec.get('distinct_references')}}
+    return {'state':state,'reason':reason,'text_extraction_usable':usable,**diagnostics,
             'phase_1':pick(p,fields+('references_found','literature_review_found')),
             'verification':pick(v,('checked_references','status_counts')),
             'relevance':pick(rel,('assessed_references','classification_counts')),

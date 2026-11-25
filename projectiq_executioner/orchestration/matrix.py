@@ -84,7 +84,8 @@ def build_test_case_matrix(plan: Mapping[str, Any] | None,
                     aggregate=[x for x in suite.get('observations',[]) if x.get('id') in ('WORKFLOW','CRUD_WORKFLOW')]
                     if len(aggregate)==1:
                         verdict,_=_check_result(aggregate[0],suite)
-                        workflow_related[spec['phase3_test_id']].append({'suite':suite.get('kind'),'check_id':aggregate[0]['id'],'outcome':verdict,'scope':'AGGREGATE_WORKFLOW_ONLY'})
+                        link={'suite':suite.get('kind'),'check_id':aggregate[0]['id'],'outcome':verdict,'scope':'AGGREGATE_WORKFLOW_ONLY'}
+                        if link not in workflow_related[spec['phase3_test_id']]:workflow_related[spec['phase3_test_id']].append(link)
     dropped = 0
     for suite in suites:
         if type(suite) is not dict:
@@ -119,7 +120,8 @@ def build_test_case_matrix(plan: Mapping[str, Any] | None,
             additional.append({'suite': suite.get('kind'), 'check_id': ident, 'phase3_test_id':parent,
                                'outcome': outcome, 'reason': reason,
                                'evidence': [evidence],
-                               'scope': 'REVIEWED_CHECK_NOT_LINKED_TO_PHASE3_CASE'})
+                               'scope': 'REVIEWED_CHECK_NOT_LINKED_TO_PHASE3_CASE',
+                               'association_scope': 'RELATED_SCENARIO_NOT_EXACT_ASSERTION' if parent else 'NO_APPROVED_PHASE3_ASSOCIATION'})
     discovered = []
     for case in cases:
         if type(case) is not dict:
@@ -175,7 +177,7 @@ def build_test_case_matrix(plan: Mapping[str, Any] | None,
         'limitations': [
             'A readiness PASS verifies only its explicit readiness assertion.',
             'NOT_TESTED is not a failing grade; BLOCKED is not a student defect.',
-            'Reviewed checks are not linked to planned cases without exact matching test IDs.',
+            'Reviewed checks may have approved scenario associations; only exact matching test IDs establish planned-case assertion outcomes.',
             'Only independently VM-verified, saved observations can establish an executed test outcome.',
             'An approved test oracle may still be incorrect; failed assertions do not establish student fault.',
         ],

@@ -34,6 +34,10 @@ class IntegritySettings:
     burstiness_ai_max: float = 0.45
     perplexity_model: str = "distilgpt2"   # folder name in models/
     max_sentences_scored: int = 120
+    # Secondary NLI candidate retrieval is provisional, not a copying threshold.
+    # Bound extra work; mutual entailment is still mandatory for counting.
+    secondary_candidate_cosine: float = 0.45
+    max_secondary_candidates: int = 60
 
 
 DEFAULT = IntegritySettings()

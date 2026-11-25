@@ -388,8 +388,12 @@ def _suite_fingerprint(kind: str, catalogs: dict) -> str:
 
 
 def _reuse_suite(prior:dict|None, kind:str, fingerprint:str, out:Path, source:dict,
-                 adapter:str) -> tuple[dict|None,dict|None]:
-    if not prior or prior.get('status')=='SECURITY_HOLD':return None,None
+                 adapter:str, refusal:list[str]|None=None) -> tuple[dict|None,dict|None]:
+    def refused(code):
+        if refusal is not None:refusal.append(code)
+        return None,None
+    if not prior:return refused('PRIOR_RESULT_MISSING')
+    if prior.get('status')=='SECURITY_HOLD':return refused('PRIOR_SECURITY_HOLD')
     base=Path(prior['_result_path']).parent
     meta=prior.get('artifacts',{})
     for ent in prior.get('suites',[]):
@@ -399,13 +403,13 @@ def _reuse_suite(prior:dict|None, kind:str, fingerprint:str, out:Path, source:di
             continue
         prefix='phase4/'+kind+'/'
         files={p:v for p,v in meta.items() if p.startswith(prefix)}
-        if not files:return None,None
+        if not files:return refused('PRIOR_SUITE_RECEIPTS_MISSING')
         for rel,receipt in files.items():
-            if not rel.startswith(prefix) or type(receipt) is not dict:return None,None
+            if not rel.startswith(prefix) or type(receipt) is not dict:return refused('PRIOR_SUITE_RECEIPT_INVALID')
             src=base.joinpath(*rel.split('/'))
             try:
-                if _digest_file(src,base)!=receipt:return None,None
-            except (OrchestrationError,OSError):return None,None
+                if _digest_file(src,base)!=receipt:return refused('PRIOR_SUITE_RECEIPT_MISMATCH')
+            except (OrchestrationError,OSError):return refused('PRIOR_SUITE_ARTIFACT_UNAVAILABLE_OR_UNSAFE')
         directory=out/'phase4'/kind
         directory.mkdir(parents=True,exist_ok=True)
         for rel in sorted(files):
@@ -422,7 +426,7 @@ def _reuse_suite(prior:dict|None, kind:str, fingerprint:str, out:Path, source:di
                 or vm.get('execution')!=EXECUTED or vm.get('cleanup')!=CLEAN):
             reject('REUSED_RUN_EVIDENCE_INVALID')
         return report,vm
-    return None,None
+    return refused('PRIOR_SUITE_IDENTITY_OR_STATE_NOT_ELIGIBLE')
 
 
 def evaluate(request: Mapping[str,Any], *, output_dir:Path,
@@ -692,17 +696,23 @@ def _run_reviewed(req:dict,op:OperatorContext,out:Path,result:dict,
             continue
         dir=out/'phase4'/kind
         try:
-            restored_vm=None; reused=False
+            restored_vm=None; reused=False; reuse_refusal=None
             if req['mode']=='RESUME':
                 # Reuse is a zero-VM operation. Validate exact fingerprint,
                 # report hashes, source, and guest proof BEFORE spending budget.
-                report,restored_vm=_reuse_suite(prior,kind,item['fingerprint'],out,source,candidate['adapter'])
+                refusal_codes=[]
+                report,restored_vm=_reuse_suite(prior,kind,item['fingerprint'],out,source,candidate['adapter'],refusal_codes)
                 reused=report is not None
+                if not reused:
+                    # Explicitly separate failed reuse eligibility from VM budget.
+                    # The detailed cause is not necessarily digest corruption.
+                    reuse_refusal=refusal_codes[0] if refusal_codes else 'PRIOR_SUITE_NOT_REUSABLE'
+                    _limit(result,reuse_refusal)
             else:report=None
             if not reused:
                 if cost+VM_COST[kind]>req['max_vm_launches']:
                     result['suites'].append({'kind':kind,'state':'BLOCKED',
-                        'reason':'VM_ATTEMPT_BUDGET','fingerprint':item['fingerprint'],
+                        'reason':'VM_ATTEMPT_BUDGET','reuse_refusal':reuse_refusal,'fingerprint':item['fingerprint'],
                         'approved_scenario_links':item.get('scenario_links',[]),
                         'vm_verified':False})
                     _limit(result,'VM_BUDGET_EXHAUSTED')

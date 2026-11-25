@@ -689,6 +689,26 @@ def assess_relevance(
             method_evidence_strength=method_strength, same_task_family=shared_task,
         )
 
+        # Supporting engineering literature need not reproduce the report's
+        # main research task. Only citation-independent report passages and
+        # accepted source metadata may establish a bounded technical connection.
+        # This is partial relevance, not proof of method adoption or claim support.
+        # Only report body outside bibliography/literature and citation-bearing
+        # sentences can independently establish a shared engineering concern.
+        from .engineering_support import supporting_concerns
+        # Independent support is computed over eligible report-body sections.
+        source_text = (title or "") + " " + (abstract or "")
+        # Shared engineering taxonomy lives in engineering_support.py.
+        shared_support = supporting_concerns(document, extraction, source_text,
+                                             evidence.citation_claims.get(index, []))
+        if (status == "verified" and accepted and abstract and shared_support and contexts
+                and label in {"insufficient_evidence", "possibly_unrelated"}):
+            label = "partially_relevant"
+            explanation = ("Verified source and citation-independent report methodology share a technical engineering concern. "
+                           "Shared concerns: " + ", ".join(shared_support) + ". "
+                           "This is a possible supporting source, not direct research relevance or confirmed method adoption. "
+                           "A citation context is linked; review its precise claim.")
+
         if not accepted and not abstract and label in {"directly_relevant", "methodologically_relevant"}:
             label = "partially_relevant"
             explanation = "The unverified title suggests a possible relationship, but no trustworthy paper metadata confirms it."

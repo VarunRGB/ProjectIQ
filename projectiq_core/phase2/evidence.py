@@ -82,7 +82,7 @@ def safe_assertions(value):
         if entry:result.append(entry)
     return result
 
-def observation_details(suites, matches):
+def observation_details(suites, matches, *, legacy_l=False):
     result=[]
     for si,oi,_,_ in matches[:20]:
         suite=obj(suites[si]);o=obj(rows(suite.get('observations'))[oi]);entry={'pointer':f'/suites/{si}/observations/{oi}','suite':clip(suite.get('kind'),80)}
@@ -94,6 +94,11 @@ def observation_details(suites, matches):
         if isinstance(o.get('path'),str):entry['path']=clip(o['path'],240)
         for k in ('assertions','expected_assertions','assertion_results','checks'):
             if isinstance(o.get(k),list):entry[k]=safe_assertions(o[k])
+        if not legacy_l:
+            # Strict numeric/boolean allowlist; no credentials, row contents, or raw responses.
+            keys={'before_matches','after_matches','expected_fields_match','captured_matches_seed','discovery_http','discovery_matches','mutation_http','mutation_subset_match','remaining_matches','verification_http','before_count','create_http','create_success','created_db_count','created_db_fields_match','delete_http','delete_success','deleted_db_count','deleted_matches','id_is_valid','read_deleted_http','read_http','read_matches','read_updated_http','update_http','update_success','updated_db_count','updated_db_fields_match','updated_matches','updated_fields_match','read_updated_matches','read_updated_fields_match'}
+            entry.update({k:o[k] for k in keys if type(o.get(k)) in (int,bool)})
+            entry['suite_metrics']={k:v for k,v in obj(suite.get('observed_metrics')).items() if k in keys and type(v) in (int,bool)}
         result.append(entry)
     return result
 
@@ -111,7 +116,7 @@ def source_refs(row):
     return result
 
 
-def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=None, legacy_research=False):
+def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=None, legacy_research=False, legacy_l=False, legacy_l1=False):
     path=Path(evaluation_path).absolute();root=path.parent
     original=read_bounded(path,MAX_JSON)
     # Reuse Phase 1 duplicate-key/nonfinite parsing and typed contract.
@@ -135,7 +140,9 @@ def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=
         e=Evidence(id='E-'+digest(kw)[:24],**kw)
         if e.id in seen:raise ValueError('DUPLICATE_EVIDENCE_ID')
         seen.add(e.id);items.append(e)
-    text='';extracted_hash=None;extraction='UNAVAILABLE'
+    from .hardening import suspicious, VERSION
+    legacy_l=legacy_l or legacy_research
+    text='';extracted_hash=None;extraction='UNAVAILABLE';suspect=[]
     try:
         if loader is None:
             from projectiq_summarizer.loaders import load_text
@@ -143,6 +150,7 @@ def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=
         full=loader(report)
         if not isinstance(full,str) or not full.strip():raise ValueError('EMPTY_EXTRACTED_TEXT')
         extracted_hash=sha(full.encode('utf-8'));text=full[:MAX_TEXT]
+        if not legacy_l:suspect=suspicious(full)
         extraction='COMPLETE' if len(full)<=MAX_TEXT else 'TRUNCATED'
         if extraction=='TRUNCATED':notes.append('Report evidence capped; omitted text is not evidence of absence.')
         for start,end,excerpt,section in section_chunks(text):
@@ -151,6 +159,9 @@ def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=
                 ['Text claim, not independently verified fact.'],{'start':start,'end':end,'extracted_text_sha256':extracted_hash,'section':section})
     except Exception:
         notes.append('Report text extraction unavailable; report-dependent grading coverage may be incomplete.')
+    if not legacy_l:
+        observations['evaluation_policy']={'version':'L1' if legacy_l1 else VERSION,'suspect_spans':suspect,'automatic_judgment':'REVIEW_REQUIRED' if suspect else 'EVIDENCE_CONSTRAINED'}
+        if suspect:notes.append('Evaluator-directed report content detected; automated qualitative judgments withheld. This is not a misconduct conclusion.')
     if sha(read_bounded(report,MAX_REPORT))!=ev.submission.report_sha256:raise ValueError('REPORT_CHANGED')
     for agent in AGENTS:
         a=ev.agents[agent]
@@ -214,7 +225,7 @@ def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=
     if 'research' in raws and not legacy_research:
         from .research_policy import normalize_research
         raw=raws['research'];r=raw['research_report']
-        research=normalize_research(raw,report,text,extraction,ev.submission.repository_url)
+        research=normalize_research(raw,report,text,extraction,ev.submission.repository_url,legacy_l=legacy_l)
         observations['research']['assessment']=research
         native_add('research','RESEARCH_RECORD','Native research assessment',research['reason'], '/research_report',True,
             research['limitations'],{'record_type':'research_assessment',**research})
@@ -222,7 +233,7 @@ def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=
         for i,row in enumerate(rows(r.get('reference_overview'))[:MAX_ROWS]):
             if not isinstance(row,dict):continue
             native_add('research','RESEARCH_RECORD','Reference '+str(i+1)+': '+clip(row.get('title'),160),canonical(row).decode()[:1500],f'/research_report/reference_overview/{i}',True,
-                ['Native metadata and heuristic relevance; not proof of citation-to-claim support.'],{'record_type':'reference','reference_number':i+1,**{k:row[k] for k in ('verification_status','relevance_classification','confidence','publication_year','year_source','age_band','cited_in_literature_review') if k in row}})
+                ['Native metadata and heuristic relevance; not proof of citation-to-claim support.'],{'record_type':'reference','reference_number':i+1,**{k:row[k] for k in ('verification_status','relevance_classification','confidence','publication_year','year_source','age_band','cited_in_literature_review',*(() if legacy_l else ('supporting_engineering_connection','citation_context_linked'))) if k in row}})
     if 'executioner' in raws:
         raw=raws['executioner'];p=obj(raw.get('project_intelligence'));quality=obj(raw.get('code_quality'));matrix=obj(raw.get('test_case_matrix'));source=obj(raw.get('source'));commit=source.get('commit_sha')
         hold=raw.get('status')=='SECURITY_HOLD' or raw.get('effective_mode') not in ('REVIEWED','RESUME') or not isinstance(commit,str) or not re.fullmatch(r'[0-9a-f]{40}',commit)
@@ -230,6 +241,12 @@ def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=
             'features_discovered':p.get('features_discovered'),'planned_counts':matrix.get('counts'),
             'maintainability':obj(quality.get('quality')).get('score') if obj(quality.get('quality')).get('status')=='PROVISIONAL' else None,
             'security_attestation':raw.get('security_attestation'),'reviewed_check_counts':matrix.get('reviewed_check_counts')}
+        if not legacy_l:
+            qs=obj(quality.get('summary'));qc=obj(quality.get('coverage'));indicator=obj(quality.get('quality'))
+            summary={k:qs[k] for k in ('analyzed_files','production_files','production_code_lines','functions_found','findings','source_candidates') if valid_int(qs.get(k))}
+            observations['executioner']['source_analysis']={'summary':summary,'coverage':qc,'indicator_status':indicator.get('status'),'confidence':indicator.get('confidence'),'overall_score':indicator.get('score') if indicator.get('status')=='PROVISIONAL' and indicator.get('confidence')!='LOW' else None,'not_grade':True}
+            if summary.get('analyzed_files',0)>0:
+                native_add('executioner','STATIC_SOURCE','Source analysis inventory',canonical(summary).decode(),'/code_quality/summary',raw.get('status')!='SECURITY_HOLD',['Source inventory is not evidence of engineering quality or successful behavior.'],{'record_type':'source_inventory',**summary,'commit_sha':commit})
         for field,records,pointer in [('features',rows(p.get('features')),'/project_intelligence/features'),('endpoints',rows(p.get('server_endpoints')),'/project_intelligence/server_endpoints'),('findings',rows(p.get('findings')),'/project_intelligence/findings'),('quality',rows(quality.get('findings')),'/code_quality/findings')]:
             if len(records)>MAX_ROWS:notes.append(f'Executioner {field} capped; not complete coverage.')
             for i,row in enumerate(records[:MAX_ROWS]):
@@ -263,7 +280,7 @@ def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=
                 native_add('executioner','TEST_PLAN',clip(row.get('title') or tid),f'{outcome} — readiness assertion only',f'/test_case_matrix/discovered_cases/{i}',limits=['Verified startup/readiness is not functional evidence and cannot support functional marks.'],data={'test_id':tid,'reported_outcome':outcome,'category':category,'scope':'READINESS_ONLY'})
             elif decisive:
                 native_add('executioner','TEST_OBSERVATION',clip(row.get('title') or tid),f'{outcome} — exact planned test',f'/test_case_matrix/discovered_cases/{i}',True,
-                    ['Native verified suite and matching exact observation; assertion outcome, not whole-project correctness.'],{'test_id':tid,'category':category,'outcome':outcome,'commit_sha':commit,'scope':'EXACT_PLANNED_TEST','observations':[f'/suites/{s}/observations/{o}' for s,o,_,_ in matching],'target':safe_target(row.get('target')),'expected_assertions':safe_assertions(row.get('expected_assertions')),'observation_details':observation_details(suites,matching)})
+                    ['Native verified suite and matching exact observation; assertion outcome, not whole-project correctness.'],{'test_id':tid,'category':category,'outcome':outcome,'commit_sha':commit,'scope':'EXACT_PLANNED_TEST','observations':[f'/suites/{s}/observations/{o}' for s,o,_,_ in matching],'target':safe_target(row.get('target')),'expected_assertions':safe_assertions(row.get('expected_assertions')),'observation_details':observation_details(suites,matching,legacy_l=legacy_l)})
             else:
                 native_add('executioner','TEST_PLAN',clip(row.get('title') or tid),f'{outcome} — {clip(row.get("reason"))}',f'/test_case_matrix/discovered_cases/{i}',limits=['Unexecuted, inconclusive or not independently matched to a verified observation; no marks.'],data={'test_id':tid,'reported_outcome':outcome,'category':category})
         # Reviewed-only scenarios remain distinct. They can inform a reviewer, never exact test-ratio scoring.
@@ -282,6 +299,14 @@ def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=
                         if o.get('test_id',o.get('id',o.get('step')))==check:matches.append((si,oi,o.get('result',o.get('status')),s.get('state')))
             good=bool(isinstance(kind,str) and isinstance(check,str) and 'readiness' not in kind.lower() and reviewed_counts[(kind,check)]==1 and matches and all(m[2]==expected and not(expected=='FAIL' and m[3]=='PASS') for m in matches))
             native_add('executioner','TEST_OBSERVATION' if good else 'TEST_PLAN',f'Reviewed scenario: {clip(check)}',f'{clip(outcome)} — {clip(kind)}',f'/test_case_matrix/reviewed_only_checks/{i}',good,
-                ['Reviewed scenario only; never establishes whole-route or exact planned-test coverage.'],{'scope':'REVIEWED_SCENARIO_ONLY','check_id':check,'suite':kind,'outcome':outcome,'commit_sha':commit,'observations':[f'/suites/{s}/observations/{o}' for s,o,_,_ in matches],'target':safe_target(row.get('target')),'expected_assertions':safe_assertions(row.get('expected_assertions')),'observation_details':observation_details(suites,matches)})
+                ['Reviewed scenario only; never establishes whole-route or exact planned-test coverage.'],{'scope':'REVIEWED_SCENARIO_ONLY','check_id':check,'suite':kind,'outcome':outcome,'commit_sha':commit,'observations':[f'/suites/{s}/observations/{o}' for s,o,_,_ in matches],'target':safe_target(row.get('target')),'expected_assertions':safe_assertions(row.get('expected_assertions')),'observation_details':observation_details(suites,matches,legacy_l=legacy_l)})
+    if not legacy_l and 'summarizer' in raws and extraction=='COMPLETE':
+        from .hardening import grounded_summary
+        observations['summarizer']['grounded_summary']=grounded_summary(text, legacy_l1=legacy_l1)
+        observations['summarizer']['summary_display_method']='EXTRACTIVE_REPORT_CLAIMS'
+    if not legacy_l and 'executioner' in raws:
+        ex=observations['executioner'];raw=raws['executioner']
+        ex['unavailable_suites']=[{'suite':clip(s.get('kind'),80),'state':clip(s.get('state'),80),'reason':clip(s.get('reuse_refusal') or s.get('reason') or s.get('vm_preflight_reason') or s.get('result_status'),160)} for s in rows(raw.get('suites')) if isinstance(s,dict) and s.get('state') not in ('PASS','FAIL')]
+        ex['planned_counts_scope']='NATIVE_REPORTED_NOT_ELIGIBILITY'
     return EvidenceBundle(evaluation_sha256=sha(original),submission_id=ev.submission.id,report_sha256=ev.submission.report_sha256,
         extracted_text_sha256=extracted_hash,report_extraction=extraction,repository_commit=commit,agent_checks=checks,items=items,observations=observations,limitations=notes)

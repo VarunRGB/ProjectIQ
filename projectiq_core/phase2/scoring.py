@@ -6,6 +6,7 @@ from .contracts import (Rubric, DecisionSet, EvidenceBundle, CriterionResult, As
 from .evidence import digest
 from .intelligence import runtime_inventory, consistency, evidence_details
 from .research_policy import is_research, research_record, research_state, ABSENT, PRESENT, validate_model_research
+from . import hardening
 
 
 def empty_decisions(bundle, rubric):
@@ -106,9 +107,11 @@ def assess(bundle: EvidenceBundle, rubric: Rubric, decisions: DecisionSet|None=N
                     if d.source=='MODEL':
                         if c.feedback_required and d.feedback is None:raise ValueError('STRUCTURED_FEEDBACK_REQUIRED')
                         validate_model_research(bundle,c,refs,d.rationale,d.feedback)
+                        hardening.validate(bundle,c,matching[0],refs,d.rationale,d.feedback)
                         flags=consistency(bundle,c,matching[0],refs,d.rationale,d.feedback)
-                    feedback=d.feedback
+                    feedback=hardening.display_feedback(bundle,c,refs,d.feedback) if d.source=='MODEL' else d.feedback
                     f=D(matching[0].fraction);level=matching[0].id;ids=d.evidence_ids;reason=d.rationale
+                    if feedback is not None and feedback!=d.feedback:reason=feedback.strength+' '+feedback.limitation
                     status='TEACHER_REVIEWED' if d.source=='TEACHER' else 'PROPOSED'
                 else:
                     if is_research(c) and research_state(bundle)!=PRESENT:reason='Native research evidence inconclusive or unavailable; teacher review required.'

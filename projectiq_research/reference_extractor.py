@@ -387,6 +387,12 @@ def _extract_title(raw: str) -> Optional[str]:
 
 def _extract_authors(raw: str) -> Optional[str]:
     text = _strip_label(_normalise_entry(raw))
+    # Initials-first author lists followed by a parenthesized publication year
+    # are not period-title format. Validate the whole candidate name list.
+    year_boundary = re.match(r"^(.{3,300}?)\s*\(\s*(?:19|20)\d{2}[a-z]?\s*\)\s*[.,]?\s+", text)
+    if year_boundary:
+        prefix = year_boundary.group(1).strip(" .,:;")
+        if _looks_like_person_author_list(prefix):return prefix
     quote = _QUOTED_TITLE_RE.search(text)
     if quote:
         prefix = text[:quote.start()].strip(" .,:;")
