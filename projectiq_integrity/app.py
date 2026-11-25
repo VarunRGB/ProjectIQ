@@ -21,6 +21,7 @@ import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 import streamlit.components.v1 as components  # noqa: E402
 
+from projectiq_integrity.ai_detection import check_document_ai  # noqa: E402
 from projectiq_integrity.config import DEFAULT, MODELS_DIR, ai_detector_info  # noqa: E402
 from projectiq_integrity.document_check import (COLOURS, COPY_CATEGORIES, PARA, SIMILAR,  # noqa: E402
                                                 check_document, highlighted_document, to_agent_result, to_html)
@@ -89,10 +90,92 @@ def quote(container, text: str) -> None:
     container.markdown(f"<div class='quote'>{html.escape(text)}</div>", unsafe_allow_html=True)
 
 
+AI_ONLY = "AI check only (one document, no references)"
+
 st.markdown("#### How much of a research document was taken from its references, and from where")
-mode = st.radio("Input", ["Use the sample report", "Upload a document and its references"],
+mode = st.radio("Input", ["Use the sample report", "Upload a document and its references", AI_ONLY],
                 horizontal=True, label_visibility="collapsed")
 doc_path = refs_dir = None
+
+
+# --------------------------------------------------------------------------- #
+# AI check only: one document, no reference papers
+# --------------------------------------------------------------------------- #
+def show_ai_only() -> None:
+    info = ai_detector_info(DEFAULT)
+    st.caption(f"Upload just the research paper. Every body sentence (title page, contents and "
+               f"reference list left out) is split into passages of {DEFAULT.ai_passage_min_words} to "
+               f"{DEFAULT.ai_passage_max_words} words, and each passage gets an AI probability from the "
+               f"{info['label']}, run on this computer. Text only: images are skipped and scanned PDFs refused.")
+    use_sample = st.checkbox("Use the sample report instead of an upload", key="ai_sample")
+    path = None
+    if use_sample:
+        path = SAMPLES / "research" / "S201_report.txt"
+        st.caption(f"Sample: `{path.name}`")
+    else:
+        up = st.file_uploader("Research paper", type=DOC_TYPES, key="ai_upload")
+        if up:
+            work = Path(tempfile.gettempdir()) / "projectiq_ai_only"
+            shutil.rmtree(work, ignore_errors=True)
+            path = save_uploads([up], work)[0]
+
+    if st.button("Run AI check", type="primary", disabled=path is None, key="run_ai"):
+        with st.spinner("Scoring each passage (the first run also loads the model, about 30 seconds)..."):
+            try:
+                st.session_state["ai_only"] = check_document_ai(path)
+            except Exception as exc:  # noqa: BLE001 - show any failure on screen
+                st.session_state.pop("ai_only", None)
+                st.error(f"The AI check failed: {exc}")
+
+    result = st.session_state.get("ai_only")
+    if not result:
+        return
+    det, passages, doc_info = result
+    st.divider()
+    st.markdown(f"**{doc_info['document']}**: {doc_info['sentences']} sentences, {doc_info['words']} words read")
+    if det["status"] != "COMPLETED":
+        st.info(f"AI percentage {det['status'].replace('_', ' ').lower()}. " + " ".join(det["limitations"][:1]))
+        return
+
+    scored = [p for p in passages if p.score is not None]
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("AI-like share of the writing", f"{det['estimated_percent']}%")
+    m2.metric("Passages flagged", f"{sum(p.flagged for p in scored)} / {len(scored)}")
+    m3.metric("Words scored", sum(p.words for p in scored))
+    m4.metric("Confidence", det["confidence"])
+    (st.warning if det["estimated_percent"] >= DEFAULT.ai_report_percent else st.success)(det["interpretation"])
+
+    st.markdown("**Every passage**")
+    df = pd.DataFrame([{"#": i, "Where": p.location, "Words": p.words,
+                        "AI probability": "" if p.score is None else round(p.score, 3),
+                        "Result": ("FLAGGED" if p.flagged else "not flagged") if p.score is not None
+                        else "too short, not scored",
+                        "Starts with": p.text[:90] + ("..." if len(p.text) > 90 else "")}
+                       for i, p in enumerate(passages, 1)])
+    st.dataframe(df.style.apply(lambda r: ["background-color:#fbe3e3" if r["Result"] == "FLAGGED" else ""]
+                                * len(r), axis=1), hide_index=True, width="stretch")
+    st.caption(f"A passage is flagged at AI probability >= {info['threshold']} (higher = more machine-like).")
+
+    flagged = [p for p in scored if p.flagged]
+    if flagged:
+        st.markdown("**Flagged passages**")
+        for p in sorted(flagged, key=lambda p: -p.score):
+            phrases = f" · stock phrases: {', '.join(p.stock_phrases)}" if p.stock_phrases else ""
+            with st.expander(f"{p.location} · {p.words} words · AI probability {p.score:.3f}{phrases}"):
+                quote(st, p.text)
+    for n in det["limitations"]:
+        st.caption(n)
+    out = {"ai_detection": det, "document": doc_info,
+           "passages": [{"location": p.location, "words": p.words, "ai_probability": p.score,
+                         "flagged": p.flagged, "text": p.text} for p in passages]}
+    st.download_button("Download AI check (JSON)", json.dumps(out, indent=2),
+                       file_name=f"{Path(doc_info['document']).stem}_ai_check.json", mime="application/json")
+
+
+if mode == AI_ONLY:
+    show_ai_only()
+    st.stop()
+
 if mode == "Use the sample report":
     doc_path, refs_dir = SAMPLES / "research" / "S201_report.txt", SAMPLES / "research" / "references"
     st.caption(f"Sample: `{doc_path.name}` checked against "

@@ -281,3 +281,32 @@ def to_signal(detection: dict, location_prefix: str, settings: IntegritySettings
                    scores={"share": detection["estimated_percent"] / 100, "margin": margin,
                            "low_confidence": float(detection["confidence"] == "low")},
                    limitations=" ".join(LIMITATIONS[:3]))]
+
+
+# --------------------------------------------------------------------------- #
+# AI check on one document, without reference papers
+# --------------------------------------------------------------------------- #
+NO_REFERENCES_NOTE = ("No reference papers were given, so copied or quoted text could not be removed "
+                      "first: every body sentence was scored, including text taken from other sources.")
+
+
+def check_document_ai(document: Path, scorer: Optional[PassageScorer] = None,
+                      settings: IntegritySettings = DEFAULT) -> tuple:
+    """AI percentage for one document on its own (no similarity check).
+
+    Reads the document like the similarity check does (title page, contents and the
+    reference list are left out) and scores every remaining sentence.
+    Returns (ai_detection dict, passages, info) where info has the document name and
+    how many sentences and words were read."""
+    from .documents import load_document, location_label
+
+    doc = load_document(Path(document))
+    sentences = [(s.index, location_label(doc, s), s.text) for s in doc.body_sentences()]
+    detection, passages = estimate(sentences, scorer=scorer, settings=settings)
+    detection["limitations"] = detection["limitations"] + [NO_REFERENCES_NOTE]
+    if detection.get("interpretation"):      # nothing was removed, so it covers the whole document
+        detection["interpretation"] = detection["interpretation"].replace("the student's own words",
+                                                                          "the document's words")
+    info = {"document": doc.source, "sentences": len(sentences),
+            "words": sum(_words(t) for _, _, t in sentences)}
+    return detection, passages, info
