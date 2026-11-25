@@ -14,7 +14,7 @@ from statistics import median
 from typing import Any, Optional, Union
 import re
 
-import fitz
+import pymupdf as fitz
 
 
 CATEGORY_WEIGHTS = {
