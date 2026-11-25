@@ -21,14 +21,14 @@ import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 import streamlit.components.v1 as components  # noqa: E402
 
-from projectiq_integrity.config import MODELS_DIR  # noqa: E402
+from projectiq_integrity.config import DEFAULT, MODELS_DIR, ai_models  # noqa: E402
 from projectiq_integrity.document_check import (COLOURS, COPY_CATEGORIES, PARA, SIMILAR,  # noqa: E402
                                                 check_document, highlighted_document, to_agent_result, to_html)
 
 SAMPLES = ROOT / "tests" / "fixtures"
 DOC_TYPES = ["pdf", "docx", "txt", "md"]
 KIND_LABELS = {"copied_chunk": "Copied chunk", "similar_report_text": "Overlap with a reference",
-               "ai_style_text": "AI-style writing"}
+               "ai_style_text": "AI-style writing", "ai_generated_share": "AI-generated share"}
 
 st.set_page_config(page_title="ProjectIQ · Integrity Agent", layout="wide")
 st.markdown("""<style>
@@ -49,7 +49,9 @@ def environment_status() -> list:
     items = [
         ("MiniLM (meaning similarity)", (MODELS_DIR / "all-MiniLM-L6-v2").exists()),
         ("DeBERTa (confirms paraphrase)", (MODELS_DIR / "nli-deberta-v3-small").exists()),
-        ("distilgpt2 (AI-style check)", (MODELS_DIR / "distilgpt2").exists()),
+        (f"Qwen2.5-{DEFAULT.ai_model_size} pair (AI percentage)",
+         all((MODELS_DIR / m).exists() for m in ai_models(DEFAULT)[:2])),
+        ("distilgpt2 (AI fallback check)", (MODELS_DIR / "distilgpt2").exists()),
     ]
     return items
 
@@ -205,18 +207,36 @@ if rep:
         else:
             st.caption("No sentence matched a reference.")
 
-    st.markdown("**AI-style writing** (the student's own sentences only; copied ones are left out)")
-    if rep.ai_findings:
-        ai = rep.ai_findings[0]
-        st.warning(f"{ai['summary']} Confidence {ai['confidence']:.2f}.")
-        for ev in ai["evidence"]:
-            st.caption(ev["location"])
-            quote(st, ev["quote"])
-        st.caption(ai["limitations"])
+    st.markdown("**AI-generated writing** (the student's own sentences only; copied ones are left out)")
+    det = rep.ai_detection
+    if det["status"] == "COMPLETED":
+        a1, a2, a3 = st.columns(3)
+        a1.metric("AI-like share of own writing", f"{det['estimated_percent']}%")
+        a2.metric("Passages flagged", len(det["flagged_passages"]))
+        a3.metric("Confidence", det["confidence"])
+        (st.warning if det["estimated_percent"] >= DEFAULT.ai_report_percent else st.info)(det["interpretation"])
+        for p in det["flagged_passages"]:
+            st.caption(f"{p['location']} · {p['words']} words · Binoculars score {p['score']:.3f} "
+                       f"(flagged at <= {p['threshold']})"
+                       + (f" · stock phrases: {', '.join(p['stock_phrases'])}" if p["stock_phrases"] else ""))
+            quote(st, p["text"])
+        for n in det["limitations"]:
+            st.caption(n)
     else:
-        st.success("Not flagged. Style measures and the local language model did not both point to AI-style text.")
-    for n in rep.ai_notes:
-        st.caption(n)
+        st.caption(f"AI percentage: {det['status'].replace('_', ' ').lower()}. "
+                   + " ".join(det["limitations"][:1]))
+        if rep.ai_findings:
+            ai = rep.ai_findings[0]
+            st.warning(f"{ai['summary']} Confidence {ai['confidence']:.2f}.")
+            for ev in ai["evidence"]:
+                st.caption(ev["location"])
+                quote(st, ev["quote"])
+            st.caption(ai["limitations"])
+        else:
+            st.success("Not flagged by the fallback check (style measures and distilgpt2 did not both "
+                       "point to AI-style text).")
+        for n in rep.ai_notes[1:] if det["limitations"] else rep.ai_notes:
+            st.caption(n)
 
     result = to_agent_result(rep, Path(rep.document).stem)
     with st.expander(f"What the Integrity Agent sends to the Rubric Agent ({len(result.findings)} findings)"):

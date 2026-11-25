@@ -1,12 +1,15 @@
 """One-time setup for fully offline ProjectIQ runs. Run ONCE while online:
 
-    python scripts/setup_offline.py           # everything (about 700 MB)
-    python scripts/setup_offline.py --check   # list what is present
+    python scripts/setup_offline.py                     # everything, AI models at 0.5B (about 3 GB)
+    python scripts/setup_offline.py --ai-models 1.5B    # also the 1.5B AI pair (about 6 GB more)
+    python scripts/setup_offline.py --ai-models 0.5B,1.5B,3B
+    python scripts/setup_offline.py --check             # list what is present
 
 Downloads into the project's models/ folder:
   models/all-MiniLM-L6-v2               embeddings (summariser + finding similar sentences)
   models/nli-deberta-v3-small           NLI (confirms paraphrases)
-  models/distilgpt2                     perplexity for the AI-text check
+  models/distilgpt2                     perplexity for the AI-text check (fallback)
+  models/Qwen2.5-<size>, -Instruct      AI percentage: observer and performer (Binoculars)
   models/en_core_web_sm, models/nltk_data   sentence splitting and stop-words
 
 After this nothing is downloaded at run time (HF_HUB_OFFLINE=1 is set by the code).
@@ -20,7 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from projectiq_integrity.config import MODELS_DIR  # noqa: E402
+from projectiq_integrity.config import AI_MODEL_PAIRS, MODELS_DIR  # noqa: E402
 
 MODELS = {
     "all-MiniLM-L6-v2": ("sentence-transformers", "sentence-transformers/all-MiniLM-L6-v2", "90 MB"),
@@ -29,6 +32,16 @@ MODELS = {
     "en_core_web_sm": ("spacy", "en_core_web_sm", "15 MB"),
     "nltk_data": ("nltk", "stopwords", "1 MB"),
 }
+AI_PAIR_SIZE = {"0.5B": "1 GB each", "1.5B": "3 GB each", "3B": "6 GB each"}
+
+
+def ai_pair_models(sizes) -> dict:
+    """The Binoculars observer/performer pair for each size asked for."""
+    out = {}
+    for size in sizes:
+        for folder in AI_MODEL_PAIRS[size][:2]:
+            out[folder] = ("causal-lm", f"Qwen/{folder}", AI_PAIR_SIZE[size])
+    return out
 
 
 def present(path: Path) -> bool:
@@ -68,7 +81,14 @@ def fetch_model(folder: str, kind: str, name: str) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true", help="only list what is present")
+    ap.add_argument("--ai-models", default="0.5B",
+                    help=f"AI-percentage model sizes, comma separated: {', '.join(AI_MODEL_PAIRS)} (default 0.5B)")
     args = ap.parse_args()
+    sizes = [x.strip() for x in args.ai_models.split(",") if x.strip()]
+    unknown = [x for x in sizes if x not in AI_MODEL_PAIRS]
+    if unknown:
+        print(f"Unknown AI model size(s): {', '.join(unknown)}. Choose from {', '.join(AI_MODEL_PAIRS)}.")
+        return 2
     if not args.check:
         for var in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_DATASETS_OFFLINE"):
             os.environ.pop(var, None)   # this script is the one place allowed online
@@ -76,7 +96,7 @@ def main() -> int:
 
     missing = 0
     items = [(f, MODELS_DIR / f, f"{n} ({size})", (lambda f=f, k=k, n=n: fetch_model(f, k, n)))
-             for f, (k, n, size) in MODELS.items()]
+             for f, (k, n, size) in {**MODELS, **ai_pair_models(sizes)}.items()]
     for label, path, desc, fetch in items:
         if present(path):
             print(f"[ok]      {label}")

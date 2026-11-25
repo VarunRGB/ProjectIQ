@@ -23,10 +23,19 @@ sentence in the reference papers.
   and inside copied chunks.
 - Text in quotation marks and the reference list are never counted. Copied text with a
   citation but no quotation marks is labelled "cited, not quoted".
-- **AI-style writing:** run on the student's own sentences only (copied ones are left
-  out). Flagged only when style measures (stock phrases, very even rhythm, few
-  specifics) and perplexity from distilgpt2 agree. Never flagged for typo-heavy or
-  short text, and confidence is capped at 0.70. Advisory only.
+- **AI percentage** (`ai_detection.py`): the share of the student's OWN words (copied
+  sentences left out) that read as machine-written. The text is split into passages of
+  about 100 to 300 words, and each passage is scored with Binoculars: two local
+  models (Qwen2.5 base and Instruct; 0.5B by default, 1.5B or 3B with
+  `PROJECTIQ_AI_MODEL_SIZE`) read it, and a low score means machine-like. AI % = words in flagged passages / words scored. Stock AI phrases are
+  shown for each flagged passage as the "why". Output is the `ai_detection` block the
+  orchestrator expects (status, estimated_percent, interpretation, confidence,
+  flagged_passages, limitations). A finding goes to the Rubric Agent from 20%.
+  The thresholds (`AI_THRESHOLDS` in config.py, one per model size) are PROVISIONAL:
+  set them with `python scripts/check_ai_thresholds.py` on REAL paragraphs in
+  `tests/fixtures/ai_calibration_real/` (kept off GitHub). Advisory only.
+- **Fallback:** if the two Qwen models are missing, the older yes/no check runs (style
+  measures and distilgpt2 perplexity must both agree).
 
 ## 1. One-time setup
 

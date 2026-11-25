@@ -98,11 +98,26 @@ class FakeLM:
         return HUMAN_LIKE(sentences)
 
 
+class NoBinoculars:
+    """Takes the place of ai_detection.Binoculars: never loads the real Qwen models,
+    even when they are installed, so tests stay fast and use the fallback AI check
+    unless a test passes its own ai_scorer."""
+
+    available = False
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def missing(self):
+        return ["stand-in (real AI models are not used in tests)"]
+
+
 def install(monkeypatch):
     """Make the analyzer use the stand-ins for the rest of one test."""
-    from projectiq_integrity import ai_indicators
+    from projectiq_integrity import ai_detection, ai_indicators
     from projectiq_integrity.ria import models
 
     monkeypatch.setattr(models, "get_embedder", lambda settings=None: FakeEmbedder())
     monkeypatch.setattr(models, "get_nli", lambda settings=None: FakeNLI())
     monkeypatch.setattr(ai_indicators, "LocalLM", FakeLM)
+    monkeypatch.setattr(ai_detection, "Binoculars", NoBinoculars)
