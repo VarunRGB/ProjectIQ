@@ -1,6 +1,15 @@
 """AI-generated text: how much of the student's OWN writing reads as machine-written.
 
-Method: Binoculars (Hans et al., 2024, "Spotting LLMs With Binoculars"), run locally.
+Two local detectors, chosen with `ai_detector` in config.py (PROJECTIQ_AI_DETECTOR):
+
+A. "classifier": Desklib's AI-text detector (desklib/ai-text-detector-v1.01, MIT licence),
+   a DeBERTa-v3-large model fine-tuned on the RAID benchmark (human vs AI text from 11
+   generators, 8 domains, 11 attacks such as paraphrasing). One model, about 1.75 GB on
+   disk and 2.5 GB RAM. Gives a probability that a passage is AI: HIGH = machine-like.
+
+B. "binoculars": below. Two models, LOW score = machine-like.
+
+Method B: Binoculars (Hans et al., 2024, "Spotting LLMs With Binoculars"), run locally.
 Two small language models that share a tokenizer read the same passage:
 
     observer   = a base model      (models/Qwen2.5-0.5B, or 1.5B / 3B)
@@ -22,7 +31,8 @@ How the percentage is built:
 1. Copied sentences are removed first (they are someone else's writing).
 2. The remaining sentences are grouped into passages of about 100 to 300 words,
    following the document's paragraphs (or pages, for PDFs).
-3. Each passage gets a Binoculars score; at or below `binoculars_ai_max` it is flagged.
+3. Each passage gets a score from the chosen detector and is flagged past its threshold
+   (classifier: probability >= threshold; Binoculars: score <= threshold).
 4. AI % = words in flagged passages / words in scored passages.
 
 Output matches the orchestrator's `ai_detection` contract (projectiq_core AIAnalysis):
@@ -31,7 +41,7 @@ status, estimated_percent, interpretation, confidence, flagged_passages, limitat
 Stock AI phrases (projectiq_summarizer.signals, read only) are shown per flagged
 passage as the "why". They never decide on their own.
 
-If the two models are not in models/, status is NOT_AVAILABLE and the older
+If the detector's model is not in models/, status is NOT_AVAILABLE and the older
 distilgpt2 check (ai_indicators.py) still runs as before.
 """
 from __future__ import annotations
@@ -44,13 +54,12 @@ from typing import Callable, List, Optional, Sequence
 
 from projectiq_summarizer.signals import _AI_RES
 
-from .config import DEFAULT, MODELS_DIR, IntegritySettings, ai_models
+from .config import DEFAULT, MODELS_DIR, IntegritySettings, ai_detector_info, ai_models
 from .contracts import Evidence
 from .evidence import Signal
 
 logger = logging.getLogger(__name__)
 
-METHOD = "Binoculars (observer/performer language models, run locally)"
 LIMITATIONS = [
     "Advisory only: an AI estimate is a reason to talk with the student, never proof or grounds for a penalty.",
     "Copied sentences are excluded; the estimate covers the student's own writing only.",
@@ -135,6 +144,84 @@ class Binoculars:
         return float(log_ppl / x_ppl), int(targets.numel())
 
 
+_DESKLIB_CLASS = None
+
+
+def desklib_model_class():
+    """The model class from the Desklib model card (MIT licence): DeBERTa-v3-large,
+    mean pooling over tokens, one linear layer, sigmoid = probability of AI.
+    Built on first use so importing this module does not import torch."""
+    global _DESKLIB_CLASS
+    if _DESKLIB_CLASS is None:
+        import torch
+        import torch.nn as nn
+        from transformers import AutoConfig, AutoModel, PreTrainedModel
+
+        class DesklibAIDetectionModel(PreTrainedModel):
+            config_class = AutoConfig
+
+            def __init__(self, config):
+                super().__init__(config)
+                self.model = AutoModel.from_config(config)
+                self.classifier = nn.Linear(config.hidden_size, 1)
+                self.post_init()
+
+            def forward(self, input_ids, attention_mask=None):
+                hidden = self.model(input_ids, attention_mask=attention_mask)[0]
+                mask = attention_mask.unsqueeze(-1).expand(hidden.size()).float()
+                pooled = torch.sum(hidden * mask, dim=1) / torch.clamp(mask.sum(dim=1), min=1e-9)
+                return {"logits": self.classifier(pooled)}
+
+        _DESKLIB_CLASS = DesklibAIDetectionModel
+    return _DESKLIB_CLASS
+
+
+class Classifier:
+    """Desklib's AI-text detector from models/, CPU only, loaded once per run. Never downloads."""
+
+    def __init__(self, settings: IntegritySettings = DEFAULT, models_dir: Path = MODELS_DIR):
+        self.settings = settings
+        self.path = Path(models_dir) / settings.classifier_model
+        self.available = self.path.exists()
+        self._tok = self._model = None
+
+    def missing(self) -> List[str]:
+        return [] if self.path.exists() else [str(self.path)]
+
+    def _load(self) -> None:
+        if self._model is not None:
+            return
+        key = ("classifier", str(self.path))
+        if key in _LOADED:
+            self._tok, self._model = _LOADED[key]
+            return
+        import torch
+        from transformers import AutoTokenizer
+
+        torch.set_num_threads(self.settings.ai_threads)
+        self._tok = AutoTokenizer.from_pretrained(self.path, local_files_only=True)
+        self._model = desklib_model_class().from_pretrained(self.path, local_files_only=True).eval()
+        _LOADED.clear()                                     # keep one detector in memory
+        _LOADED[key] = (self._tok, self._model)
+
+    def __call__(self, text: str) -> Optional[tuple]:
+        import torch
+
+        self._load()
+        enc = self._tok(text, truncation=True, max_length=self.settings.classifier_max_tokens,
+                        return_tensors="pt")
+        if enc["input_ids"].shape[1] < 16:
+            return None
+        with torch.no_grad():
+            logit = self._model(input_ids=enc["input_ids"], attention_mask=enc["attention_mask"])["logits"]
+        return float(torch.sigmoid(logit).item()), int(enc["input_ids"].shape[1])
+
+
+def make_detector(settings: IntegritySettings = DEFAULT):
+    """The detector chosen in config.py: Classifier or Binoculars."""
+    return Classifier(settings) if ai_detector_info(settings)["name"] == "classifier" else Binoculars(settings)
+
+
 # --------------------------------------------------------------------------- #
 # Passages
 # --------------------------------------------------------------------------- #
@@ -199,14 +286,16 @@ def estimate(sentences: Sequence[tuple], scorer: Optional[PassageScorer] = None,
              settings: IntegritySettings = DEFAULT) -> tuple:
     """Returns (ai_detection dict, passages). sentences: (index, location, text) of own text."""
     passages = build_passages(sentences, settings)
-    threshold = ai_models(settings)[3]
+    info = ai_detector_info(settings)
+    threshold = info["threshold"]
     if scorer is None:
-        model = Binoculars(settings)
+        model = make_detector(settings)
         if not model.available:
             return ({"status": "NOT_AVAILABLE", "estimated_percent": None, "interpretation": None,
                      "confidence": None, "flagged_passages": [],
-                     "limitations": [f"AI-percentage models not found: {', '.join(model.missing())}. "
-                                     "Run: python scripts/setup_offline.py"]}, passages)
+                     "limitations": [f"AI-percentage model not found: {', '.join(model.missing())}. "
+                                     f"Run: python scripts/setup_offline.py --ai-detector {info['name']}"]},
+                    passages)
         scorer = model
 
     try:
@@ -217,7 +306,7 @@ def estimate(sentences: Sequence[tuple], scorer: Optional[PassageScorer] = None,
             if result is None:
                 continue
             p.score = round(result[0], 4)
-            p.flagged = p.score <= threshold
+            p.flagged = p.score >= threshold if info["higher_is_ai"] else p.score <= threshold
             if p.flagged:
                 p.stock_phrases = stock_phrases(p.text)
     except Exception as exc:  # noqa: BLE001 - a failed AI estimate must not stop the similarity check
@@ -230,8 +319,8 @@ def estimate(sentences: Sequence[tuple], scorer: Optional[PassageScorer] = None,
     scored_words = sum(p.words for p in scored)
     flagged_words = sum(p.words for p in scored if p.flagged)
     limits = list(LIMITATIONS)
-    limits.append(f"Threshold {threshold} ({ai_models(settings)[0]} pair) is PROVISIONAL until checked on "
-                  "real student text (scripts/check_ai_thresholds.py).")
+    limits.append(f"Detector: {info['label']}. Threshold {info['score_name']} {info['rule']} {threshold} is "
+                  "PROVISIONAL until checked on real student text (scripts/check_ai_thresholds.py).")
     skipped = sum(p.words for p in passages if p.score is None)
     if skipped:
         limits.append(f"{skipped} words in short passages were not scored.")
@@ -249,9 +338,11 @@ def estimate(sentences: Sequence[tuple], scorer: Optional[PassageScorer] = None,
                       f"({flagged_words} of {scored_words} scored, in {sum(p.flagged for p in scored)} of "
                       f"{len(scored)} passages) read as machine-generated. Advisory, not proof.")
     flagged = [{"location": p.location, "words": p.words, "score": p.score,
-                "threshold": threshold, "stock_phrases": p.stock_phrases,
+                "threshold": threshold, "detector": info["name"], "score_name": info["score_name"],
+                "rule": info["rule"], "stock_phrases": p.stock_phrases,
                 "text": p.text[:600]}
-               for p in sorted(scored, key=lambda p: p.score) if p.flagged][:settings.ai_max_passages_shown]
+               for p in sorted(scored, key=lambda p: p.score, reverse=info["higher_is_ai"])
+               if p.flagged][:settings.ai_max_passages_shown]
     return ({"status": "COMPLETED", "estimated_percent": pct, "interpretation": interpretation,
              "confidence": confidence, "flagged_passages": flagged, "limitations": limits}, passages)
 
@@ -261,12 +352,13 @@ def to_signal(detection: dict, location_prefix: str, settings: IntegritySettings
     if detection.get("status") != "COMPLETED" or detection["estimated_percent"] < settings.ai_report_percent:
         return []
     evidence = [Evidence(source="report",
-                         location=(f"{location_prefix} {p['location']}, Binoculars score {p['score']:.3f} "
-                                   f"(flagged at <= {p['threshold']})"
+                         location=(f"{location_prefix} {p['location']}, {p.get('score_name', 'score')} "
+                                   f"{p['score']:.3f} (flagged at {p.get('rule', '<=')} {p['threshold']})"
                                    + (f", stock phrases: {', '.join(p['stock_phrases'])}" if p["stock_phrases"] else "")),
                          quote=p["text"])
                 for p in detection["flagged_passages"]]
-    margin = max((p["threshold"] - p["score"]) for p in detection["flagged_passages"])
+    margin = max((p["score"] - p["threshold"]) if p.get("rule") == ">=" else (p["threshold"] - p["score"])
+                 for p in detection["flagged_passages"])
     return [Signal(kind="ai_generated_share", summary=detection["interpretation"], evidence=evidence,
                    scores={"share": detection["estimated_percent"] / 100, "margin": margin,
                            "low_confidence": float(detection["confidence"] == "low")},

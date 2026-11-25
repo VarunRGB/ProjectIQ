@@ -36,9 +36,16 @@ class IntegritySettings:
     perplexity_model: str = "distilgpt2"   # folder name in models/
     max_sentences_scored: int = 120
 
-    # ---- AI percentage (ai_detection.py, Binoculars) ----------------------------
-    # Used instead of the distilgpt2 check above when the chosen model pair is in models/.
-    # Size: set PROJECTIQ_AI_MODEL_SIZE=0.5B, 1.5B or 3B (see AI_MODEL_PAIRS below).
+    # ---- AI percentage (ai_detection.py) ---------------------------------------
+    # Used instead of the distilgpt2 check above when the chosen detector's model is in models/.
+    # Detector: "classifier" (Desklib, one trained DeBERTa-v3-large model, about 2.5 GB RAM)
+    # or "binoculars" (two Qwen models compared). Set PROJECTIQ_AI_DETECTOR to choose.
+    ai_detector: str = field(default_factory=lambda: os.getenv("PROJECTIQ_AI_DETECTOR", "classifier"))
+    classifier_model: str = "ai-text-detector-v1.01"   # folder name in models/
+    # A passage with an AI probability at or above this reads as AI. None = CLASSIFIER_THRESHOLD.
+    classifier_ai_min: Optional[float] = None
+    classifier_max_tokens: int = 768                    # the model's own limit
+    # Binoculars size: set PROJECTIQ_AI_MODEL_SIZE=0.5B, 1.5B or 3B (see AI_MODEL_PAIRS below).
     ai_model_size: str = field(default_factory=lambda: os.getenv("PROJECTIQ_AI_MODEL_SIZE", "0.5B"))
     ai_observer_model: str = ""        # folder names in models/; empty = from ai_model_size
     ai_performer_model: str = ""
@@ -68,6 +75,25 @@ AI_MODEL_PAIRS = {
 # PROVISIONAL: 0.90 is the original paper's value for 7B models. Replace each with the
 # value scripts/check_ai_thresholds.py suggests on real student text for that size.
 AI_THRESHOLDS = {"0.5B": 0.90, "1.5B": 0.90, "3B": 0.90}
+
+
+# PROVISIONAL: set on 25 Nov 2026 from 30 calibration files (15 AI, 15 human) with
+# scripts/check_ai_thresholds.py --detector classifier: at 0.91 no human passage was flagged
+# and 5 of 15 AI passages were caught (at the model card's 0.5: 9 of 15, but 2 human flagged).
+# Recheck with more human text before relying on it.
+CLASSIFIER_THRESHOLD = 0.91
+
+
+def ai_detector_info(settings: "IntegritySettings") -> dict:
+    """Which AI detector is in use, its model folders, threshold and which way it reads."""
+    if settings.ai_detector == "classifier":
+        threshold = settings.classifier_ai_min if settings.classifier_ai_min is not None else CLASSIFIER_THRESHOLD
+        return {"name": "classifier", "label": "Desklib AI-text classifier (DeBERTa-v3-large)",
+                "folders": [settings.classifier_model], "threshold": threshold, "higher_is_ai": True,
+                "score_name": "AI probability", "rule": ">="}
+    observer, performer, _, threshold = ai_models(settings)
+    return {"name": "binoculars", "label": f"Binoculars ({observer} pair)", "folders": [observer, performer],
+            "threshold": threshold, "higher_is_ai": False, "score_name": "Binoculars score", "rule": "<="}
 
 
 def ai_models(settings: "IntegritySettings") -> tuple:

@@ -21,7 +21,7 @@ import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
 import streamlit.components.v1 as components  # noqa: E402
 
-from projectiq_integrity.config import DEFAULT, MODELS_DIR, ai_models  # noqa: E402
+from projectiq_integrity.config import DEFAULT, MODELS_DIR, ai_detector_info  # noqa: E402
 from projectiq_integrity.document_check import (COLOURS, COPY_CATEGORIES, PARA, SIMILAR,  # noqa: E402
                                                 check_document, highlighted_document, to_agent_result, to_html)
 
@@ -49,8 +49,8 @@ def environment_status() -> list:
     items = [
         ("MiniLM (meaning similarity)", (MODELS_DIR / "all-MiniLM-L6-v2").exists()),
         ("DeBERTa (confirms paraphrase)", (MODELS_DIR / "nli-deberta-v3-small").exists()),
-        (f"Qwen2.5-{DEFAULT.ai_model_size} pair (AI percentage)",
-         all((MODELS_DIR / m).exists() for m in ai_models(DEFAULT)[:2])),
+        (f"{ai_detector_info(DEFAULT)['label']} (AI percentage)",
+         all((MODELS_DIR / m).exists() for m in ai_detector_info(DEFAULT)["folders"])),
         ("distilgpt2 (AI fallback check)", (MODELS_DIR / "distilgpt2").exists()),
     ]
     return items
@@ -216,8 +216,8 @@ if rep:
         a3.metric("Confidence", det["confidence"])
         (st.warning if det["estimated_percent"] >= DEFAULT.ai_report_percent else st.info)(det["interpretation"])
         for p in det["flagged_passages"]:
-            st.caption(f"{p['location']} · {p['words']} words · Binoculars score {p['score']:.3f} "
-                       f"(flagged at <= {p['threshold']})"
+            st.caption(f"{p['location']} · {p['words']} words · {p.get('score_name', 'score')} {p['score']:.3f} "
+                       f"(flagged at {p.get('rule', '<=')} {p['threshold']})"
                        + (f" · stock phrases: {', '.join(p['stock_phrases'])}" if p["stock_phrases"] else ""))
             quote(st, p["text"])
         for n in det["limitations"]:

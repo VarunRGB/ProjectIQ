@@ -25,13 +25,18 @@ sentence in the reference papers.
   citation but no quotation marks is labelled "cited, not quoted".
 - **AI percentage** (`ai_detection.py`): the share of the student's OWN words (copied
   sentences left out) that read as machine-written. The text is split into passages of
-  about 100 to 300 words, and each passage is scored with Binoculars: two local
-  models (Qwen2.5 base and Instruct; 0.5B by default, 1.5B or 3B with
-  `PROJECTIQ_AI_MODEL_SIZE`) read it, and a low score means machine-like. AI % = words in flagged passages / words scored. Stock AI phrases are
+  about 100 to 300 words, and each passage is scored by one of two local detectors
+  (`PROJECTIQ_AI_DETECTOR`):
+  - `classifier`: Desklib's AI-text detector (DeBERTa-v3-large trained on the RAID
+    benchmark, MIT licence; one model, 1.75 GB, about 2.5 GB RAM). Gives the probability
+    that a passage is AI; high means machine-like.
+  - `binoculars`: two Qwen2.5 models (base and Instruct; 0.5B by default, 1.5B or 3B
+    with `PROJECTIQ_AI_MODEL_SIZE`); a low score means machine-like. AI % = words in flagged passages / words scored. Stock AI phrases are
   shown for each flagged passage as the "why". Output is the `ai_detection` block the
   orchestrator expects (status, estimated_percent, interpretation, confidence,
   flagged_passages, limitations). A finding goes to the Rubric Agent from 20%.
-  The thresholds (`AI_THRESHOLDS` in config.py, one per model size) are PROVISIONAL:
+  The thresholds (`CLASSIFIER_THRESHOLD`, and `AI_THRESHOLDS` per Binoculars size, in
+  config.py) are PROVISIONAL:
   set them with `python scripts/check_ai_thresholds.py` on REAL paragraphs in
   `tests/fixtures/ai_calibration_real/` (kept off GitHub). Advisory only.
 - **Fallback:** if the two Qwen models are missing, the older yes/no check runs (style

@@ -421,8 +421,8 @@ def to_html(report: DocumentReport) -> str:
     det = report.ai_detection
     if det.get("status") == "COMPLETED":
         passages = "".join(
-            f"<li><small>{e(p['location'])}, {p['words']} words, Binoculars score {p['score']:.3f} "
-            f"(flagged at &lt;= {p['threshold']})"
+            f"<li><small>{e(p['location'])}, {p['words']} words, {e(p.get('score_name', 'score'))} "
+            f"{p['score']:.3f} (flagged at {e(p.get('rule', '<='))} {p['threshold']})"
             + (f", stock phrases: {e(', '.join(p['stock_phrases']))}" if p["stock_phrases"] else "")
             + f"</small><br>{e(p['text'])}</li>" for p in det["flagged_passages"])
         ai_html = (f"<p class='big'>{det['estimated_percent']}%</p><p>{e(det['interpretation'])} "

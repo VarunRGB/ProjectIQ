@@ -1,7 +1,8 @@
 """One-time setup for fully offline ProjectIQ runs. Run ONCE while online:
 
     python scripts/setup_offline.py                     # everything, AI models at 0.5B (about 3 GB)
-    python scripts/setup_offline.py --ai-models 1.5B    # also the 1.5B AI pair (about 6 GB more)
+    python scripts/setup_offline.py --ai-detector classifier   # the Desklib AI classifier (1.75 GB)
+    python scripts/setup_offline.py --ai-models 1.5B    # also the 1.5B Binoculars pair (about 6 GB more)
     python scripts/setup_offline.py --ai-models 0.5B,1.5B,3B
     python scripts/setup_offline.py --check             # list what is present
 
@@ -9,6 +10,7 @@ Downloads into the project's models/ folder:
   models/all-MiniLM-L6-v2               embeddings (summariser + finding similar sentences)
   models/nli-deberta-v3-small           NLI (confirms paraphrases)
   models/distilgpt2                     perplexity for the AI-text check (fallback)
+  models/ai-text-detector-v1.01         AI percentage: Desklib classifier (--ai-detector classifier)
   models/Qwen2.5-<size>, -Instruct      AI percentage: observer and performer (Binoculars)
   models/en_core_web_sm, models/nltk_data   sentence splitting and stop-words
 
@@ -32,6 +34,7 @@ MODELS = {
     "en_core_web_sm": ("spacy", "en_core_web_sm", "15 MB"),
     "nltk_data": ("nltk", "stopwords", "1 MB"),
 }
+CLASSIFIER = {"ai-text-detector-v1.01": ("desklib", "desklib/ai-text-detector-v1.01", "1.75 GB")}
 AI_PAIR_SIZE = {"0.5B": "1 GB each", "1.5B": "3 GB each", "3B": "6 GB each"}
 
 
@@ -60,6 +63,13 @@ def fetch_model(folder: str, kind: str, name: str) -> None:
         cls = AutoModelForSequenceClassification if kind == "cross-encoder" else AutoModelForCausalLM
         AutoTokenizer.from_pretrained(name).save_pretrained(target)
         cls.from_pretrained(name).save_pretrained(target)
+    elif kind == "desklib":
+        from transformers import AutoTokenizer
+
+        from projectiq_integrity.ai_detection import desklib_model_class
+
+        AutoTokenizer.from_pretrained(name).save_pretrained(target)
+        desklib_model_class().from_pretrained(name).save_pretrained(target)
     elif kind == "spacy":
         import spacy
         from spacy.cli import download
@@ -82,9 +92,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true", help="only list what is present")
     ap.add_argument("--ai-models", default="0.5B",
-                    help=f"AI-percentage model sizes, comma separated: {', '.join(AI_MODEL_PAIRS)} (default 0.5B)")
+                    help=f"Binoculars model sizes, comma separated: {', '.join(AI_MODEL_PAIRS)} (default 0.5B); "
+                         "'none' to skip them")
+    ap.add_argument("--ai-detector", default="",
+                    help="also fetch an AI detector: 'classifier' (Desklib, 1.75 GB)")
     args = ap.parse_args()
-    sizes = [x.strip() for x in args.ai_models.split(",") if x.strip()]
+    sizes = [x.strip() for x in args.ai_models.split(",") if x.strip() and x.strip().lower() != "none"]
     unknown = [x for x in sizes if x not in AI_MODEL_PAIRS]
     if unknown:
         print(f"Unknown AI model size(s): {', '.join(unknown)}. Choose from {', '.join(AI_MODEL_PAIRS)}.")
@@ -96,7 +109,8 @@ def main() -> int:
 
     missing = 0
     items = [(f, MODELS_DIR / f, f"{n} ({size})", (lambda f=f, k=k, n=n: fetch_model(f, k, n)))
-             for f, (k, n, size) in {**MODELS, **ai_pair_models(sizes)}.items()]
+             for f, (k, n, size) in {**MODELS, **ai_pair_models(sizes),
+                                     **(CLASSIFIER if args.ai_detector == "classifier" else {})}.items()]
     for label, path, desc, fetch in items:
         if present(path):
             print(f"[ok]      {label}")

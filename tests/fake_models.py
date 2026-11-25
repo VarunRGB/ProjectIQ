@@ -99,7 +99,7 @@ class FakeLM:
 
 
 class NoBinoculars:
-    """Takes the place of ai_detection.Binoculars: never loads the real Qwen models,
+    """Takes the place of ai_detection.Binoculars and .Classifier: never loads the real AI models,
     even when they are installed, so tests stay fast and use the fallback AI check
     unless a test passes its own ai_scorer."""
 
@@ -121,3 +121,4 @@ def install(monkeypatch):
     monkeypatch.setattr(models, "get_nli", lambda settings=None: FakeNLI())
     monkeypatch.setattr(ai_indicators, "LocalLM", FakeLM)
     monkeypatch.setattr(ai_detection, "Binoculars", NoBinoculars)
+    monkeypatch.setattr(ai_detection, "Classifier", NoBinoculars)
