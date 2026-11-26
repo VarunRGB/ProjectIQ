@@ -7,7 +7,7 @@ import sys
 import tempfile
 import unittest
 
-from test_phase6_core import SRC,quality,vm,run
+from projectiq_executioner.tests.test_phase6_core import SRC,quality,vm,run
 from projectiq_executioner.phase6.__main__ import main
 
 class CliChecks(unittest.TestCase):

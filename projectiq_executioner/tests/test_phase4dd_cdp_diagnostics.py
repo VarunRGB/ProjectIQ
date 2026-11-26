@@ -28,7 +28,7 @@ def fake_proc(code=119, stderr=b''):
     return types.SimpleNamespace(returncode=code, stderr=stderr, stdout=b'')
 
 
-def test_report(issue):
+def _make_test_report(issue):
     return {
         'schema_version': '0.1', 'stage': 'guest_browser_login',
         'source': SOURCE, 'adapter': 'php_mysql_v1',
@@ -91,14 +91,14 @@ class Diagnostics(unittest.TestCase):
         for issue in ('LOGIN_CDP_UNAVAILABLE', 'LOGIN_HELPER_UNAVAILABLE',
                       'LOGIN_BROWSER_UNAVAILABLE', 'LOGIN_HELPER_INVALID_REPORT',
                       'LOGIN_DIAG_NO_MARKER_EXIT_118', 'LOGIN_DIAG_NO_MARKER_EXIT_119'):
-            contract.validate_login_report(BUNDLE, test_report(issue))
+            contract.validate_login_report(BUNDLE, _make_test_report(issue))
 
     def test_07_new_inconclusive_codes_accepted(self):
         for stage, reason in [('ENVIRONMENT', 'ENV_REJECTED'),
                               ('CHROME_START', 'OS_FAILURE'),
                               ('FORM_WAIT', 'CDP_REPLY_TIMEOUT'),
                               ('AUTH_TASKS', 'CDP_PIPE_CLOSED')]:
-            contract.validate_login_report(BUNDLE, test_report(
+            contract.validate_login_report(BUNDLE, _make_test_report(
                 f'LOGIN_DIAG_{stage}__{reason}'))
 
     def test_08_invalid_issue_codes_rejected(self):
@@ -110,23 +110,23 @@ class Diagnostics(unittest.TestCase):
                       'LOGIN_DIAG_CHROME_START__', None, 11):
             with self.subTest(issue=str(issue)[:50]):
                 with self.assertRaises(contract.LoginReviewError):
-                    contract.validate_login_report(BUNDLE, test_report(issue))
+                    contract.validate_login_report(BUNDLE, _make_test_report(issue))
 
     def test_09_diag_cannot_certify_pass(self):
-        out = test_report('LOGIN_DIAG_FORM_WAIT__CDP_REPLY_TIMEOUT')
+        out = _make_test_report('LOGIN_DIAG_FORM_WAIT__CDP_REPLY_TIMEOUT')
         out['status'] = 'PASS'
         for item in out['checks']: item['matched'] = True
         with self.assertRaises(contract.LoginReviewError):
             contract.validate_login_report(BUNDLE, out)
 
     def test_10_diag_cannot_certify_fail_with_indeterminate_checks(self):
-        out = test_report('LOGIN_DIAG_FORM_WAIT__CDP_REPLY_TIMEOUT')
+        out = _make_test_report('LOGIN_DIAG_FORM_WAIT__CDP_REPLY_TIMEOUT')
         out['status'] = 'FAIL'
         with self.assertRaises(contract.LoginReviewError):
             contract.validate_login_report(BUNDLE, out)
 
     def test_11_unsafe_field_never_accepted(self):
-        out = test_report('LOGIN_DIAG_FORM_WAIT__CDP_REPLY_TIMEOUT')
+        out = _make_test_report('LOGIN_DIAG_FORM_WAIT__CDP_REPLY_TIMEOUT')
         out['cookie'] = 'abc'
         with self.assertRaises(contract.LoginReviewError):
             contract.validate_login_report(BUNDLE, out)

@@ -8,11 +8,12 @@ from ..phase8c.artifacts import _zip_inventory
 from .broker import require
 
 
-def assemble_reviewed(*,source,bundle,out,vm_config,node_tarball,node_sha256,node_version='v24.22.3'):
+def assemble_reviewed(*,source,bundle,out,vm_config,node_tarball,node_sha256,node_version='v24.22.3',storage_guard=False,require_bounded_volume=False):
     from ..phase2.vm_worker.orchestrator import load_config
     from ..phase2.vm_worker.qemu import (QemuWorker,SSHControl,verify_host_toolchain,make_ssh_key,make_nocloud_iso,_free_loopback_port,effective_vm_vcpus)
     from ..phase2.vm_worker.d5c_runtime_workspace import ManagedRuntimeRun
     from ..phase2.vm_worker import d5d_host_acl_audit as acl
+    require(not require_bounded_volume or storage_guard,'BOUNDED_VOLUME_REQUIRES_STORAGE_GUARD')
     config=load_config(vm_config)
     identity=source['repository']+'@'+source['commit_sha']
     require(identity in config['approved_snapshots'],'EXISTING_OPERATOR_APPROVAL_REQUIRED')
@@ -28,10 +29,15 @@ def assemble_reviewed(*,source,bundle,out,vm_config,node_tarball,node_sha256,nod
     result={'status':'OFFLINE_ASSEMBLY_FAILED','cleanup':'UNVERIFIED','vm_start_attempts':0,'application_vms_started':0,'runtime_permission':False,'security_attestation':'NOT_ATTESTED_FOR_UNTRUSTED_STUDENTS','stage':'MANAGED_WORKSPACE'}
     # Keep output private, and publish cache only after the VM stops and managed
     # storage is recovered. A failed candidate is removed from the output.
+    watch=None
     pending=Path(out)/'cache.pending';final=Path(out)/'npm-cache.zip'
     try:
         work=managed.open()
         require(shutil.disk_usage(work).free>=24*1024**3,'HOST_DISK_HEADROOM_INSUFFICIENT')
+        if storage_guard:
+            from ..phase8c_final.storage import inspect_volume,DiskWatchdog
+            volume=inspect_volume(work);result['storage_volume']=volume
+            if require_bounded_volume:require(volume['volume_capacity_bounded'],'SEPARATE_BOUNDED_VOLUME_REQUIRED')
         result['stage']='VM_SETUP'
         key,pub=make_ssh_key(config,work);seed=make_nocloud_iso(work,pub,'projectiq-8c2-'+uuid.uuid4().hex,workspace_disk_mib=1536,app_cgroup=True)
         port=_free_loopback_port();worker=QemuWorker({**config,'workspace_disk_mib':1536},work,port,ram_mib=3072,cpus=effective_vm_vcpus(config,2))
@@ -45,6 +51,8 @@ def assemble_reviewed(*,source,bundle,out,vm_config,node_tarball,node_sha256,nod
             expired.set()
             if proc is not None and proc.poll() is None:proc.kill()
         timer=threading.Timer(630,expire);timer.daemon=True;timer.start()
+        if storage_guard:
+            watch=DiskWatchdog(work,proc);watch.start()
         result['stage']='SSH_BOOT';ssh=SSHControl(config,work,port,key);ssh.wait_ssh(worker,seconds=110);managed.mark_booted()
         result['stage']='TRUSTED_INPUT_TRANSFER'
         req={'bundle_sha256':receipt['sha256'],'node_sha256':node_sha256,'node_version':node_version,'sentinel_port':sentinel_port}
@@ -62,8 +70,9 @@ def assemble_reviewed(*,source,bundle,out,vm_config,node_tarball,node_sha256,nod
         with received.open('rb') as src,pending.open('xb') as dest:shutil.copyfileobj(src,dest,1024*1024)
         require(checked_file(pending,170_000_000)==artifact,'CACHE_COPY_MISMATCH')
         result.update(status='CACHE_CANDIDATE',artifact=artifact,inventory=inventory,offline_reuse_observed=True,workspace_mib=1536,network='QEMU_RESTRICT_ON',host_gateway_sentinel_denied=True,npm_ci_preexec_handoffs=2,repository_scripts_executed=False)
-    except (Exception,KeyboardInterrupt):
-        result.setdefault('error_code','WORKER_STAGE_FAILED')
+    except (Exception,KeyboardInterrupt) as exc:
+        known={'HOST_DISK_HEADROOM_INSUFFICIENT','SEPARATE_BOUNDED_VOLUME_REQUIRED','STORAGE_GUARD_TRIPPED','OFFLINE_WORKER_POLICY_MISMATCH','HOST_SENTINEL_POSITIVE_CONTROL_FAILED','GUEST_RESULT_LIMIT','GUEST_RECEIPT_MISMATCH','CACHE_HASH_MISMATCH','CACHE_COPY_MISMATCH'}
+        result.setdefault('error_code',str(exc) if type(exc) is ValueError and str(exc) in known else 'WORKER_STAGE_FAILED')
     finally:
         if timer is not None:timer.cancel();timer.join(timeout=3)
         if worker is not None:
@@ -73,6 +82,10 @@ def assemble_reviewed(*,source,bundle,out,vm_config,node_tarball,node_sha256,nod
                 if marked and stopped:managed.mark_stopped()
             except Exception:stopped=False
         else:stopped=True
+        if watch is not None:
+            if stopped and not watch.tripped.is_set():watch.sample()
+            watch.stop();result['storage_watchdog']=watch.report()
+            if watch.tripped.is_set():result['error_code']=watch.reason;result['status']='OFFLINE_ASSEMBLY_FAILED'
         if stopped:
             try:managed.close()
             except Exception:pass
@@ -82,7 +95,7 @@ def assemble_reviewed(*,source,bundle,out,vm_config,node_tarball,node_sha256,nod
         if sentinel is not None:sentinel.close()
         if contact.is_set():result['error_code']='HOST_SENTINEL_CONTACTED';result['status']='OFFLINE_ASSEMBLY_FAILED'
         if expired.is_set():result['error_code']='WORKER_WALL_TIMEOUT'
-    if result['status']=='CACHE_CANDIDATE' and result['cleanup']==CLEAN and not expired.is_set():
+    if result['status']=='CACHE_CANDIDATE' and result['cleanup']==CLEAN and not expired.is_set() and (not storage_guard or (watch is not None and watch.samples>0 and not watch.tripped.is_set())):
         pending.rename(final);result['status']='OFFLINE_CACHE_ASSEMBLED_REVIEWED_NOT_AUTHORIZED';result['stage']='COMPLETE'
     else:
         pending.unlink(missing_ok=True);result.pop('artifact',None);result.pop('inventory',None);result['status']='OFFLINE_ASSEMBLY_FAILED'
