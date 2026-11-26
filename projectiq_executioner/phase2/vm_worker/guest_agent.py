@@ -1561,6 +1561,7 @@ def prepare_npm_cache(request_path: Path, *, base_dir: Path = Path('/home/projec
     runtime.mkdir(mode=0o700)
     node, npm = _node_tar_extract(node_archive, version, runtime)
     node_archive.unlink(missing_ok=True)
+    _share_tree(runtime, writable=False)
     ver = _trusted_process([str(node), '--version'], timeout=15)
     if ver.returncode or ver.stdout.decode('utf-8', errors='replace').strip() != version:
         raise GuestFailure('NODE_VITE_RUNTIME_VERSION_MISMATCH')
