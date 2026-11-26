@@ -79,6 +79,9 @@
 .r-pair p { margin: 2px 0; }
 .r-foot { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; justify-content: space-between; gap: 10px; font-size: 8.5pt; color: var(--faint); flex-wrap: wrap; }
 
+.r-rings { margin-top: 12px; }
+.r-rings .ring figcaption { font-size: 8.5pt; }
+.r-format { display: grid; grid-template-columns: 90px 1fr; gap: 12px; align-items: start; }
 @media (max-width: 800px) { .r-doc { padding: 18px; } .r-cover-grid, .r-two, .r-pair { grid-template-columns: 1fr; } .r-facts { grid-template-columns: 1fr 1fr; } }
 
 @media print {

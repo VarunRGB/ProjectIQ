@@ -268,6 +268,45 @@ export interface UnifiedResult {
   elapsed_seconds: number;
   artifacts: Record<string, string>;
   limitations: string[];
+  /** IEEE format checker (projectiq_core/ieee_integration.py). Advisory; never affects marks. Absent in older runs. */
+  ieee_format?: IEEEFormat;
+}
+
+export type IEEEVerdict = 'LIKELY_IEEE_STYLE' | 'NEEDS_REVIEW' | 'NEEDS_PDF_VERIFICATION' | 'NOT_IEEE_LIKE' | 'CANNOT_VERIFY_LAYOUT' | 'NOT_EVALUATED';
+
+export interface IEEECategory {
+  category: string;
+  rubric_weight: number;
+  earned: number | null;
+  possible: number;
+  status: 'pass' | 'needs_attention' | 'not_applicable';
+}
+
+export interface IEEECheck {
+  category: string;
+  criterion: string;
+  earned: number;
+  possible: number;
+  detail: string;
+  suggestion: string;
+  page: number | null;
+  applicable: boolean;
+  status: 'pass' | 'warning' | 'fail' | 'not_applicable';
+}
+
+export interface IEEEFormat {
+  status: 'COMPLETED' | 'REVIEW_REQUIRED' | 'FAILED';
+  score: number | null;
+  max_score: number;
+  rating?: string;
+  format_verdict: IEEEVerdict;
+  assessment_scope?: 'layout_and_structure' | 'style_and_structure' | 'structure_only' | string;
+  layout_verdict?: string;
+  categories?: IEEECategory[];
+  checks?: IEEECheck[];
+  notes?: string[];
+  disclaimer?: string;
+  error_code?: string;
 }
 
 // ------------------------------------------------- Frontend-only envelope
@@ -363,12 +402,12 @@ export interface ExecutionerRequest {
   resume_from?: string;
 }
 
-export type RunStage = 'queued' | 'summarizer' | 'integrity' | 'research' | 'executioner' | 'evidence' | 'rubric' | 'done' | 'failed';
+export type RunStage = 'queued' | 'format' | 'summarizer' | 'integrity' | 'research' | 'executioner' | 'evidence' | 'rubric' | 'done' | 'failed';
 
 export interface RunEvent {
   at_ms: number;
   stage: RunStage;
-  agent?: AgentName | 'rubric';
+  agent?: AgentName | 'rubric' | 'format';
   message: string;
   level: 'info' | 'warn' | 'error' | 'success';
 }
@@ -381,6 +420,6 @@ export interface RunStatus {
   elapsed_ms: number;
   stage: RunStage;
   state: 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
-  agents: Record<AgentName | 'rubric', { state: 'waiting' | 'running' | 'done' | 'skipped' | 'failed' | 'partial'; detail?: string; elapsed_ms?: number }>;
+  agents: Record<AgentName | 'rubric' | 'format', { state: 'waiting' | 'running' | 'done' | 'skipped' | 'failed' | 'partial'; detail?: string; elapsed_ms?: number; /** Real progress when the backend reports it (rubric batches). */ progress?: number }>;
   events: RunEvent[];
 }

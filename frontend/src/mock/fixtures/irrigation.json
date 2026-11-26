@@ -60,11 +60,11 @@
      "model": "grounded-extractive-L1",
      "word_count": 619,
      "chunks": 1,
-     "elapsed_s": 0.0011,
+     "elapsed_s": 0.0013,
      "summary_display_method": "EXTRACTIVE_REPORT_CLAIMS",
      "summary_display_policy": "L2",
      "collection_model": "grounded-extractive-L1",
-     "collection_elapsed_s": 0.0011
+     "collection_elapsed_s": 0.0013
     },
     "limitations": [
      "Summary-only overview; report claims are not independently verified and never contribute to the project grade. A missing historical summary is unavailable until separately collected."
@@ -604,9 +604,9 @@
   },
   "assessment": {
    "schema_version": "2.0",
-   "evidence_sha256": "e27be85919eb560dd94b2701119e14561897cd548c8c3ccc2bd2368183d837d9",
+   "evidence_sha256": "0bedf4ebde5350ef9002132ec88ea5ac759a0eaf754260c9b909639ba5433b0d",
    "rubric_sha256": "c70203f5b4635610dc70c5dbef54e220ca7659c28eee8b79eb544b15fdb21694",
-   "decisions_sha256": "762dacbf485b7d4068057910619a804ac1c36f6bdd9655505765f5feca666594",
+   "decisions_sha256": "34965e47111a75565f0bd91a6b0ca5393a3c701bd35f3256608f9e2f597146ac",
    "status": "READY_FOR_TEACHER_REVIEW",
    "max_points": 50.0,
    "proposed_points": 31.25,
@@ -1120,14 +1120,15 @@
   "workflow_status": "COMPLETE",
   "agent_failures": [],
   "rubric_exit_code": 0,
-  "elapsed_seconds": 0.0907,
+  "elapsed_seconds": 0.1926,
   "artifacts": {
    "evaluation": "collection/evaluation.json",
    "assessment": "rubric/assessment.json",
    "rubric": "rubric/rubric.json",
    "decisions": "rubric/decisions.json",
    "evidence": "rubric/evidence.json",
-   "intelligence": "rubric/evidence_intelligence.json"
+   "intelligence": "rubric/evidence_intelligence.json",
+   "ieee_format": "collection/ieee_format.json"
   },
   "limitations": [
    "Native receipts attest saved bytes only, not agent correctness or authenticity.",
@@ -1143,11 +1144,244 @@
    "Private local evaluation; no unrestricted execution or authenticated faculty approval.",
    "Live Executioner collection is STATIC; runtime marks require eligible reviewed evidence.",
    "Legacy judge never executed by this workflow. Imported historical summaries may have been produced by that judge."
-  ]
+  ],
+  "ieee_format": {
+   "status": "COMPLETED",
+   "score": 62.2,
+   "max_score": 100,
+   "rating": "Major text-structure issues",
+   "format_verdict": "CANNOT_VERIFY_LAYOUT",
+   "assessment_scope": "structure_only",
+   "layout_verdict": "Column layout unavailable for this format",
+   "categories": [
+    {
+     "category": "Page layout",
+     "rubric_weight": 25,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "rubric_weight": 20,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Title and authors",
+     "rubric_weight": 10,
+     "earned": 10,
+     "possible": 10,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "rubric_weight": 15,
+     "earned": 8,
+     "possible": 15,
+     "status": "needs_attention"
+    },
+    {
+     "category": "Section structure",
+     "rubric_weight": 10,
+     "earned": 10,
+     "possible": 10,
+     "status": "pass"
+    },
+    {
+     "category": "Figures and tables",
+     "rubric_weight": 10,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "References and citations",
+     "rubric_weight": 10,
+     "earned": 0,
+     "possible": 10,
+     "status": "needs_attention"
+    }
+   ],
+   "checks": [
+    {
+     "category": "Page layout",
+     "criterion": "A4 or US Letter page size",
+     "earned": 0,
+     "possible": 8,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Page layout",
+     "criterion": "Two-column body layout",
+     "earned": 0,
+     "possible": 14,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Page layout",
+     "criterion": "Plausible and balanced outer margins",
+     "earned": 0,
+     "possible": 3,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "criterion": "Body text near 10 pt",
+     "earned": 0,
+     "possible": 12,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "criterion": "Serif/Times-like body font",
+     "earned": 0,
+     "possible": 8,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Title and authors",
+     "criterion": "Title text on first line",
+     "earned": 6,
+     "possible": 6,
+     "detail": "Potential title: Feasibility Study: Soil-Moisture Based Smart Irrigation for the College Botanical Garden",
+     "suggestion": "Place the research-paper title at the start of the document.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Title and authors",
+     "criterion": "Author / affiliation text",
+     "earned": 4,
+     "possible": 4,
+     "detail": "Text found between the title and abstract.",
+     "suggestion": "Add author names and affiliations below the title.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "criterion": "Abstract label",
+     "earned": 8,
+     "possible": 8,
+     "detail": "Abstract label found.",
+     "suggestion": "Include an Abstract paragraph following the chosen IEEE template.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "criterion": "Index Terms / Keywords label",
+     "earned": 0,
+     "possible": 7,
+     "detail": "Index Terms/Keywords label not found.",
+     "suggestion": "Include an 'Index Terms—' line beneath the abstract.",
+     "page": null,
+     "applicable": true,
+     "status": "fail"
+    },
+    {
+     "category": "Section structure",
+     "criterion": "Numbered main sections",
+     "earned": 6,
+     "possible": 6,
+     "detail": "9 numbered main section(s) detected.",
+     "suggestion": "Use headings such as 'I. INTRODUCTION', 'II. METHODS', 'III. RESULTS'.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Section structure",
+     "criterion": "Introduction section",
+     "earned": 4,
+     "possible": 4,
+     "detail": "Introduction section found.",
+     "suggestion": "Add an Introduction section using a consistent section-heading style.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Figures and tables",
+     "criterion": "Figure and table captions",
+     "earned": 0,
+     "possible": 10,
+     "detail": "No figure/table mentions detected; category excluded.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "References heading",
+     "earned": 0,
+     "possible": 4,
+     "detail": "References heading not found.",
+     "suggestion": "Add a References section at the end of the paper.",
+     "page": null,
+     "applicable": true,
+     "status": "fail"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "Numbered bibliography entries",
+     "earned": 0,
+     "possible": 4,
+     "detail": "0 numbered reference entry/entries found.",
+     "suggestion": "Use IEEE-style numbered reference entries such as [1] and [2].",
+     "page": null,
+     "applicable": true,
+     "status": "fail"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "Bracketed in-text citations",
+     "earned": 0,
+     "possible": 2,
+     "detail": "0 line(s) contain bracketed citations before the reference list.",
+     "suggestion": "Cite your sources in the main text using [1], [2], etc.",
+     "page": null,
+     "applicable": true,
+     "status": "fail"
+    }
+   ],
+   "notes": [
+    "This is a TEXT STRUCTURE score, not an IEEE layout/format-compliance score. Plain text does not store page dimensions, columns, margins, or fonts.",
+    "Export a formatted DOCX or PDF for a fuller formatting assessment.",
+    "For submission, validate the specific conference/journal template and run official PDF compliance checks separately."
+   ],
+   "disclaimer": "This is a teaching/demo formatting score, not an official IEEE score, publication decision or replacement for a venue's template and IEEE PDF Checker."
+  }
  },
  "evidence": {
   "schema_version": "2.0",
-  "evaluation_sha256": "6e87726ff8aff149ce8f3082daa234f1ce1c835ee3d7ff8afc4f0f4513962a75",
+  "evaluation_sha256": "d97fa30cd20863e3574be7122b17b52987cfcdd6fa807d727bde4b65365959e6",
   "submission_id": "IR-2026-030",
   "report_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
   "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
@@ -1381,12 +1615,12 @@
     }
    },
    {
-    "id": "E-8cb4055142d0ec03a6cf258e",
+    "id": "E-04094be6d42872dbbe7e0f29",
     "agent": "summarizer",
     "kind": "REPORT_SUMMARY",
     "label": "Generated summary",
     "text": "This report studies whether a low-cost soil-moisture based irrigation controller can reduce water use in the college botanical garden. The objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period. The system consists of three components: the sensor nodes, the controller and a logging module.",
-    "artifact_sha256": "4399b7c454141aea1f6b1010025e0715876d84d3120a082d119fcee28cbe300f",
+    "artifact_sha256": "68e8d9971501d8868415e8dff386ee40880410cbf6d304573e615382c780916a",
     "locator": "/summary/summary",
     "provenance": "NATIVE_RECEIPT_MATCHED",
     "eligible_for_review": false,
@@ -1396,12 +1630,12 @@
     "data": {}
    },
    {
-    "id": "E-8fc73f1f63644936d456b9b6",
+    "id": "E-261731db45ab0493721d25db",
     "agent": "summarizer",
     "kind": "REPORT_SUMMARY",
     "label": "Generated key point",
     "text": "Scenario 3 (negative check): when rainfall was recorded in the last six hours, a watering request should be rejected and the valve must stay closed.",
-    "artifact_sha256": "4399b7c454141aea1f6b1010025e0715876d84d3120a082d119fcee28cbe300f",
+    "artifact_sha256": "68e8d9971501d8868415e8dff386ee40880410cbf6d304573e615382c780916a",
     "locator": "/summary/key_points/0",
     "provenance": "NATIVE_RECEIPT_MATCHED",
     "eligible_for_review": false,
@@ -1411,12 +1645,12 @@
     "data": {}
    },
    {
-    "id": "E-a3aff94e43a0c9359fc7760d",
+    "id": "E-25088d3231c8eba07b5e10aa",
     "agent": "summarizer",
     "kind": "REPORT_SUMMARY",
     "label": "Generated key point",
     "text": "Independent verification is required before installation.",
-    "artifact_sha256": "4399b7c454141aea1f6b1010025e0715876d84d3120a082d119fcee28cbe300f",
+    "artifact_sha256": "68e8d9971501d8868415e8dff386ee40880410cbf6d304573e615382c780916a",
     "locator": "/summary/key_points/1",
     "provenance": "NATIVE_RECEIPT_MATCHED",
     "eligible_for_review": false,
@@ -1426,12 +1660,12 @@
     "data": {}
    },
    {
-    "id": "E-e290fe992089d87780e70f05",
+    "id": "E-bf7f376036b4bd32333f37d3",
     "agent": "summarizer",
     "kind": "REPORT_SUMMARY",
     "label": "Generated key point",
     "text": "The study covers only six beds and one season.",
-    "artifact_sha256": "4399b7c454141aea1f6b1010025e0715876d84d3120a082d119fcee28cbe300f",
+    "artifact_sha256": "68e8d9971501d8868415e8dff386ee40880410cbf6d304573e615382c780916a",
     "locator": "/summary/key_points/2",
     "provenance": "NATIVE_RECEIPT_MATCHED",
     "eligible_for_review": false,
@@ -1441,12 +1675,12 @@
     "data": {}
    },
    {
-    "id": "E-5fdb55087594014878dd211e",
+    "id": "E-07ea065a97668acaeb6d0b50",
     "agent": "summarizer",
     "kind": "REPORT_SUMMARY",
     "label": "Generated key point",
     "text": "A soil-moisture based controller appears feasible and could reduce water use by about 40% in summer.",
-    "artifact_sha256": "4399b7c454141aea1f6b1010025e0715876d84d3120a082d119fcee28cbe300f",
+    "artifact_sha256": "68e8d9971501d8868415e8dff386ee40880410cbf6d304573e615382c780916a",
     "locator": "/summary/key_points/3",
     "provenance": "NATIVE_RECEIPT_MATCHED",
     "eligible_for_review": false,
@@ -1554,7 +1788,7 @@
  },
  "decisions": {
   "schema_version": "2.0",
-  "evidence_sha256": "e27be85919eb560dd94b2701119e14561897cd548c8c3ccc2bd2368183d837d9",
+  "evidence_sha256": "0bedf4ebde5350ef9002132ec88ea5ac759a0eaf754260c9b909639ba5433b0d",
   "rubric_sha256": "c70203f5b4635610dc70c5dbef54e220ca7659c28eee8b79eb544b15fdb21694",
   "decisions": [
    {
@@ -2944,9 +3178,9 @@
   },
   "assessment": {
    "schema_version": "2.0",
-   "evidence_sha256": "e27be85919eb560dd94b2701119e14561897cd548c8c3ccc2bd2368183d837d9",
+   "evidence_sha256": "0bedf4ebde5350ef9002132ec88ea5ac759a0eaf754260c9b909639ba5433b0d",
    "rubric_sha256": "a544c026133afdcbbf2d858287122a66e0506c8374847a273ef87ddf59cc27fd",
-   "decisions_sha256": "fc8012e6182220c8bbbd005d2d5964e90a986986b305905c6fb52d42f878017f",
+   "decisions_sha256": "470cce883cdd7ec670bc0453e9fe0b6ba569899cc64e5c32b8686868991472e4",
    "status": "READY_FOR_TEACHER_REVIEW",
    "max_points": 80.0,
    "proposed_points": 47.83,

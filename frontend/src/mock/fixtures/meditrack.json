@@ -61,11 +61,11 @@
      "model": "grounded-extractive-L1",
      "word_count": 516,
      "chunks": 1,
-     "elapsed_s": 0.0012,
+     "elapsed_s": 0.001,
      "summary_display_method": "EXTRACTIVE_REPORT_CLAIMS",
      "summary_display_policy": "L2",
      "collection_model": "grounded-extractive-L1",
-     "collection_elapsed_s": 0.0012
+     "collection_elapsed_s": 0.001
     },
     "limitations": [
      "Summary-only overview; report claims are not independently verified and never contribute to the project grade. A missing historical summary is unavailable until separately collected."
@@ -1472,9 +1472,9 @@
   },
   "assessment": {
    "schema_version": "2.0",
-   "evidence_sha256": "9d02b176fa9e98d083349c3d14114d7a0ce0df66920f87bf30650b7a99d32058",
+   "evidence_sha256": "999d4c605ed56de4221d61a86326ab4893040fe0c932bc0798a1e003652c553d",
    "rubric_sha256": "322a8a012f18b0ef62275454d732e14d8072313cf170cfe4e77b85e425c20b8e",
-   "decisions_sha256": "bffe5540e502ee5464777f32f1df27f6db2c5ea8fbfb152711bc8853df7fdf8d",
+   "decisions_sha256": "8dd760a52b16806373a4eb8a2fc4edd0c975d264dc9e174e484b88eb2695d948",
    "status": "INSUFFICIENT_EVIDENCE",
    "max_points": 100.0,
    "proposed_points": null,
@@ -2102,14 +2102,15 @@
    "research"
   ],
   "rubric_exit_code": 0,
-  "elapsed_seconds": 0.159,
+  "elapsed_seconds": 0.2542,
   "artifacts": {
    "evaluation": "collection/evaluation.json",
    "assessment": "rubric/assessment.json",
    "rubric": "rubric/rubric.json",
    "decisions": "rubric/decisions.json",
    "evidence": "rubric/evidence.json",
-   "intelligence": "rubric/evidence_intelligence.json"
+   "intelligence": "rubric/evidence_intelligence.json",
+   "ieee_format": "collection/ieee_format.json"
   },
   "limitations": [
    "Native receipts attest saved bytes only, not agent correctness or authenticity.",
@@ -2125,11 +2126,244 @@
    "Private local evaluation; no unrestricted execution or authenticated faculty approval.",
    "Live Executioner collection is STATIC; runtime marks require eligible reviewed evidence.",
    "Legacy judge never executed by this workflow. Imported historical summaries may have been produced by that judge."
-  ]
+  ],
+  "ieee_format": {
+   "status": "COMPLETED",
+   "score": 84.4,
+   "max_score": 100,
+   "rating": "Minor text-structure issues",
+   "format_verdict": "CANNOT_VERIFY_LAYOUT",
+   "assessment_scope": "structure_only",
+   "layout_verdict": "Column layout unavailable for this format",
+   "categories": [
+    {
+     "category": "Page layout",
+     "rubric_weight": 25,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "rubric_weight": 20,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Title and authors",
+     "rubric_weight": 10,
+     "earned": 10,
+     "possible": 10,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "rubric_weight": 15,
+     "earned": 8,
+     "possible": 15,
+     "status": "needs_attention"
+    },
+    {
+     "category": "Section structure",
+     "rubric_weight": 10,
+     "earned": 10,
+     "possible": 10,
+     "status": "pass"
+    },
+    {
+     "category": "Figures and tables",
+     "rubric_weight": 10,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "References and citations",
+     "rubric_weight": 10,
+     "earned": 10,
+     "possible": 10,
+     "status": "pass"
+    }
+   ],
+   "checks": [
+    {
+     "category": "Page layout",
+     "criterion": "A4 or US Letter page size",
+     "earned": 0,
+     "possible": 8,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Page layout",
+     "criterion": "Two-column body layout",
+     "earned": 0,
+     "possible": 14,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Page layout",
+     "criterion": "Plausible and balanced outer margins",
+     "earned": 0,
+     "possible": 3,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "criterion": "Body text near 10 pt",
+     "earned": 0,
+     "possible": 12,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "criterion": "Serif/Times-like body font",
+     "earned": 0,
+     "possible": 8,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Title and authors",
+     "criterion": "Title text on first line",
+     "earned": 6,
+     "possible": 6,
+     "detail": "Potential title: MediTrack: Medicine Reminder and Inventory Tracker for Small Clinics",
+     "suggestion": "Place the research-paper title at the start of the document.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Title and authors",
+     "criterion": "Author / affiliation text",
+     "earned": 4,
+     "possible": 4,
+     "detail": "Text found between the title and abstract.",
+     "suggestion": "Add author names and affiliations below the title.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "criterion": "Abstract label",
+     "earned": 8,
+     "possible": 8,
+     "detail": "Abstract label found.",
+     "suggestion": "Include an Abstract paragraph following the chosen IEEE template.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "criterion": "Index Terms / Keywords label",
+     "earned": 0,
+     "possible": 7,
+     "detail": "Index Terms/Keywords label not found.",
+     "suggestion": "Include an 'Index Terms—' line beneath the abstract.",
+     "page": null,
+     "applicable": true,
+     "status": "fail"
+    },
+    {
+     "category": "Section structure",
+     "criterion": "Numbered main sections",
+     "earned": 6,
+     "possible": 6,
+     "detail": "9 numbered main section(s) detected.",
+     "suggestion": "Use headings such as 'I. INTRODUCTION', 'II. METHODS', 'III. RESULTS'.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Section structure",
+     "criterion": "Introduction section",
+     "earned": 4,
+     "possible": 4,
+     "detail": "Introduction section found.",
+     "suggestion": "Add an Introduction section using a consistent section-heading style.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Figures and tables",
+     "criterion": "Figure and table captions",
+     "earned": 0,
+     "possible": 10,
+     "detail": "No figure/table mentions detected; category excluded.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "References heading",
+     "earned": 4,
+     "possible": 4,
+     "detail": "References heading found.",
+     "suggestion": "Add a References section at the end of the paper.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "Numbered bibliography entries",
+     "earned": 4,
+     "possible": 4,
+     "detail": "3 numbered reference entry/entries found.",
+     "suggestion": "Use IEEE-style numbered reference entries such as [1] and [2].",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "Bracketed in-text citations",
+     "earned": 2,
+     "possible": 2,
+     "detail": "1 line(s) contain bracketed citations before the reference list.",
+     "suggestion": "Cite your sources in the main text using [1], [2], etc.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    }
+   ],
+   "notes": [
+    "This is a TEXT STRUCTURE score, not an IEEE layout/format-compliance score. Plain text does not store page dimensions, columns, margins, or fonts.",
+    "Export a formatted DOCX or PDF for a fuller formatting assessment.",
+    "For submission, validate the specific conference/journal template and run official PDF compliance checks separately."
+   ],
+   "disclaimer": "This is a teaching/demo formatting score, not an official IEEE score, publication decision or replacement for a venue's template and IEEE PDF Checker."
+  }
  },
  "evidence": {
   "schema_version": "2.0",
-  "evaluation_sha256": "d5500076fb4ba39bc4f7d8cff5070f9e68574c0cb6d06becafd1faa8e2c5862a",
+  "evaluation_sha256": "514d100c6a422b1bf3416bbcf97bfa3194b0b0170cbccfbdbcb98ba4700ef09b",
   "submission_id": "MT-2026-021",
   "report_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
   "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
@@ -2383,12 +2617,12 @@
     }
    },
    {
-    "id": "E-3e75e1fdb1fdb101cdbbb614",
+    "id": "E-f1618b3ec248bd5cfb77699c",
     "agent": "summarizer",
     "kind": "REPORT_SUMMARY",
     "label": "Generated summary",
     "text": "MediTrack is a Flask web application that helps small clinics track medicine stock and remind patients about their doses. The objectives are to record medicines and batches with expiry dates, to show a dashboard of low stock and soon-to-expire batches, to let staff create dose schedules for patients and to show a daily reminder list. The application has three blueprints: inventory, patients and reminders.",
-    "artifact_sha256": "78cf346c287294ac4de147b88d5d88aaed78a613fd94a992ba7af947b9165120",
+    "artifact_sha256": "08363a3335a413bdac5f8ae6997884eb1df9c1b42797560ebd86f029edd8594c",
     "locator": "/summary/summary",
     "provenance": "NATIVE_RECEIPT_MATCHED",
     "eligible_for_review": false,
@@ -2398,12 +2632,12 @@
     "data": {}
    },
    {
-    "id": "E-c6a5f4ef572d9319b2acf64c",
+    "id": "E-2b69dfaa13b781dd47a1b7f3",
     "agent": "summarizer",
     "kind": "REPORT_SUMMARY",
     "label": "Generated key point",
     "text": "We used Flask with SQLAlchemy for the models and WTForms for form validation.",
-    "artifact_sha256": "78cf346c287294ac4de147b88d5d88aaed78a613fd94a992ba7af947b9165120",
+    "artifact_sha256": "08363a3335a413bdac5f8ae6997884eb1df9c1b42797560ebd86f029edd8594c",
     "locator": "/summary/key_points/0",
     "provenance": "NATIVE_RECEIPT_MATCHED",
     "eligible_for_review": false,
@@ -2413,12 +2647,12 @@
     "data": {}
    },
    {
-    "id": "E-a63d68147ccbe0e431d15e51",
+    "id": "E-154eec987d7564d0f624ff34",
     "agent": "summarizer",
     "kind": "REPORT_SUMMARY",
     "label": "Generated key point",
     "text": "Creating a schedule for a patient who does not exist should be rejected.",
-    "artifact_sha256": "78cf346c287294ac4de147b88d5d88aaed78a613fd94a992ba7af947b9165120",
+    "artifact_sha256": "08363a3335a413bdac5f8ae6997884eb1df9c1b42797560ebd86f029edd8594c",
     "locator": "/summary/key_points/1",
     "provenance": "NATIVE_RECEIPT_MATCHED",
     "eligible_for_review": false,
@@ -2428,12 +2662,12 @@
     "data": {}
    },
    {
-    "id": "E-30a0efc58cc6b93f4b887df7",
+    "id": "E-2e5796be6a8c4519d107c16e",
     "agent": "summarizer",
     "kind": "REPORT_SUMMARY",
     "label": "Generated key point",
     "text": "The system has not been tested with real clinic data.",
-    "artifact_sha256": "78cf346c287294ac4de147b88d5d88aaed78a613fd94a992ba7af947b9165120",
+    "artifact_sha256": "08363a3335a413bdac5f8ae6997884eb1df9c1b42797560ebd86f029edd8594c",
     "locator": "/summary/key_points/2",
     "provenance": "NATIVE_RECEIPT_MATCHED",
     "eligible_for_review": false,
@@ -2443,12 +2677,12 @@
     "data": {}
    },
    {
-    "id": "E-4502a0a989fa0395835ee0e1",
+    "id": "E-e937cfb0f79cce5f7793ef04",
     "agent": "summarizer",
     "kind": "REPORT_SUMMARY",
     "label": "Generated key point",
     "text": "MediTrack replaces the paper register for stock and expiry tracking and gives staff a daily reminder list.",
-    "artifact_sha256": "78cf346c287294ac4de147b88d5d88aaed78a613fd94a992ba7af947b9165120",
+    "artifact_sha256": "08363a3335a413bdac5f8ae6997884eb1df9c1b42797560ebd86f029edd8594c",
     "locator": "/summary/key_points/3",
     "provenance": "NATIVE_RECEIPT_MATCHED",
     "eligible_for_review": false,
@@ -3416,7 +3650,7 @@
  },
  "decisions": {
   "schema_version": "2.0",
-  "evidence_sha256": "9d02b176fa9e98d083349c3d14114d7a0ce0df66920f87bf30650b7a99d32058",
+  "evidence_sha256": "999d4c605ed56de4221d61a86326ab4893040fe0c932bc0798a1e003652c553d",
   "rubric_sha256": "322a8a012f18b0ef62275454d732e14d8072313cf170cfe4e77b85e425c20b8e",
   "decisions": [
    {
@@ -4950,9 +5184,9 @@
   },
   "assessment": {
    "schema_version": "2.0",
-   "evidence_sha256": "9d02b176fa9e98d083349c3d14114d7a0ce0df66920f87bf30650b7a99d32058",
+   "evidence_sha256": "999d4c605ed56de4221d61a86326ab4893040fe0c932bc0798a1e003652c553d",
    "rubric_sha256": "3619ec074d315c4b4fba3ec87c1baa75742f7b312266d5c52089bd58b0deaadd",
-   "decisions_sha256": "cf56547afb0cbddd9066d6b9194f2e5669d43432a2f998026137fe7a06a3155f",
+   "decisions_sha256": "28fab5383fe10a953258dbab4a1727760a737592b4a8ad5cb321508cd188ab0d",
    "status": "INSUFFICIENT_EVIDENCE",
    "max_points": 80.0,
    "proposed_points": null,

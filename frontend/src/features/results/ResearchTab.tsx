@@ -1,7 +1,8 @@
 import { Fragment, useState } from 'react';
-import { AgentStatusBadge, Badge, Callout, Empty, Fact, HBar, More, StackBar, Tip } from '../../components/ui';
+import { AgentStatusBadge, Badge, Callout, Empty, Fact, HBar, More, Tip } from '../../components/ui';
 import { AGE_BAND, RESEARCH_RELEVANCE, RESEARCH_VERIFICATION, humanize } from '../../lib/labels';
 import { pct, type ViewModel } from '../../lib/viewModel';
+import { Donut, Legend, Ring } from '../../components/Visuals';
 
 const VTONE: Record<string, string> = { verified: 'good', needs_review: 'warn', not_found: 'warn', metadata_mismatch: 'bad', lookup_error: 'warn', not_checked: 'muted' };
 const RTONE: Record<string, string> = { directly_relevant: 'good', methodologically_relevant: 'info', partially_relevant: 'warn', insufficient_evidence: 'muted', possibly_unrelated: 'bad' };
@@ -48,17 +49,22 @@ export default function ResearchTab({ vm }: { vm: ViewModel }) {
       <div className="grid g3 mt-l">
         <section className="panel" style={{ marginTop: 0 }}>
           <h3>Identity verification</h3>
-          <div className="mt"><StackBar label="Verification" parts={Object.entries(vc).map(([k, v]) => ({ value: v as number, tone: VTONE[k] ?? 'muted', label: RESEARCH_VERIFICATION[k]?.label ?? k }))} /></div>
-          <div className="mt">{Object.entries(vc).map(([k, v]) => <div key={k} className="row between small" style={{ padding: '3px 0' }}><span><span className={`dot tone-${VTONE[k] ?? 'muted'}`} style={{ marginRight: 6 }} /><Tip text={RESEARCH_VERIFICATION[k]?.explain ?? ''}><span>{RESEARCH_VERIFICATION[k]?.label ?? humanize(k)}</span></Tip></span><strong>{v as number}</strong></div>)}</div>
+          <div className="row mt" style={{ gap: 18, flexWrap: 'nowrap' }}>
+            <Donut size={110} parts={Object.entries(vc).map(([k, v]) => ({ value: v as number, tone: (VTONE[k] ?? 'muted') as any, label: RESEARCH_VERIFICATION[k]?.label ?? k }))} center={`${vc.verified ?? 0}/${p1.reference_entries}`} sub="verified" />
+            <Legend parts={Object.entries(vc).map(([k, v]) => ({ value: v as number, tone: (VTONE[k] ?? 'muted') as any, label: RESEARCH_VERIFICATION[k]?.label ?? humanize(k) }))} />
+          </div>
         </section>
         <section className="panel" style={{ marginTop: 0 }}>
           <h3>Relevance to the project</h3>
-          <div className="mt"><StackBar label="Relevance" parts={Object.entries(rc).map(([k, v]) => ({ value: v as number, tone: RTONE[k] ?? 'muted', label: RESEARCH_RELEVANCE[k]?.label ?? k }))} /></div>
-          <div className="mt">{Object.entries(rc).sort((a, b) => (RESEARCH_RELEVANCE[a[0]]?.rank ?? 9) - (RESEARCH_RELEVANCE[b[0]]?.rank ?? 9)).map(([k, v]) => <div key={k} className="row between small" style={{ padding: '3px 0' }}><span><span className={`dot tone-${RTONE[k] ?? 'muted'}`} style={{ marginRight: 6 }} />{RESEARCH_RELEVANCE[k]?.label ?? humanize(k)}</span><strong>{v as number}</strong></div>)}</div>
+          <div className="row mt" style={{ gap: 18, flexWrap: 'nowrap' }}>
+            <Donut size={110} parts={Object.entries(rc).map(([k, v]) => ({ value: v as number, tone: (RTONE[k] ?? 'muted') as any, label: RESEARCH_RELEVANCE[k]?.label ?? k }))} center={String((rc.directly_relevant ?? 0) + (rc.methodologically_relevant ?? 0))} sub="relevant" />
+            <Legend parts={Object.entries(rc).sort((a, b) => (RESEARCH_RELEVANCE[a[0]]?.rank ?? 9) - (RESEARCH_RELEVANCE[b[0]]?.rank ?? 9)).map(([k, v]) => ({ value: v as number, tone: (RTONE[k] ?? 'muted') as any, label: RESEARCH_RELEVANCE[k]?.label ?? humanize(k) }))} />
+          </div>
           <p className="tiny muted mt">Heuristic estimates. Relevance does not prove a source supports the specific claim it is cited for.</p>
         </section>
         <section className="panel" style={{ marginTop: 0 }}>
           <h3>Publication age</h3>
+          <div className="row mt" style={{ justifyContent: 'center' }}><Ring value={p4.recent_reliable_percent ?? null} size={96} label="Last 5 years" sub={`Of ${p4.reliable_publication_year_count} confirmed years`} tone="info" /></div>
           <div className="mt">{ages.map(([k, v]) => <HBar key={k} label={AGE_BAND[k] ?? humanize(k)} value={v} max={p1.reference_entries || 1} tone={k === 'within_5_years' ? 'good' : k === 'unknown' ? 'muted' : 'info'} display={String(v)} />)}</div>
           <p className="tiny muted mt">Median confirmed year: {p4.median_reliable_publication_year ?? 'not available'}. Directly relevant and recent: {p4.verified_direct_recent_count} of {p4.verified_direct_count}.</p>
         </section>

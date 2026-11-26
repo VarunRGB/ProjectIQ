@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { LedgerBar } from '../../components/Ledger';
+import { LedgerBar, SectionRings } from '../../components/Ledger';
+import { Ring, toneFor } from '../../components/Visuals';
+import { VERDICT } from '../results/FormatTab';
 import { evidenceAgent } from '../../components/EvidenceCard';
 import { AGENT_INFO, AGE_BAND, CRITERION_STATUS, DIAG_CATEGORY, EVIDENCE_KIND, FLAG_TEXT, INTEGRITY_CATEGORY, OWNER_INFO, PROVENANCE, RESEARCH_RELEVANCE, RESEARCH_VERIFICATION, TEST_OUTCOME, TEST_REASON, humanize, reasonText } from '../../lib/labels';
 import { useEvaluation } from '../../lib/useEvaluation';
@@ -84,6 +86,7 @@ export default function ReportPage() {
 
         <Section n={++n} title="Mark sheet" lead="Each criterion with its share of the grade, the level awarded and who decided it. Criteria that are not assessed are not counted as zero.">
           <LedgerBar a={a} interactive={false} />
+          <div className="r-rings"><SectionRings a={a} size={70} animate={false} /></div>
           <table className="r-table mt">
             <thead><tr><th>Criterion</th><th className="num">Weight</th><th>Level</th><th className="num">Marks</th><th>Status</th></tr></thead>
             <tbody>
@@ -238,6 +241,17 @@ export default function ReportPage() {
             {ig.secondary.length > 0 && <p className="r-small">A second, experimental pass found {ig.secondary.length} additional loosely similar sentence{ig.secondary.length > 1 ? 's' : ''} ({ig.secondary.filter((m) => m.secondary_review?.status === 'MUTUAL_ENTAILMENT_CANDIDATE').length} possible paraphrase{ig.secondary.filter((m) => m.secondary_review?.status === 'MUTUAL_ENTAILMENT_CANDIDATE').length === 1 ? '' : 's'}, unconfirmed). They are not counted in the overlap.</p>}
             <h4>AI-generated writing estimate</h4>
             {ig.ai?.status === 'COMPLETED' ? <p>{ig.ai.interpretation} Confidence: {humanize(ig.ai.confidence)}.</p> : <p className="r-note">{ig.ai?.status === 'INCONCLUSIVE' ? 'Inconclusive: too little text could be scored.' : ig.ai?.status === 'FAILED' ? 'The estimate failed.' : 'Not available for this evaluation.'} This is not 0%.</p>}
+          </Section>
+        )}
+
+        {r.ieee_format && r.ieee_format.status !== 'FAILED' && (
+          <Section n={++n} title="Report formatting (IEEE conventions)" lead="Advisory check of common IEEE paper conventions. It does not affect marks.">
+            <div className="r-format">
+              <Ring value={r.ieee_format.score} size={78} animate={false} tone={toneFor(r.ieee_format.score, 85, 70)} />
+              <div><strong>{VERDICT[r.ieee_format.format_verdict]?.label}</strong>. {r.ieee_format.rating}. <span className="r-small">{r.ieee_format.layout_verdict}.</span>
+                <ul className="r-list">{(r.ieee_format.checks ?? []).filter((c) => c.status === 'fail' || c.status === 'warning').slice(0, 6).map((c, i) => <li key={i}><strong>{c.criterion}:</strong> {c.suggestion || c.detail}</li>)}</ul>
+              </div>
+            </div>
           </Section>
         )}
 

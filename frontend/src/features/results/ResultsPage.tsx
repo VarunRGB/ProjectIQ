@@ -11,6 +11,7 @@ import IntegrityTab from './IntegrityTab';
 import SummaryTab from './SummaryTab';
 import EvidenceTab from './EvidenceTab';
 import ActivityTab from './ActivityTab';
+import FormatTab from './FormatTab';
 
 export default function ResultsPage({ caps }: { caps: BackendCapabilities | null }) {
   const { id, tab = 'overview' } = useParams();
@@ -29,6 +30,7 @@ export default function ResultsPage({ caps }: { caps: BackendCapabilities | null
     ['executioner', 'Executioner', null],
     ['research', 'Research', null],
     ['integrity', 'Integrity', null],
+    ['format', 'Format', null],
     ['summary', 'Report summary', null],
     ['evidence', 'Evidence', rec.evidence?.items.length ?? null],
     ['activity', 'Activity', null],
@@ -80,6 +82,7 @@ export default function ResultsPage({ caps }: { caps: BackendCapabilities | null
       {tab === 'executioner' && <ExecutionerTab vm={vm} />}
       {tab === 'research' && <ResearchTab vm={vm} />}
       {tab === 'integrity' && <IntegrityTab vm={vm} />}
+      {tab === 'format' && <FormatTab f={r.ieee_format} />}
       {tab === 'summary' && <SummaryTab vm={vm} />}
       {tab === 'evidence' && <EvidenceTab vm={vm} />}
       {tab === 'activity' && <ActivityTab vm={vm} />}

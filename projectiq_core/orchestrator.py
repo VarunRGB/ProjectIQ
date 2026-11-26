@@ -379,7 +379,21 @@ def evaluate(*, out: Path, rubric: Rubric, report=None, title=None, submission_i
                 write_new(out/'workflow_error.json', json_bytes({'stage':'research','error_type':type(exc).__name__,
                     'code':str(exc) if str(exc).isupper() and len(str(exc))<120 else 'RESEARCH_SUPPLEMENT_FAILED'}))
                 raise
+    ieee_path = collection / "ieee_format.json"
+
+    if ieee_path.is_file():
+        ieee_result = load_json(ieee_path)
+    else:
+        from .ieee_integration import run_ieee_check
+
+        ieee_result = run_ieee_check(
+            collection / "input" / ev.submission.report_name
+        )
+
+        write_new(ieee_path, json_bytes(ieee_result))
     eval_path = collection/'evaluation.json'
+
+
     if bundle is None:
         bundle = build_evidence(eval_path, acknowledge_imported=acknowledge_imported)
     if old_decisions is not None:
@@ -430,6 +444,9 @@ def evaluate(*, out: Path, rubric: Rubric, report=None, title=None, submission_i
                   'Private local evaluation; no unrestricted execution or authenticated faculty approval.',
                   'Live Executioner collection is STATIC; runtime marks require eligible reviewed evidence.',
                   'Legacy judge never executed by this workflow. Imported historical summaries may have been produced by that judge.']))}
+    
+    result["ieee_format"] = ieee_result
+    result["artifacts"]["ieee_format"] = "collection/ieee_format.json"
     write_new(out/'result.json', json_bytes(result))
     print('Unified result:', out/'result.json', flush=True)
     return 130 if grade_code==130 else 1 if grade_code else 2 if failures else 0

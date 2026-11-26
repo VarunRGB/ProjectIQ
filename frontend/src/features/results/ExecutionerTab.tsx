@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { ObservationTable } from '../../components/EvidenceCard';
-import { AgentStatusBadge, Badge, Callout, Empty, Fact, HBar, More, OutcomeBadge, SourceLoc, StackBar, Tip, shortSha } from '../../components/ui';
+import { AgentStatusBadge, Badge, Callout, Empty, Fact, HBar, More, OutcomeBadge, SourceLoc, Tip, shortSha } from '../../components/ui';
 import { DIAG_CATEGORY, OWNER_INFO, TEST_OUTCOME, TEST_REASON, humanize, type Tone } from '../../lib/labels';
 import type { TestRow, ViewModel } from '../../lib/viewModel';
+import { Donut, Legend, Ring, toneFor } from '../../components/Visuals';
 
 const OUTCOMES = ['PASSED', 'FAILED', 'BLOCKED', 'INCONCLUSIVE', 'NOT_TESTED'];
 const OUT_TONE: Record<string, string> = { PASSED: 'good', FAILED: 'bad', BLOCKED: 'warn', INCONCLUSIVE: 'pencil', NOT_TESTED: 'muted' };
@@ -156,13 +157,18 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
         <div className="grid g2">
           <div className="sub">
             <div className="row between"><h4>Planned tests ({planned.length})</h4><span className="small muted">{executedPlanned} executed</span></div>
-            <div className="mt"><StackBar label="Planned test outcomes" parts={OUTCOMES.map((o) => ({ value: pc[o] ?? 0, tone: OUT_TONE[o], label: TEST_OUTCOME[o].label }))} /></div>
-            <div className="row small mt" style={{ gap: 14 }}>{OUTCOMES.map((o) => <span key={o}><span className={`dot tone-${OUT_TONE[o]}`} style={{ marginRight: 5 }} />{TEST_OUTCOME[o].label} {pc[o] ?? 0}</span>)}</div>
+            <div className="row mt" style={{ gap: 22, flexWrap: 'nowrap' }}>
+              <Donut parts={OUTCOMES.map((o) => ({ value: pc[o] ?? 0, tone: OUT_TONE[o] as any, label: TEST_OUTCOME[o].label }))} center={String(planned.length)} sub="planned" />
+              <Legend parts={OUTCOMES.map((o) => ({ value: pc[o] ?? 0, tone: OUT_TONE[o] as any, label: TEST_OUTCOME[o].label }))} />
+              <Ring value={executedPlanned ? pc.PASSED ?? 0 : null} max={executedPlanned || 1} size={86} label="Pass rate" sub={executedPlanned ? 'Of executed tests' : 'Nothing executed'} tone={toneFor(executedPlanned ? ((pc.PASSED ?? 0) / executedPlanned) * 100 : null)} />
+            </div>
           </div>
           <div className="sub">
             <div className="row between"><h4>Reviewed scenarios ({reviewed.length})</h4><Tip text="A reviewed scenario checks one approved behaviour. It does not cover a whole route or every requirement."><span className="small muted">Not full coverage</span></Tip></div>
-            <div className="mt"><StackBar label="Reviewed scenario outcomes" parts={OUTCOMES.map((o) => ({ value: rc[o] ?? 0, tone: OUT_TONE[o], label: TEST_OUTCOME[o].label }))} /></div>
-            <div className="row small mt" style={{ gap: 14 }}>{OUTCOMES.filter((o) => rc[o]).map((o) => <span key={o}><span className={`dot tone-${OUT_TONE[o]}`} style={{ marginRight: 5 }} />{TEST_OUTCOME[o].label} {rc[o]}</span>)}{!reviewed.length && <span className="muted">None in this run</span>}</div>
+            <div className="row mt" style={{ gap: 22, flexWrap: 'nowrap' }}>
+              <Donut parts={OUTCOMES.map((o) => ({ value: rc[o] ?? 0, tone: OUT_TONE[o] as any, label: TEST_OUTCOME[o].label }))} center={String(reviewed.length)} sub="scenarios" />
+              {reviewed.length ? <Legend parts={OUTCOMES.filter((o) => rc[o]).map((o) => ({ value: rc[o] ?? 0, tone: OUT_TONE[o] as any, label: TEST_OUTCOME[o].label }))} /> : <span className="small muted">None in this run</span>}
+            </div>
           </div>
         </div>
 
@@ -230,7 +236,7 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
           <div className="grid g2 mt-l">
             <div>
               <h4>Dimensions</h4>
-              <div className="mt">{Object.entries(qi.dimensions ?? {}).map(([k, v]) => <HBar key={k} label={humanize(k)} value={v as number | null} tone={(v as number) >= 80 ? 'good' : (v as number) >= 60 ? 'warn' : 'bad'} />)}</div>
+              <div className="vis-row mt">{Object.entries(qi.dimensions ?? {}).map(([k, v]) => <Ring key={k} value={v as number | null} size={78} label={humanize(k)} tone={toneFor(v as number | null, 80, 60)} />)}</div>
               {Object.values(qi.dimensions ?? {}).some((v) => v === null) && <p className="tiny muted">n/a: not measurable for this language. Excluded from the indicator, not counted as zero.</p>}
             </div>
             <div>

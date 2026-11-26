@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { backend, type BackendCapabilities } from '../../api';
 import type { Criterion, Evidence, Feedback, Rubric, TeacherDecisionEntry, TeacherReview } from '../../api/types';
 import { EvidenceCard } from '../../components/EvidenceCard';
-import { CoverageMeter, GradeHeadline, segClass } from '../../components/Ledger';
+import { CoverageMeter, GradeHeadline, SectionRings, segClass } from '../../components/Ledger';
 import { Badge, Callout, CriterionStatusBadge, Drawer, More, Tip } from '../../components/ui';
 import { EVIDENCE_KIND, FLAG_TEXT, engineMessage, humanize, reasonText } from '../../lib/labels';
 import { clone, isResearch, validateRubric } from '../../lib/rubric';
@@ -331,6 +331,7 @@ export default function Grading({ vm, setReview, caps, reload }: { vm: ViewModel
           </div>
         </div>
       </section>
+      <section className="panel"><div className="panel-head"><h2>Score by section</h2></div><SectionRings a={a} size={84} /></section>
       {toast && <div className="mt" role="status"><Callout tone="good">{toast}</Callout></div>}
       {err && <div className="mt" role="alert"><Callout tone="bad" title="Not saved">{err}</Callout></div>}
       <div className="mt-l">

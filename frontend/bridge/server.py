@@ -94,7 +94,7 @@ class Job:
         self.state = 'RUNNING'
         self.stage = 'queued'
         self.events = []
-        self.agents = {a: {'state': 'waiting'} for a in (*AGENTS, 'rubric')}
+        self.agents = {a: {'state': 'waiting'} for a in ('format', *AGENTS, 'rubric')}
         self.started_at = {}
         self.proc = None
         self.cancelled = False
@@ -145,6 +145,9 @@ def interpret(job: Job, line: str):
     m = AGENT_LINE.match(line)
     if m:
         agent, rest = m.groups()
+        if job.agents['format']['state'] == 'running':
+            # The collector runs the IEEE format check before the first agent starts.
+            job.agent('format', 'done', 'Format check finished')
         if rest == 'starting':
             job.agent(agent, 'running', 'Running')
             job.event(f'{agent.capitalize()} started.', stage=agent, agent=agent)
@@ -161,6 +164,10 @@ def interpret(job: Job, line: str):
         if job.agents['rubric']['state'] == 'waiting':
             job.agent('rubric', 'running', 'Proposing levels from evidence')
             job.event('Rubric engine started.', stage='rubric', agent='rubric')
+        mb = re.search(r'batch (\d+)/(\d+)', line)
+        if mb:
+            with job.lock:
+                job.agents['rubric']['progress'] = round(100 * (int(mb.group(1)) - 1) / int(mb.group(2)))
         job.agent('rubric', 'running', line[:160])
         job.event(line[:220], 'warn' if 'WITHHELD' in line or 'DEFER' in line else 'info', agent='rubric')
         return
@@ -213,6 +220,7 @@ def evaluate_job(job: Job, req: dict, files: dict, jobdir: Path):
                 args += ['--references', refs_dir]
             if verify:
                 args += ['--verify-research']
+            job.agent('format', 'running', 'Checking IEEE formatting')
             code, tail = run_cmd(job, args, label='projectiq_core evaluate')
         else:
             if not req.get('acknowledge_imported'):
@@ -256,6 +264,7 @@ def evaluate_job(job: Job, req: dict, files: dict, jobdir: Path):
                 args += ['--references', refs_dir]
             if verify:
                 args += ['--verify-research']
+            job.agent('format', 'running', 'Checking IEEE formatting')
             run_cmd(job, args, label='projectiq_core collect')
             native = jobdir / 'collect' / 'native'
             # 3. Bundle every native result as one acknowledged imported evaluation.
@@ -279,6 +288,9 @@ def evaluate_job(job: Job, req: dict, files: dict, jobdir: Path):
                 'verify_research': verify, 'elapsed_seconds': round(time.time() - job.started, 1),
                 'composition': 'IMPORTED_ACKNOWLEDGED' if composed else 'LIVE'}
         dump(out / 'faculty_meta.json', meta)
+        fmt = (load(out / 'result.json').get('ieee_format') or {}).get('status')
+        job.agent('format', {'COMPLETED': 'done', 'REVIEW_REQUIRED': 'partial', 'FAILED': 'failed'}.get(fmt, 'skipped'),
+                  {'COMPLETED': 'Format check finished', 'REVIEW_REQUIRED': 'Needs review', 'FAILED': 'Format check failed'}.get(fmt, 'Not available'))
         for a in (*AGENTS, 'rubric'):
             if job.agents[a]['state'] in ('waiting', 'running'):
                 job.agent(a, 'done' if a == 'rubric' else 'skipped')

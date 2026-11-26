@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import type { AgentName } from '../../api/types';
-import { CoverageMeter, GradeHeadline, LedgerBar } from '../../components/Ledger';
-import { AgentStatusBadge, Badge, Callout, Fact, ProvenanceBadge, Tip } from '../../components/ui';
+import { CoverageMeter, GradeHeadline, LedgerBar, SectionRings } from '../../components/Ledger';
+import { Ring, toneFor, toneForRisk } from '../../components/Visuals';
+import { FormatSummary } from './FormatTab';
+import { AgentStatusBadge, Badge, Callout, ProvenanceBadge, Tip } from '../../components/ui';
 import { AGENT_INFO, humanize } from '../../lib/labels';
 import { pct, type ViewModel } from '../../lib/viewModel';
 
@@ -33,31 +35,34 @@ function agentFacts(vm: ViewModel, n: AgentName) {
   if (n === 'executioner' && vm.executioner) {
     const e = vm.executioner;
     const run = (e.counts.PASSED ?? 0) + (e.counts.FAILED ?? 0);
+    const rv = e.reviewed.length; const rvPass = e.reviewedCounts.PASSED ?? 0;
     return (
-      <div className="g3 grid" style={{ gap: 12 }}>
-        <Fact value={e.intelligence.server_endpoint_count ?? null} label="Endpoints found" />
-        <Fact value={run ? `${e.counts.PASSED ?? 0}/${run}` : null} label="Planned tests passed" tip="Only exact planned tests with verified observations. Untested cases are not failures." />
-        <Fact value={e.effectiveMode || null} label="Mode" />
+      <div className="vis-row">
+        <Ring value={run ? e.counts.PASSED ?? 0 : null} max={run || 1} size={88} suffix="" display={run ? `${e.counts.PASSED ?? 0}/${run}` : undefined} label="Planned tests passed" sub={run ? 'Verified runs' : 'None executed'} tone={toneFor(run ? ((e.counts.PASSED ?? 0) / run) * 100 : null)} />
+        <Ring value={rv ? rvPass : null} max={rv || 1} size={88} display={rv ? `${rvPass}/${rv}` : undefined} label="Reviewed scenarios" sub={rv ? 'Passed' : 'None run'} tone={toneFor(rv ? (rvPass / rv) * 100 : null)} />
+        <Ring value={e.intelligence.features_discovered ?? null} max={Math.max(1, e.intelligence.features_discovered ?? 1)} size={88} display={String(e.intelligence.features_discovered ?? 0)} tone="info" label="Features found" sub={`${e.intelligence.server_endpoint_count ?? 0} endpoints`} />
       </div>
     );
   }
   if (n === 'research' && vm.research?.report) {
-    const p = vm.research.report;
+    const p = vm.research.report; const total = p.phase_1.reference_entries || 0;
+    const ver = p.phase_2.status_counts?.verified ?? 0;
+    const rel = (p.phase_3.classification_counts?.directly_relevant ?? 0) + (p.phase_3.classification_counts?.methodologically_relevant ?? 0);
     return (
-      <div className="g3 grid" style={{ gap: 12 }}>
-        <Fact value={p.phase_1.reference_entries} label="References" />
-        <Fact value={p.phase_2.status_counts?.verified ?? 0} label="Verified" tip="Identity matched an academic metadata record." />
-        <Fact value={p.phase_4.recent_reliable_percent === null ? null : pct(p.phase_4.recent_reliable_percent, 0)} label="Recent (5 yrs)" tip="Share of references with a confirmed year that are under five years old." />
+      <div className="vis-row">
+        <Ring value={total ? ver : null} max={total || 1} size={88} display={`${ver}/${total}`} label="Verified" sub="Identity confirmed" tone={toneFor(total ? (ver / total) * 100 : null)} />
+        <Ring value={total ? rel : null} max={total || 1} size={88} display={`${rel}/${total}`} label="Relevant" sub="Direct or method" tone={toneFor(total ? (rel / total) * 100 : null)} />
+        <Ring value={p.phase_4.recent_reliable_percent ?? null} size={88} label="Recent" sub="Last 5 years" tone="info" />
       </div>
     );
   }
   if (n === 'integrity' && vm.integrity) {
     const i = vm.integrity; const ai = i.ai;
+    const aiPct = ai?.status === 'COMPLETED' ? ai.estimated_percent : null;
     return (
-      <div className="g3 grid" style={{ gap: 12 }}>
-        <Fact value={i.overlap === null ? null : pct(i.overlap)} label="Reference overlap" tip="Confirmed verbatim, near-verbatim and paraphrased words as a share of checked words. Not a plagiarism verdict." />
-        <Fact value={i.references.length} label="References compared" />
-        <Fact value={ai?.status === 'COMPLETED' ? pct(ai.estimated_percent) : null} label="AI-like writing" tip="Advisory estimate. Never proof and never a deduction." />
+      <div className="vis-row">
+        <Ring value={i.overlap} size={88} label="Reference overlap" sub={i.overlap === null ? 'No references' : 'Confirmed only'} tone={toneForRisk(i.overlap)} />
+        <Ring value={aiPct} size={88} label="AI-like writing" sub={aiPct === null ? 'Not available' : 'Advisory'} tone={toneForRisk(aiPct, 15, 35)} />
       </div>
     );
   }
@@ -88,6 +93,11 @@ export default function Overview({ vm, base }: { vm: ViewModel; base: string }) 
             <LedgerBar a={a} linkBase={`${base}/grading`} />
           </div>
         </div>
+      </section>
+
+      <section className="panel" aria-label="Score by section">
+        <div className="panel-head"><div><h2>Score by section</h2><p>Violet rings are AI proposals, teal rings are approved by you. Sections not yet assessed show n/a, not zero.</p></div></div>
+        <SectionRings a={a} />
       </section>
 
       <div className="grid g2 mt-l" style={{ alignItems: 'start' }}>
@@ -144,6 +154,13 @@ export default function Overview({ vm, base }: { vm: ViewModel; base: string }) 
             </section>
           );
         })}
+        <section className="panel" style={{ marginTop: 0 }}>
+          <div className="panel-head" style={{ marginBottom: 10 }}>
+            <div><h3>Format check</h3><p className="small">Compares the report with IEEE paper conventions. Advisory only.</p></div>
+          </div>
+          <FormatSummary f={vm.rec.result.ieee_format} size={88} />
+          <div className="mt"><Link to={`${base}/format`} className="btn sm">Open format results</Link></div>
+        </section>
       </div>
     </>
   );

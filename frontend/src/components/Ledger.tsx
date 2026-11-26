@@ -1,3 +1,4 @@
+import { Ring } from './Visuals';
 import { Link } from 'react-router-dom';
 import type { Recomputed, RecomputedCriterion } from '../lib/scoring';
 import { fmtPoints } from '../lib/viewModel';
@@ -97,6 +98,29 @@ export function CoverageMeter({ a }: { a: Recomputed }) {
         <span>Proposed or objective {Math.round(prop * 100) / 100}%</span>
         <span>Not assessed {Math.round((100 - a.assessed_weight_percent) * 100) / 100}%</span>
       </div>
+    </div>
+  );
+}
+
+/** One ring per rubric section: earned marks out of the section's marks. Unassessed parts are not counted as zero. */
+export function SectionRings({ a, size = 92, animate = true }: { a: Recomputed; size?: number; animate?: boolean }) {
+  const groups = a.groups.filter((g) => g.max_points > 0);
+  return (
+    <div className="section-rings">
+      {groups.map((g) => {
+        const crits = a.criteria.filter((c) => c.group === g.id && c.status !== 'EXCLUDED');
+        const reviewed = crits.length > 0 && crits.every((c) => c.status === 'TEACHER_REVIEWED');
+        const partial = g.unresolved_criterion_ids.length > 0;
+        const name = g.id.charAt(0).toUpperCase() + g.id.slice(1).replace(/_/g, ' ');
+        if (partial && g.assessed_max_points === 0) {
+          return <Ring key={g.id} value={null} size={size} label={name} sub={`Not assessed (of ${fmtPoints(g.max_points)})`} animate={animate} />;
+        }
+        return (
+          <Ring key={g.id} value={g.assessed_subtotal_points} max={partial ? g.assessed_max_points : g.max_points} size={size} animate={animate}
+            tone={reviewed ? 'ink' : 'pencil'} display={fmtPoints(g.assessed_subtotal_points)} label={name}
+            sub={partial ? `of ${fmtPoints(g.assessed_max_points)} assessed so far` : `of ${fmtPoints(g.max_points)}${reviewed ? ', approved' : ', proposed'}`} />
+        );
+      })}
     </div>
   );
 }

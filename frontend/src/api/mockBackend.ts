@@ -40,7 +40,7 @@ function writeJSON(key: string, value: unknown) {
 
 interface MockRun {
   run_id: string; evaluation_id: string; scenario: string; title: string; submission_id: string;
-  started_at: number; script: { at: number; stage: RunStage; agent?: AgentName | 'rubric'; state?: string; message: string; level: RunEvent['level'] }[];
+  started_at: number; script: { at: number; stage: RunStage; agent?: AgentName | 'rubric' | 'format'; state?: string; message: string; level: RunEvent['level'] }[];
   total_ms: number; cancelled?: boolean; request: Pick<EvaluationRequest, 'title' | 'submission_id' | 'students' | 'course' | 'rubric' | 'repository_url' | 'report_file_name'> & { mode: string | null };
 }
 
@@ -127,7 +127,9 @@ export class MockBackend implements Backend {
     let t = 400;
     const step = (dt: number, e: Omit<MockRun['script'][number], 'at'>) => { t += dt; script.push({ at: t, ...e }); };
     step(0, { stage: 'queued', message: 'Submission received; private report snapshot saved with its SHA-256.', level: 'info' });
-    step(700, { stage: 'summarizer', agent: 'summarizer', state: 'running', message: 'Extracting report text and key sentences (no model call).', level: 'info' });
+    step(500, { stage: 'format', agent: 'format', state: 'running', message: 'Checking the report against IEEE formatting conventions.', level: 'info' });
+    step(1400, { stage: 'format', agent: 'format', state: 'done', message: 'Format check finished.', level: 'success' });
+    step(200, { stage: 'summarizer', agent: 'summarizer', state: 'running', message: 'Extracting report text and key sentences (no model call).', level: 'info' });
     step(1500, { stage: 'summarizer', agent: 'summarizer', state: 'done', message: 'Summary extracted.', level: 'success' });
     step(300, { stage: 'integrity', agent: 'integrity', state: 'running', message: req.reference_files.length ? `Comparing the report with ${req.reference_files.length} reference document(s).` : 'No references uploaded: similarity will be unavailable, not zero.', level: req.reference_files.length ? 'info' : 'warn' });
     step(2400, { stage: 'integrity', agent: 'integrity', state: 'running', message: 'Scoring passages of the student’s own writing for AI-like text.', level: 'info' });
@@ -164,7 +166,7 @@ export class MockBackend implements Backend {
     const elapsed = Math.min(now() - run.started_at, run.total_ms);
     const seen = run.script.filter((e) => e.at <= elapsed);
     const agents: RunStatus['agents'] = {
-      summarizer: { state: 'waiting' }, integrity: { state: 'waiting' }, research: { state: 'waiting' },
+      format: { state: 'waiting' }, summarizer: { state: 'waiting' }, integrity: { state: 'waiting' }, research: { state: 'waiting' },
       executioner: { state: 'waiting' }, rubric: { state: 'waiting' },
     };
     const started: Record<string, number> = {};

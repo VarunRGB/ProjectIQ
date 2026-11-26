@@ -3,6 +3,7 @@ import type { AIAnalysis, AIFlaggedPassage } from '../../api/types';
 import { AgentStatusBadge, Badge, Callout, Empty, Fact, HBar, More, Tip } from '../../components/ui';
 import { INTEGRITY_CATEGORY, humanize } from '../../lib/labels';
 import { pct, type ViewModel } from '../../lib/viewModel';
+import { Gauge, Ring, toneForRisk } from '../../components/Visuals';
 
 const AI_STATE: Record<AIAnalysis['status'], { label: string; tone: 'good' | 'warn' | 'bad' | 'muted' | 'info'; text: string }> = {
   COMPLETED: { label: 'Estimate available', tone: 'info', text: '' },
@@ -18,20 +19,6 @@ const SECONDARY: Record<string, { label: string; tone: 'warn' | 'muted' | 'info'
   MODEL_UNAVAILABLE: { label: 'Inference model unavailable', tone: 'muted', explain: 'The candidate could not be checked.' },
   REVIEW_UNAVAILABLE: { label: 'Review unavailable', tone: 'muted', explain: 'The secondary check failed; primary results are unaffected.' },
 };
-
-/** Semicircle gauge. Shows the estimate as a share, labelled advisory. */
-function Gauge({ value }: { value: number }) {
-  const r = 70, cx = 90, cy = 86, a = Math.PI * (1 - value / 100);
-  const x = cx + r * Math.cos(a), y = cy - r * Math.sin(a);
-  return (
-    <svg viewBox="0 0 180 104" width="200" style={{ flexShrink: 0 }} role="img" aria-label={`AI-like writing estimate ${value}%`}>
-      <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`} fill="none" stroke="#e7eaf0" strokeWidth="14" strokeLinecap="round" />
-      {value > 0 && <path d={`M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${x} ${y}`} fill="none" stroke="#6750b0" strokeWidth="14" strokeLinecap="round" />}
-      <text x={cx} y={cy - 12} textAnchor="middle" style={{ font: '600 30px var(--serif)', fill: '#1d2b53' }}>{value}%</text>
-      <text x={cx} y={cy + 10} textAnchor="middle" style={{ font: '500 11px var(--sans)', fill: '#5f6880' }}>advisory estimate</text>
-    </svg>
-  );
-}
 
 /**
  * Dedicated, extensible section for the Integrity agent's AI-generated-content
@@ -51,7 +38,7 @@ export function AIDetectionPanel({ ai }: { ai: AIAnalysis | null }) {
       {ai?.status === 'COMPLETED' && ai.estimated_percent !== null ? (
         <div className="grid g2" style={{ alignItems: 'center' }}>
           <div className="row" style={{ gap: 20, flexWrap: 'nowrap' }}>
-            <Gauge value={ai.estimated_percent} />
+            <Gauge value={ai.estimated_percent} size={220} label="AI-like writing" caption="Advisory estimate" bands={[[15, 'good'], [35, 'warn'], [100, 'bad']]} />
             <div>
               <p style={{ margin: 0 }}>{ai.interpretation}</p>
               <p className="small muted" style={{ margin: '8px 0 0' }}>Confidence: <strong>{humanize(ai.confidence)}</strong>. Copied sentences are excluded before scoring.</p>
@@ -120,8 +107,17 @@ export default function IntegrityTab({ vm }: { vm: ViewModel }) {
           <Callout tone="muted" title="Similarity unavailable, not zero">No reference documents were uploaded for this submission, so there was nothing to compare against. Upload the papers the students cite to enable this check in a future evaluation.</Callout>
         ) : (
           <>
-            <div className="grid g4">
-              <Fact value={pct(i.overlap)} label="Confirmed overlap" tip="Verbatim, near-verbatim and confirmed paraphrase words as a share of checked words." />
+            <div className="grid g2" style={{ alignItems: 'center' }}>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <Gauge value={i.overlap} size={220} label="Confirmed overlap" caption="Share of checked words" bands={[[10, 'good'], [25, 'warn'], [100, 'bad']]} />
+              </div>
+              <div className="vis-row">
+                {(['verbatim', 'near-verbatim', 'paraphrase', 'similar meaning (not confirmed)'] as const).filter((k) => k in i.byCategory).map((k) => (
+                  <Ring key={k} value={i.byCategory[k] ?? null} size={82} label={INTEGRITY_CATEGORY[k].label} sub={INTEGRITY_CATEGORY[k].counted ? 'Counted' : 'Advisory, not counted'} tone={INTEGRITY_CATEGORY[k].counted ? toneForRisk(i.byCategory[k] ?? null, 5, 15) : 'muted'} />
+                ))}
+              </div>
+            </div>
+            <div className="grid g3 mt-l">
               <Fact value={pct(i.inChunks)} label="In copied passages" tip="Overlap that forms runs of consecutive sentences following the same reference." />
               <Fact value={i.wordsChecked} label="Words checked" />
               <Fact value={i.references.length} label="References compared" scope={i.references.join(', ')} />

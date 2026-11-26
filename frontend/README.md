@@ -60,6 +60,7 @@ acknowledgment and labels this evidence as imported.
 | Evidence explorer, citations | `rubric/evidence.json` | `EvidenceBundle` 2.0 |
 | Model decisions (defer/retry) | `rubric/decisions.json` | `DecisionSet` 2.0 |
 | AI-writing estimate | `agents.integrity.ai_detection` | `AIAnalysis`, Desklib detector output (merged) |
+| IEEE format check | `result.ieee_format` (`projectiq_core/ieee_integration.py`) | advisory score, verdict, categories and checks; shown in the Format tab, overview and report |
 | Additional semantic matches | `agents.integrity.details.matches[].secondary_review` | advisory second NLI pass (merged), never counted |
 
 All types are mirrored in `src/api/types.ts`. No new data contract was invented.
@@ -82,6 +83,16 @@ directories so the bridge can serve and re-grade them.
 | CampusConnect | Imported RESUME/REVIEWED Executioner evidence (fresh + reused suites, failed and blocked tests), research with metadata conflicts, integrity overlap and AI estimate, research criterion deferred so the grade is withheld |
 | MediTrack | Live STATIC run, Research agent failure, no reference corpus (similarity unavailable), AI detector missing |
 | Irrigation | Report-only submission, custom template, research excluded with weight redistribution, complete proposed grade |
+
+## Visual design notes
+
+* The run screen shows one progress ring per step (format check, summary, integrity, research,
+  executioner, rubric) joined by flowing arrows, plus an overall loading bar. Running steps show a
+  time-based estimate that only reaches 100% when the backend reports the step finished; the
+  rubric step uses the real batch count when available. No logs are shown to teachers.
+* Results use rings (section scores, tests passed, verified references, format areas), donuts
+  (test outcomes, verification, relevance) and speed-test gauges (AI-like writing, overlap, format
+  score). Missing values are drawn as an empty dashed ring labelled n/a, never as 0.
 
 ## Grading behaviour
 
