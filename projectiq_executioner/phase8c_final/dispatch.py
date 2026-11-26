@@ -35,21 +35,27 @@ def plan_acquisition(root,source):
     return plan,recipe,{'kind':'BLOCKED','reason':'RESOLVER_NOT_IMPLEMENTED'}
 
 
-def _download(cmd,out,bundle,staging):
+def _download(cmd,out,bundle,staging,*,python_child=False):
     require(shutil.disk_usage(out).free>=500_000_000,'HOST_DISK_HEADROOM_INSUFFICIENT')
     try:
-        cp=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=630,check=False)
+        try:cp=subprocess.run(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=630,check=False)
+        except subprocess.TimeoutExpired:
+            if python_child:raise ValueError('PYPI_CHILD_TIMEOUT') from None
+            raise
         if cp.returncode!=0:
             # Child may emit only a fixed bounded error code; no raw output.
-            code='REGISTRY_ACQUISITION_FAILED'
+            code='PYPI_CHILD_PROTOCOL_FAILED' if python_child else 'REGISTRY_ACQUISITION_FAILED'
             if len(cp.stdout)<=4096:
                 try:
                     candidate=load_object(cp.stdout.decode('utf-8')).get('error_code')
-                    if candidate in SAFE_ERRORS:code=candidate
+                    if isinstance(candidate,str) and candidate in SAFE_ERRORS:code=candidate
                 except (ValueError,TypeError,UnicodeError):pass
             raise ValueError(code)
         require(len(cp.stdout)<=4096,'REGISTRY_RESULT_LIMIT')
-        return load_object(cp.stdout.decode('utf-8'))
+        try:return load_object(cp.stdout.decode('utf-8'))
+        except (ValueError,UnicodeError):
+            if python_child:raise ValueError('PYPI_CHILD_PROTOCOL_FAILED') from None
+            raise
     except BaseException:
         bundle.unlink(missing_ok=True)
         if staging.exists() and not _linked(staging):shutil.rmtree(staging)

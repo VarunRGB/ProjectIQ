@@ -6,10 +6,10 @@ from __future__ import annotations
 import hashlib, http.client, json, re, socket, ssl, time, zipfile, shutil
 from pathlib import Path
 from urllib.parse import urlsplit
-from packaging.requirements import Requirement
+from packaging.requirements import Requirement, InvalidRequirement
 from packaging.version import Version, InvalidVersion
 from packaging.utils import canonicalize_name, parse_wheel_filename
-from packaging.specifiers import SpecifierSet
+from packaging.specifiers import SpecifierSet, InvalidSpecifier
 from ..phase8a.planner import digest
 from ..phase8b.planner import load_object
 from ..phase8c2.broker import require, public_address
@@ -91,23 +91,29 @@ class PublicTLS(http.client.HTTPSConnection):
         except BaseException:raw.close();raise
 
 
-def _get(host,path,limit,deadline,consume,connection=PublicTLS):
+def _get(host,path,limit,deadline,consume,connection=PublicTLS,*,simple=False):
     require(time.monotonic()<deadline and 0<limit<=MAX_WHEEL,'PYPI_BUDGET_EXCEEDED')
-    if host=='pypi.org':require(re.fullmatch(r'/pypi/[a-z0-9][a-z0-9-]{0,100}(?:/[0-9][A-Za-z0-9.!+_-]{0,79})?/json',path),'PYPI_METADATA_PATH_DENIED')
+    if simple:
+        require(host=='pypi.org' and re.fullmatch(r'/simple/[a-z0-9][a-z0-9-]{0,100}/',path),'PYPI_METADATA_PATH_DENIED')
+    elif host=='pypi.org':require(re.fullmatch(r'/pypi/[a-z0-9][a-z0-9-]{0,100}(?:/[0-9][A-Za-z0-9.!+_-]{0,79})?/json',path),'PYPI_METADATA_PATH_DENIED')
     else:require(host=='files.pythonhosted.org' and FILE_PATH.fullmatch(path),'PYPI_FILE_URL_DENIED')
     con=connection(host)
     try:
-        con.request('GET',path,headers={'Accept-Encoding':'identity','Connection':'close','User-Agent':'ProjectIQ-Wheel-Broker/1'})
+        headers={'Accept-Encoding':'identity','Connection':'close','User-Agent':'ProjectIQ-Wheel-Broker/1'}
+        if simple:headers['Accept']='application/vnd.pypi.simple.v1+json'
+        con.request('GET',path,headers=headers)
         response=con.getresponse();require(response.status==200,'PYPI_HTTP_NOT_200')
+        if simple:require(response.getheader('Content-Type','').split(';',1)[0].strip().lower()=='application/vnd.pypi.simple.v1+json','PYPI_INDEX_FORMAT_UNSUPPORTED')
         require(response.getheader('Content-Encoding','identity').lower()=='identity','PYPI_ENCODING_DENIED')
+        size_code='PYPI_PROJECT_INDEX_SIZE_LIMIT' if simple else 'PYPI_RELEASE_METADATA_SIZE_LIMIT' if host=='pypi.org' else 'PYPI_WHEEL_SIZE_LIMIT'
         length=response.getheader('Content-Length')
-        require(length is None or length.isdecimal() and 0<int(length)<=limit,'PYPI_SIZE_LIMIT')
+        require(length is None or length.isdecimal() and 0<int(length)<=limit,size_code)
         size=0
         while True:
             require(time.monotonic()<deadline,'PYPI_DEADLINE')
             block=response.read(min(65536,limit-size+1))
             if not block:break
-            size+=len(block);require(size<=limit,'PYPI_SIZE_LIMIT');consume(block)
+            size+=len(block);require(size<=limit,size_code);consume(block)
         require(size>0 and (length is None or size==int(length)),'PYPI_SIZE_MISMATCH')
         return size
     finally:con.close()
@@ -231,3 +237,84 @@ def fetch_wheels(lock,out,deadline):
 
 # Fixed diagnostic codes only; no metadata, URLs, paths or arbitrary exception text.
 SAFE_ERRORS=frozenset(('PYPI_BUDGET_EXCEEDED', 'PYPI_DEADLINE', 'PYPI_DNS_NOT_PUBLIC', 'PYPI_ENCODING_DENIED', 'PYPI_FILE_URL_DENIED', 'PYPI_FILE_URL_INVALID', 'PYPI_HOST_DENIED', 'PYPI_HTTP_NOT_200', 'PYPI_MARKER_UNSUPPORTED', 'PYPI_METADATA_DEPENDENCY_LIMIT', 'PYPI_METADATA_PATH_DENIED', 'PYPI_METADATA_TOTAL_LIMIT', 'PYPI_NAME_INVALID', 'PYPI_NO_COMPATIBLE_WHEEL_SOLUTION', 'PYPI_QUERY_BUDGET', 'PYPI_RELEASE_FILE_LIMIT', 'PYPI_RELEASE_IDENTITY_MISMATCH', 'PYPI_RELEASE_LIMIT', 'PYPI_RELEASE_METADATA_PENDING_ACTUAL_WHEEL_VERIFICATION', 'PYPI_REQUIREMENT_INVALID', 'PYPI_SIZE_LIMIT', 'PYPI_SIZE_MISMATCH', 'PYPI_SOLVER_BUDGET', 'PYPI_TOTAL_WHEEL_LIMIT', 'PYPI_TRANSITIVE_URL_OR_EXTRAS_UNSUPPORTED', 'PYPI_WHEELHOUSE_LIMIT', 'PYPI_WHEEL_HASH_MISMATCH', 'PYTHON_DIRECT_PIN_LIMIT', 'PYTHON_EXACT_DIRECT_PINS_REQUIRED', 'PYTHON_PIN_INVALID_OR_DUPLICATE', 'PYTHON_REQUIREMENTS_LIMIT', 'PYTHON_TARGET_UNSUPPORTED'))
+
+# 8E: bounded Simple JSON project index for ranged dependency discovery.
+# The original 8C Metadata class is retained for the exact-pin path.
+class CompactMetadata(Metadata):
+    def __init__(self,deadline,python_version):
+        super().__init__(deadline);self.env=target(python_version)
+
+    def get(self,name,version=None):
+        if version is not None:return super().get(name,version)
+        require(isinstance(name,str) and NAME.fullmatch(name),'PYPI_METADATA_PATH_DENIED')
+        key=(name,None)
+        if key not in self.cache:
+            self.count+=1;require(self.count<=MAX_QUERIES,'PYPI_QUERY_BUDGET')
+            data=bytearray();remaining=80_000_000-self.total
+            require(remaining>0,'PYPI_METADATA_TOTAL_LIMIT')
+            _get('pypi.org','/simple/'+name+'/',min(MAX_WHEEL,remaining),self.deadline,data.extend,simple=True)
+            self.total+=len(data);require(self.total<=80_000_000,'PYPI_METADATA_TOTAL_LIMIT')
+            obj=load_object(data.decode('utf-8'));del data
+            meta=obj.get('meta');require(isinstance(meta,dict) and isinstance(meta.get('api-version'),str) and re.fullmatch(r'1\.[0-9]{1,4}',meta['api-version']) and int(meta['api-version'].split('.')[1])>=1,'PYPI_INDEX_FORMAT_UNSUPPORTED')
+            require(isinstance(obj.get('name'),str) and canonicalize_name(obj['name'])==name,'PYPI_RELEASE_IDENTITY_MISMATCH')
+            rows=obj.get('files');require(isinstance(rows,list) and len(rows)<=100000,'PYPI_INDEX_FILE_LIMIT')
+            releases={}
+            for f in rows:
+                if not isinstance(f,dict) or f.get('yanked',False) is not False:continue
+                filename=f.get('filename')
+                if not isinstance(filename,str) or not WHEEL.fullmatch(filename):continue
+                try:n,v,_,_=parse_wheel_filename(filename)
+                except ValueError:continue
+                version_text=str(v)
+                if n!=name or not VER.fullmatch(version_text) or v.is_prerelease or v.is_devrelease:continue
+                row={'filename':filename,'packagetype':'bdist_wheel','yanked':False,'requires_python':f.get('requires-python'),'size':f.get('size'),'digests':f.get('hashes'),'url':f.get('url')}
+                if not isinstance(row['digests'],dict):continue
+                # An invalid historical Requires-Python must never become an
+                # eligible wheel or abort discovery of unrelated releases.
+                rp=row['requires_python']
+                if rp is not None:
+                    if not isinstance(rp,str) or len(rp)>500:continue
+                    try:SpecifierSet(rp)
+                    except InvalidSpecifier:continue
+                candidate=_eligible([row],name,version_text,self.env)
+                if candidate is None:continue
+                rank=(wheel_rank(filename,name,version_text),filename)
+                old=releases.get(version_text)
+                if old is None or rank<(wheel_rank(old[0]['filename'],name,version_text),old[0]['filename']):releases[version_text]=[row]
+                require(len(releases)<=15000,'PYPI_RELEASE_LIMIT')
+            self.cache[key]={'releases':releases}
+        return self.cache[key]
+
+SAFE_ERRORS=SAFE_ERRORS|frozenset({'PYPI_PROJECT_INDEX_SIZE_LIMIT','PYPI_RELEASE_METADATA_SIZE_LIMIT','PYPI_WHEEL_SIZE_LIMIT','PYPI_INDEX_FORMAT_UNSUPPORTED','PYPI_INDEX_FILE_LIMIT'})
+
+# Fixed, non-sensitive diagnostics for the ranged Python child. Never serialize
+# arbitrary exception text, response content, file paths or URLs.
+_STAGE_ERRORS={
+    'INPUT':'PYPI_INPUT_FAILED',
+    'RESOLUTION':'PYPI_RESOLUTION_OR_FETCH_FAILED',
+    'FETCH':'PYPI_WHEEL_FETCH_FAILED',
+    'LOCK_WRITE':'PYPI_LOCK_WRITE_FAILED',
+}
+SAFE_ERRORS=SAFE_ERRORS|frozenset(_STAGE_ERRORS.values())|frozenset({
+    'PYPI_DNS_LOOKUP_FAILED','PYPI_TLS_FAILED','PYPI_NETWORK_TIMEOUT',
+    'PYPI_HTTP_PROTOCOL_FAILED','PYPI_NETWORK_OR_IO_FAILED',
+    'PYPI_JSON_INVALID','PYPI_METADATA_SPECIFIER_INVALID',
+    'PYPI_METADATA_REQUIREMENT_INVALID','PYPI_METADATA_VERSION_INVALID',
+    'PYPI_METADATA_STRUCTURE_INVALID','PYPI_INTERRUPTED',
+    'PYPI_CHILD_PROTOCOL_FAILED','PYPI_CHILD_TIMEOUT',
+})
+
+def diagnostic_error(exc,stage):
+    if type(exc) is ValueError and str(exc) in SAFE_ERRORS:return str(exc)
+    if isinstance(exc,KeyboardInterrupt):return 'PYPI_INTERRUPTED'
+    if isinstance(exc,InvalidSpecifier):return 'PYPI_METADATA_SPECIFIER_INVALID'
+    if isinstance(exc,InvalidRequirement):return 'PYPI_METADATA_REQUIREMENT_INVALID'
+    if isinstance(exc,InvalidVersion):return 'PYPI_METADATA_VERSION_INVALID'
+    if isinstance(exc,(json.JSONDecodeError,UnicodeError)) or (type(exc) is ValueError and str(exc) in {'DUPLICATE_JSON_KEY','NONFINITE_JSON','EXPECTED_OBJECT'}):return 'PYPI_JSON_INVALID'
+    if isinstance(exc,socket.gaierror):return 'PYPI_DNS_LOOKUP_FAILED'
+    if isinstance(exc,ssl.SSLError):return 'PYPI_TLS_FAILED'
+    if isinstance(exc,TimeoutError):return 'PYPI_NETWORK_TIMEOUT'
+    if isinstance(exc,http.client.HTTPException):return 'PYPI_HTTP_PROTOCOL_FAILED'
+    if isinstance(exc,OSError):return 'PYPI_NETWORK_OR_IO_FAILED' if stage in {'RESOLUTION','FETCH'} else _STAGE_ERRORS[stage]
+    if isinstance(exc,(KeyError,TypeError,AttributeError,IndexError)) and stage=='RESOLUTION':return 'PYPI_METADATA_STRUCTURE_INVALID'
+    return _STAGE_ERRORS[stage]

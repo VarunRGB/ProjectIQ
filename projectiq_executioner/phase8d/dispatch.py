@@ -32,7 +32,7 @@ def select_components(plan,component=None,all_independent=False):
 def _python_fetch(requirements,out,version):
     path=out/'python_input.json';write(path,{'requirements':requirements,'target_python':version})
     bundle=out/'python-wheelhouse.zip'
-    stats=_download([sys.executable,'-m','projectiq_executioner.phase8d','_resolve','--input',str(path),'--out',str(out)],out,bundle,out/'.wheel-staging')
+    stats=_download([sys.executable,'-m','projectiq_executioner.phase8d','_resolve','--input',str(path),'--out',str(out)],out,bundle,out/'.wheel-staging',python_child=True)
     checked_file(out/'python-lock.json',1_000_000);lock=load_object((out/'python-lock.json').read_text('utf-8'));validate_lock(lock,requirements,version)
     return bundle,lock,stats
 
