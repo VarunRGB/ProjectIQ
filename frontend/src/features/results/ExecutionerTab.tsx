@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ObservationTable } from '../../components/EvidenceCard';
 import { FunctionalPanel } from './FunctionalEvidence';
+import { evaluationModeLabel } from '../../lib/facultyExperience';
 import { AgentStatusBadge, Badge, Callout, Empty, Fact, HBar, More, OutcomeBadge, SourceLoc, Tip, shortSha } from '../../components/ui';
 import { DIAG_CATEGORY, OWNER_INFO, TEST_OUTCOME, TEST_REASON, humanize, type Tone } from '../../lib/labels';
 import type { TestRow, ViewModel } from '../../lib/viewModel';
@@ -83,10 +84,10 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
       <section className="panel">
         <div className="panel-head">
           <div><h2>Repository evaluation</h2><p>{pi.overview}</p></div>
-          <AgentStatusBadge status={card.status} />
+          {demo?.inventory && card.status==='PARTIAL' ? <Tip text="Automatic observations are available, but coverage and reviewed grading evidence remain limited."><Badge tone="info">Scoped evidence</Badge></Tip> : <AgentStatusBadge status={card.status} />}
         </div>
         <div className="grid g4">
-          <Fact value={demo ? 'TRUSTED_DEMO' : e.mode} label="Mode requested" scope={demo ? 'Separate automatic evidence + static matrix' : e.effectiveMode !== e.mode ? `Effective evidence: ${e.effectiveMode}` : undefined} />
+          <Fact value={evaluationModeLabel(demo ? 'TRUSTED_DEMO' : e.mode)} label="Mode requested" scope={demo ? 'Separate automatic evidence + static matrix' : e.effectiveMode !== e.mode ? `Effective evidence: ${e.effectiveMode}` : undefined} />
           <Fact value={shortSha(e.commit)} label="Pinned commit" scope={e.repository ?? undefined} />
           {demo ? <Fact value={demo.inventory ? `${demo.inventory.passed}/${demo.inventory.attempted}` : null} label="Independent checks passed / attempted" /> : <Fact value={`${e.freshSuites} fresh, ${e.reusedSuites} reused`} label="Verified reviewed suites" tip="Fresh: executed in a new disposable VM during this call. Reused: saved evidence whose receipts were re-verified." />}
           <Fact value={demo ? (demo.vmStarts===null ? null : `${demo.vmStarts} of 1`) : `${e.card.details.vm_attempts_scheduled ?? 0} of ${e.card.details.vm_attempt_budget ?? 0}`} label="VM launches used" />

@@ -13,7 +13,7 @@ export interface AttentionItem { tone: 'warn' | 'bad' | 'info' | 'muted'; text: 
 export function attentionItems(vm: ViewModel, base: string): AttentionItem[] {
   const a = vm.assessment; const out: AttentionItem[] = [];
   const un = a.criteria.filter((c) => c.status === 'UNASSESSED');
-  if (un.length) out.push({ tone: 'warn', text: `${un.map((c) => c.title).join(', ')} could not be assessed automatically. Score ${un.length === 1 ? 'it' : 'them'} from the evidence to release the complete grade.`, to: `${base}/grading?criterion=${un[0].id}`, action: 'Assess now' });
+  if (un.length) out.push({ tone: 'warn', text: `${un.length} ${un.length === 1 ? 'criterion still needs' : 'criteria still need'} assessment. Open grading to review the available evidence and decide marks.`, to: `${base}/grading?criterion=${un[0].id}`, action: 'Assess now' });
   const prop = a.criteria.filter((c) => c.status === 'PROPOSED' || c.status === 'OBJECTIVE_PROVISIONAL');
   if (prop.length) out.push({ tone: 'info', text: `${prop.length} AI-proposed or objective mark${prop.length > 1 ? 's are' : ' is'} waiting for your approval.`, to: `${base}/grading`, action: 'Review proposals' });
   for (const f of vm.rec.result.agent_failures) out.push({ tone: 'bad', text: `The ${AGENT_INFO[f].name} agent failed. Criteria that need its evidence stay unassessed; nothing is scored as zero.`, to: `${base}/${f === 'summarizer' ? 'summary' : f}`, action: 'See details' });
@@ -104,9 +104,9 @@ export default function Overview({ vm, base }: { vm: ViewModel; base: string }) 
         <SectionRings a={a} />
       </section>
 
-      <div className="grid g2 mt-l" style={{ alignItems: 'start' }}>
+      <div className="grid g2 mt-l f3-attention" style={{ alignItems: 'start' }}>
         <section className="panel" aria-label="Needs attention">
-          <div className="panel-head"><h2>What needs your attention</h2></div>
+          <div className="panel-head"><h2>Review priorities</h2></div>
           {!items.length && <Callout tone="good">Nothing outstanding. All marks are approved.</Callout>}
           <div className="stack">
             {items.map((it, i) => (
@@ -151,7 +151,7 @@ export default function Overview({ vm, base }: { vm: ViewModel; base: string }) 
             <section key={n} className="panel" style={{ marginTop: 0 }}>
               <div className="panel-head" style={{ marginBottom: 10 }}>
                 <div><h3>{AGENT_INFO[n].name}</h3><p className="small">{AGENT_INFO[n].role}</p></div>
-                <AgentStatusBadge status={card.status} />
+                {n === 'executioner' && card.status === 'PARTIAL' && vm.executioner?.automatic?.inventory ? <Tip text="Automatic observations are available, but coverage and reviewed grading evidence remain limited."><Badge tone="info">Scoped evidence</Badge></Tip> : <AgentStatusBadge status={card.status} />}
               </div>
               {agentFacts(vm, n)}
               <div className="mt"><Link to={`${base}/${tabOf[n]}`} className="btn sm">Open {AGENT_INFO[n].name.toLowerCase()} results</Link></div>
