@@ -1,3 +1,30 @@
+# Phase 8F — trusted local demo and deferred production qualification
+
+## Current scope (8F-B)
+
+8F-A remains the non-authorizing compatibility/qualification diagnostic. The original production plan below is deferred, not satisfied. For the local MVP, `demo` is a separate **operator-trusted** route. Use only on repositories and dependencies you trust. Do not expose it to student submissions, HTTP APIs, background jobs, or a shared/unattended service. Run as your normal Windows user, not administrator. The trust switch is an operator assertion, not a security assessment. No dedicated worker or hard global disk quota has been established.
+
+- Resolve the supplied GitHub URL and optional ref (default branch when omitted), acquire an exact commit and compile fresh 8D plans. The 8F-A eight-adapter policy does not restrict this trusted demo route: all compatible 8D adapters are eligible. Optional native toolchains require explicit opt-in and actual provisioned guest compilers.
+- Refuse blocked plans, missing/ambiguous components, missing or mismatched trusted toolchain assets, and a busy or unverified QEMU host. Use `--component ROOT` for a multi-component project; `--all-independent --max-vms N` permits at most four compatible components sequentially. It does not run services together. No retry after a failed or uncertain worker result.
+- Create a temporary local config containing only this exact source approval. The original file is never written; the temporary file is removed on ordinary completion or exceptions. A force-kill or power loss can leave a temporary directory; do not reuse it. Inspect worker leases/cleanup before retrying. Temporary config copies must never be committed or included in report bundles. It is not a production authorization token.
+- Call the unchanged 8D dispatcher with the pinned SHA, automatically acquire dependencies only where needed, and validate saved plan/dispatch/runtime receipts using the 8E auditor. The existing exact-SHA checks, offline runtime, resource restrictions, QEMU networking, and cleanup remain. GitHub is acquired once for preflight and again at the exact SHA by the existing dispatcher per selected component. This intentionally avoids moving the dispatcher trust boundary.
+- A successful `demo_result.json` has `DEMO_REVIEWED_SMOKE_COMPLETE`, `temporary_approval_cleanup: REMOVED`, `original_config_unchanged: true`, and `automatic_untrusted_execution: false`. `vm_attempt_count_uncertain: true` means inspect the worker before retrying. Smoke readiness is not functional verification.
+
+### Commands (regular PowerShell, ProjectIQ root)
+
+```powershell
+python -m pytest -q tests/test_executioner_phase8f.py tests/test_executioner_phase8f_demo.py
+$demoOut = "outputs\executioner\phase8f_demo_$(Get-Date -Format yyyyMMdd_HHmmssfff)"
+python -m projectiq_executioner.phase8f demo --repo "https://github.com/mdn/beginner-html-site-scripted" --ref 7e7e6527e10072ff0cacda499145ffba63af057e --trust-demo-source --vm-config vm_config.json --out $demoOut
+Get-Content "$demoOut\demo_result.json"
+```
+
+Only run this example if you have personally selected and trust the exact source. For subsequent submissions, omit `--ref` to resolve the current default branch. For Node, supply the existing trusted `--node-tarball` and `--node-sha256` (or `--node-catalog`). For Python dependencies, supply the existing trusted `--pip-wheel` and `--pip-sha256`. Reuse the operator-pinned hashes from Phase 8E; do not derive expected hashes from newly obtained files. `--allow-inferred` opts into the existing bounded Python dependency inference, not arbitrary package installation. No extra assets are necessary for static/PHP/stdlib Python CLI. All original compatibility limits remain, including unsupported package managers, external services, private repositories, ambiguous entrypoints, and archive limits. The main configuration and normal reviewed execution remain unchanged.
+
+8F-C: live demo acceptance with previously unapproved trusted source, followed by a refusal in ordinary 8D using the original config. 8F-D: integration and documentation. Production qualification and authenticated admission remain a separate future effort. The original 8F-A production roadmap is recorded below for continuity.
+
+---
+
 # Phase 8F — automatic admission, gate A
 
 ## Objective and boundary
