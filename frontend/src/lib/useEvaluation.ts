@@ -16,7 +16,10 @@ export function useEvaluation(id: string | undefined) {
     return () => { live = false; };
   }, [id, version]);
   const reload = useCallback(() => setVersion((v) => v + 1), []);
-  const setReview = useCallback((review: TeacherReview) => setRec((r) => (r ? { ...r, review } : r)), []);
+  const setReview = useCallback((review: TeacherReview) => {
+    if (rec?.source === 'BACKEND') { reload(); return; }
+    setRec((r) => (r ? { ...r, review } : r));
+  }, [rec?.source, reload]);
   const vm = useMemo(() => (rec ? buildViewModel(rec) : null), [rec]);
   return { rec, vm, error, setReview, reload };
 }

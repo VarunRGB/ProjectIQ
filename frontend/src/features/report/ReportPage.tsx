@@ -46,7 +46,7 @@ export default function ReportPage() {
   const critById = new Map(vm.rubric.criteria.map((c) => [c.id, c]));
   const faculty = audience === 'faculty';
   const final = a.status === 'TEACHER_REVIEWED';
-  const ex = vm.executioner; const rs = vm.research; const ig = vm.integrity;
+  const ex = vm.executioner; const demo = ex?.card.details.trusted_demo; const rs = vm.research; const ig = vm.integrity;
   const findings = verifiedFindings(vm);
   const improvements = a.criteria.filter((c) => c.feedback && c.status !== 'EXCLUDED').map((c) => ({ title: c.title, text: c.feedback!.improvement }));
   let n = 0;
@@ -79,7 +79,7 @@ export default function ReportPage() {
               <dt>Repository</dt><dd>{sub.repository_url ? <>{sub.repository_url.replace('https://github.com/', '')}{ex?.commit && <> at {ex.commit.slice(0, 10)}</>}</> : 'None (report-only submission)'}</dd>
               <dt>Rubric</dt><dd>{vm.rubric.title}, {vm.rubric.total_points} marks</dd>
               <dt>Evaluated</dt><dd>{rec.meta.evaluated_utc ? new Date(rec.meta.evaluated_utc).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : 'Not recorded'}</dd>
-              {faculty && <><dt>Evidence</dt><dd>{r.collection_mode === 'LIVE' ? 'Collected live' : 'Imported from earlier runs, acknowledged by an operator'}</dd></>}
+              {faculty && <><dt>Evidence</dt><dd>{r.collection_mode === 'LIVE' ? 'Collected live' : 'Bundled as imported evidence, acknowledged by an operator'}</dd></>}
             </dl>
           </div>
         </header>
@@ -164,7 +164,7 @@ export default function ReportPage() {
         {ex && ex.mode && (
           <Section n={++n} title="Repository and testing" lead={ex.intelligence.overview}>
             <div className="r-facts">
-              <div><b>{ex.mode}</b><span>Executioner mode{ex.effectiveMode !== ex.mode ? ` (${ex.effectiveMode} evidence)` : ''}</span></div>
+              <div><b>{demo ? 'TRUSTED_DEMO' : ex.mode}</b><span>Executioner mode{demo ? ' (separate automatic observations)' : ex.effectiveMode !== ex.mode ? ` (${ex.effectiveMode} evidence)` : ''}</span></div>
               <div><b>{ex.intelligence.server_endpoint_count ?? 0}</b><span>Endpoints found</span></div>
               <div><b>{ex.counts.PASSED ?? 0} / {(ex.counts.PASSED ?? 0) + (ex.counts.FAILED ?? 0)}</b><span>Executed planned tests passed</span></div>
               <div><b>{ex.counts.NOT_TESTED ?? 0}</b><span>Planned tests not executed</span></div>
@@ -172,7 +172,7 @@ export default function ReportPage() {
               <div><b>{ex.quality?.quality?.score ?? 'Withheld'}</b><span>Maintainability indicator (not a grade)</span></div>
             </div>
             <p className="r-small">Technologies: {(ex.intelligence.technologies ?? []).map((t: any) => t.name).join(', ')}. Features found in the source: {(ex.intelligence.features ?? []).map((f: any) => f.name).join('; ')}.</p>
-            {ex.mode === 'STATIC' && <p className="r-note">STATIC mode: no student code was executed. Planned tests are specifications only.</p>}
+            {demo ? <p className="r-note">Automatic trusted demo: {humanize(demo.status)}. {demo.functional_tests_executed ?? 0} independent tests, {demo.workflow_requests_attempted ?? 0} workflow requests reported. These observations are separate from the original static matrix and are not reviewed grading evidence.</p> : ex.mode === 'STATIC' && <p className="r-note">STATIC mode: no student code was executed. Planned tests are specifications only.</p>}
             {[...ex.planned, ...ex.reviewed].some((t) => t.outcome === 'FAILED') && (
               <>
                 <h4>Failed tests</h4>
@@ -269,7 +269,7 @@ export default function ReportPage() {
               <thead><tr><th>Agent</th><th>Status</th><th>In this evaluation</th><th>Provenance</th></tr></thead>
               <tbody>{(['summarizer', 'integrity', 'research', 'executioner'] as AgentName[]).map((k) => {
                 const ag = r.agents[k]; const p = ag.receipt_provenance;
-                return <tr key={k}><td>{AGENT_INFO[k].name}</td><td>{humanize(ag.status)}</td><td>{humanize(r.agent_actions[k])}</td><td>{p ? PROVENANCE[p].label : humanize(ag.evidence_check)}</td></tr>;
+                return <tr key={k}><td>{AGENT_INFO[k].name}</td><td>{humanize(ag.status)}</td><td>{humanize(vm.provenance.perAgent[k].action)}</td><td>{p ? PROVENANCE[p].label : humanize(ag.evidence_check)}</td></tr>;
               })}</tbody>
             </table>
             {vm.provenance.acknowledged && <p className="r-small">Imported results were acknowledged by an operator as belonging to this submission. The acknowledgment is recorded but is not independent authentication.</p>}

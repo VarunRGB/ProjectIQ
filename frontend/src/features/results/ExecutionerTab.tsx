@@ -65,6 +65,7 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
   if (card.status === 'FAILED' || !e.mode) {
     return <div className="panel"><div className="panel-head"><h2>Executioner</h2><AgentStatusBadge status={card.status} /></div><Callout tone="bad" title="No usable Executioner result">{card.limitations.join(' ')} {card.error_code && <code>{card.error_code}</code>}</Callout></div>;
   }
+  const demo = e.card.details.trusted_demo;
   const pi = e.intelligence;
   const planned = e.planned; const reviewed = e.reviewed;
   const pc = e.counts; const rc = e.reviewedCounts;
@@ -84,23 +85,23 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
           <AgentStatusBadge status={card.status} />
         </div>
         <div className="grid g4">
-          <Fact value={e.mode} label="Mode requested" scope={e.effectiveMode !== e.mode ? `Effective evidence: ${e.effectiveMode}` : undefined} />
+          <Fact value={demo ? 'TRUSTED_DEMO' : e.mode} label="Mode requested" scope={demo ? 'Separate automatic evidence + static matrix' : e.effectiveMode !== e.mode ? `Effective evidence: ${e.effectiveMode}` : undefined} />
           <Fact value={shortSha(e.commit)} label="Pinned commit" scope={e.repository ?? undefined} />
           <Fact value={`${e.freshSuites} fresh, ${e.reusedSuites} reused`} label="Verified test suites" tip="Fresh: executed in a new disposable VM during this call. Reused: saved evidence whose receipts were re-verified." />
-          <Fact value={`${e.card.details.vm_attempts_scheduled ?? 0} of ${e.card.details.vm_attempt_budget ?? 0}`} label="VM launches used" />
+          <Fact value={demo ? (demo.vm_attempt_count_uncertain ? 'Uncertain' : `${demo.vm_start_attempts ?? 0} of 1`) : `${e.card.details.vm_attempts_scheduled ?? 0} of ${e.card.details.vm_attempt_budget ?? 0}`} label="VM launches used" />
         </div>
         <div className="grid g3 mt-l">
           {(Object.keys(MODE_INFO) as (keyof typeof MODE_INFO)[]).map((m) => (
-            <div key={m} className="sub" style={m === e.mode ? { borderColor: 'var(--ink)', background: '#f4f6fb' } : undefined}>
-              <div className="row between"><strong>{MODE_INFO[m].title}</strong>{m === e.mode && <Badge tone="info">This result</Badge>}</div>
+            <div key={m} className="sub" style={!demo && m === e.mode ? { borderColor: 'var(--ink)', background: '#f4f6fb' } : undefined}>
+              <div className="row between"><strong>{MODE_INFO[m].title}</strong>{!demo && m === e.mode && <Badge tone="info">This result</Badge>}</div>
               <p className="small muted" style={{ margin: '4px 0 0' }}>{MODE_INFO[m].text}</p>
             </div>
           ))}
         </div>
         <div className="mt">
-          {e.mode === 'STATIC'
+          {demo ? <Callout tone="info" title="Automatic trusted demo">{humanize(demo.status)}. {humanize(demo.selected_path)}. {demo.functional_tests_executed ?? 0} independent tests and {demo.workflow_requests_attempted ?? 0} workflow requests reported. The original STATIC matrix below is retained and is not automatic functional coverage. No reviewed grading credit; see the separate demo evidence.</Callout> : e.mode === 'STATIC'
             ? <Callout tone="info">Nothing was executed. Planned tests are specifications only, so functional criteria need verified runs or your own judgment.</Callout>
-            : <Callout tone="warn" title={imported ? 'Imported reviewed evidence' : 'Reviewed execution'}>{imported ? `This ${e.mode} result was produced by a separate Executioner run and imported with operator acknowledgment. The unified evaluator currently runs STATIC only; reviewed and resume runs still need to be wired into it.` : 'Only operator-approved suites ran.'} VM runs are not security-attested for arbitrary student code.</Callout>}
+            : <Callout tone="warn" title={imported ? 'Imported reviewed evidence' : 'Reviewed execution'}>{imported ? `This ${e.mode} result was produced by a separate Executioner run and imported with operator acknowledgment. Reviewed and resume retain their specialized composition path.` : 'Only operator-approved suites ran.'} VM runs are not security-attested for arbitrary student code.</Callout>}
         </div>
       </section>
 

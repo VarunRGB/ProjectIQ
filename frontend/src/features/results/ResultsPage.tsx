@@ -52,7 +52,7 @@ export default function ResultsPage({ caps }: { caps: BackendCapabilities | null
           </p>
           <div className="row small" style={{ marginTop: 10, gap: 14 }}>
             <Tip text={ws.explain}><Badge tone={ws.tone}>{ws.label}</Badge></Tip>
-            <Tip text={r.collection_mode === 'LIVE' ? 'Agents ran in this evaluation.' : 'Agent results were imported from earlier runs and re-verified against their receipts.'}>
+            <Tip text={r.collection_mode === 'LIVE' ? 'Agents ran in this evaluation.' : 'Agent results were bundled as imported evidence; they may have been collected during this bridge job. See the activity and provenance details.'}>
               <Badge tone={r.collection_mode === 'LIVE' ? 'good' : 'warn'}>{r.collection_mode === 'LIVE' ? 'Live collection' : 'Imported evidence'}</Badge>
             </Tip>
             {vm.provenance.acknowledged && <ProvenanceBadge p="IMPORTED_ACKNOWLEDGED" />}

@@ -34,6 +34,8 @@ function agentFacts(vm: ViewModel, n: AgentName) {
   if (card.status === 'FAILED') return <p className="small c-bad">{card.limitations[0] ?? 'The agent failed.'} {card.error_code && <code>{card.error_code}</code>}</p>;
   if (n === 'executioner' && vm.executioner) {
     const e = vm.executioner;
+    const demo = e.card.details.trusted_demo;
+    if (demo) return <div className="stack"><strong>{humanize(demo.status)}</strong><span className="small muted">Automatic trusted demo · {humanize(demo.selected_path)} · {demo.vm_start_attempts ?? 0} VM starts reported{demo.vm_attempt_count_uncertain ? ' (count uncertain)' : ''}. Functional observations are separate from reviewed grading evidence.</span></div>;
     const run = (e.counts.PASSED ?? 0) + (e.counts.FAILED ?? 0);
     const rv = e.reviewed.length; const rvPass = e.reviewedCounts.PASSED ?? 0;
     return (
@@ -126,7 +128,7 @@ export default function Overview({ vm, base }: { vm: ViewModel; base: string }) 
                 return (
                   <tr key={n}>
                     <td><strong>{AGENT_INFO[n].name}</strong></td>
-                    <td><Tip text={p.action === 'REUSED' ? 'Reused from the saved collection. The agent was not rerun.' : p.action === 'COLLECTED' ? 'Collected live in this evaluation.' : p.action === 'SKIPPED' ? 'Not needed for this rubric or submission.' : 'Not available.'}><Badge tone={p.action === 'COLLECTED' ? 'good' : p.action === 'REUSED' ? 'info' : 'muted'}>{humanize(p.action)}</Badge></Tip></td>
+                    <td><Tip text={p.action === 'COLLECTED_THIS_RUN' ? 'Collected during this bridge job, then bundled as imported evidence.' : p.action === 'RESUME_THIS_RUN' ? 'Resume ran in this job and may reuse earlier suites.' : p.action === 'IMPORTED_FILE' ? 'Supplied from an existing result file.' : p.action === 'REUSED' ? 'Reused from the saved collection. The agent was not rerun.' : p.action === 'COLLECTED' ? 'Collected live in this evaluation.' : p.action === 'SKIPPED' ? 'Not needed for this rubric or submission.' : 'Not available.'}><Badge tone={p.action === 'COLLECTED' || p.action === 'COLLECTED_THIS_RUN' ? 'good' : p.action === 'REUSED' ? 'info' : 'muted'}>{humanize(p.action)}</Badge></Tip></td>
                     <td>{p.provenance ? <ProvenanceBadge p={p.provenance as any} /> : <span className="small muted">{p.check === 'MATCHED' ? 'Matched' : humanize(p.check)}</span>}</td>
                   </tr>
                 );

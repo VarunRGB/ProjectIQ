@@ -28,7 +28,7 @@ export default function ActivityTab({ vm }: { vm: ViewModel }) {
         </dl>
         <h4 className="mt-l">Agent receipts</h4>
         <table className="t mt"><tbody>{(Object.keys(r.agents) as AgentName[]).map((a) => (
-          <tr key={a}><td>{AGENT_INFO[a].name}</td><td>{humanize(r.agent_actions[a])}</td><td><Badge tone={r.agents[a].evidence_check === 'MATCHED' ? 'good' : r.agents[a].evidence_check === 'NOT_RUN' ? 'muted' : 'bad'}>{humanize(r.agents[a].evidence_check)}</Badge></td></tr>
+          <tr key={a}><td>{AGENT_INFO[a].name}</td><td>{humanize(vm.provenance.perAgent[a].action)}</td><td><Badge tone={r.agents[a].evidence_check === 'MATCHED' ? 'good' : r.agents[a].evidence_check === 'NOT_RUN' ? 'muted' : 'bad'}>{humanize(r.agents[a].evidence_check)}</Badge></td></tr>
         ))}</tbody></table>
         {Object.keys(r.decision_reuse.dropped_decisions).length > 0 && (
           <><h4 className="mt-l">Decisions not carried over</h4><ul className="small">{Object.entries(r.decision_reuse.dropped_decisions).map(([k, v]) => <li key={k}>{k}: {humanize(v)}</li>)}</ul></>

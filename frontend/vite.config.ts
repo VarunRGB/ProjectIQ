@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react';
 // the local ProjectIQ bridge at VITE_API_BASE (see src/api/httpBackend.ts).
 export default defineConfig({
   plugins: [react()],
-  server: { port: 5173 },
+  server: { host: '127.0.0.1', port: 5173, strictPort: true },
+  preview: { host: '127.0.0.1', port: 4173, strictPort: true },
   test: { environment: 'node' },
 } as any);

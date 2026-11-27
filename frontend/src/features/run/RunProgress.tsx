@@ -58,10 +58,11 @@ export default function RunProgress() {
   const { runId } = useParams();
   const [run, setRun] = useState<RunStatus | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const best = useRef<Record<string, number>>({});
   useEffect(() => {
     let live = true;
-    const tick = () => backend.getRun(runId!).then((r) => { if (live) setRun(r); }).catch((e) => live && setErr(e.message));
+    const tick = () => backend.getRun(runId!).then((r) => { if (live) { setRun(r); setErr(null); } }).catch((e) => live && setErr(e.message));
     tick();
     const t = setInterval(tick, 400);
     return () => { live = false; clearInterval(t); };
@@ -70,17 +71,20 @@ export default function RunProgress() {
   if (!run) return <div className="page"><p className="muted">Connecting to the run…</p></div>;
 
   const finished = run.state !== 'RUNNING';
-  const pcts = LANES.map((l) => {
+  const composed = run.executioner_mode === 'REVIEWED' || run.executioner_mode === 'RESUME';
+  const lanes = composed ? [LANES.find((l) => l.key === 'executioner')!, ...LANES.filter((l) => l.key !== 'executioner')] : LANES;
+  const pcts = lanes.map((l) => {
     let p = lanePct(l, run.agents[l.key] ?? { state: 'waiting' });
     if (p !== null) { p = Math.round(Math.max(p, best.current[l.key] ?? 0)); best.current[l.key] = p; } // never move backwards
     return p;
   });
-  const active = LANES.filter((_l, i) => pcts[i] !== null);
+  const active = lanes.filter((_l, i) => pcts[i] !== null);
   const wsum = active.reduce((a, l) => a + l.weight, 0) || 1;
-  let overall = Math.round(LANES.reduce((a, l, i) => a + (pcts[i] === null ? 0 : (pcts[i]! * l.weight) / wsum), 0));
+  let overall = Math.round(lanes.reduce((a, l, i) => a + (pcts[i] === null ? 0 : (pcts[i]! * l.weight) / wsum), 0));
   if (run.state === 'COMPLETED') overall = 100;
-  const current = LANES.find((l) => run.agents[l.key]?.state === 'running');
-  const failedLanes = LANES.filter((l) => run.agents[l.key]?.state === 'failed');
+  else overall = Math.min(99, overall);
+  const current = lanes.find((l) => run.agents[l.key]?.state === 'running');
+  const failedLanes = lanes.filter((l) => run.agents[l.key]?.state === 'failed');
 
   return (
     <div className="page" style={{ maxWidth: 900 }}>
@@ -105,20 +109,22 @@ export default function RunProgress() {
             </div>
           </div>
           <div className="row">
-            {run.state === 'RUNNING' && <button className="btn" onClick={() => backend.cancelRun(run.run_id)}>Cancel</button>}
+            {run.state === 'RUNNING' && <button className="btn" disabled={run.cancel_requested} onClick={() => backend.cancelRun(run.run_id).catch((e) => setCancelError(String(e.message || e)))}>{run.cancel_requested ? 'Stop requested' : 'Stop after current command'}</button>}
             {run.evaluation_id && <Link className="btn primary" to={`/evaluations/${run.evaluation_id}`}>Open results</Link>}
           </div>
         </div>
+        {run.cancel_requested && run.state === 'RUNNING' && <div className="mt"><Callout tone="warn">Waiting for the current backend command to finish safely. A unified command may finish the whole evaluation. Do not close the bridge or kill the VM.</Callout></div>}
+        {cancelError && <div className="mt"><Callout tone="warn">{cancelError}</Callout></div>}
         {failedLanes.length > 0 && <div className="mt"><Callout tone="warn">{failedLanes.map((l) => l.name).join(', ')} could not finish. The other agents keep going, and anything missing is shown as unavailable, not as zero.</Callout></div>}
       </section>
 
       <section className="panel">
         <div className="pipeline">
-          {LANES.map((l, i) => {
+          {lanes.map((l, i) => {
             const a = run.agents[l.key] ?? { state: 'waiting' };
             const p = pcts[i];
             const running = a.state === 'running';
-            const next = LANES.slice(i + 1).find((x) => run.agents[x.key]?.state !== 'skipped');
+            const next = lanes.slice(i + 1).find((x) => run.agents[x.key]?.state !== 'skipped');
             const nextState = next ? run.agents[next.key]?.state : undefined;
             const flow: 'idle' | 'active' | 'done' = running ? 'active' : ['done', 'partial', 'failed', 'skipped'].includes(a.state) && nextState && nextState !== 'waiting' ? 'done' : ['done', 'partial', 'failed', 'skipped'].includes(a.state) ? 'active' : 'idle';
             return (
@@ -133,7 +139,7 @@ export default function RunProgress() {
                   </div>
                   <div className="small muted" style={{ textAlign: 'right', minWidth: 48 }}>{a.elapsed_ms && a.state !== 'skipped' ? clock(a.elapsed_ms) : ''}</div>
                 </div>
-                {i < LANES.length - 1 && <FlowArrow state={finished && run.state === 'COMPLETED' ? 'done' : flow} />}
+                {i < lanes.length - 1 && <FlowArrow state={finished && run.state === 'COMPLETED' ? 'done' : flow} />}
               </div>
             );
           })}

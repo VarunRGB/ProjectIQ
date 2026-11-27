@@ -41,6 +41,8 @@ export default function NewEvaluation({ caps }: { caps: BackendCapabilities | nu
   const [rubric, setRubric] = useState<Rubric>(defaultRubric());
   const [verify, setVerify] = useState(false);
   const [mode, setMode] = useState<ExecutionerMode>('STATIC');
+  const [trustDemo, setTrustDemo] = useState(false);
+  const [disposable, setDisposable] = useState(false);
   const [readiness, setReadiness] = useState<'AUTO' | 'YES' | 'NO'>('AUTO');
   const [vmBudget, setVmBudget] = useState(2);
   const [suites, setSuites] = useState<Record<string, Record<string, string>>>({});
@@ -62,9 +64,10 @@ export default function NewEvaluation({ caps }: { caps: BackendCapabilities | nu
   const rubricIssues = validateRubric(rubric);
   const liveModes = caps?.liveExecutionerModes ?? ['STATIC'];
   const modeLive = liveModes.includes(mode);
-  // Anything other than a plain STATIC run becomes an acknowledged imported evaluation.
-  const composed = hasRepo && (mode !== 'STATIC' || !!importResult);
-  const vmCost = Object.keys(suites).reduce((a, k) => a + SUITES[k].cost, 0);
+  const demo = mode === 'TRUSTED_DEMO';
+  const composed = hasRepo && !demo && (mode !== 'STATIC' || !!importResult);
+  const suiteCost = Object.keys(suites).reduce((a, k) => a + SUITES[k].cost, 0);
+  const vmCost = suiteCost + (readiness === 'YES' || (readiness === 'AUTO' && suiteCost === 0) ? 1 : 0);
   const codeCriteria = rubric.criteria.filter((c) => c.applicability !== 'EXCLUDED' && c.required_evidence.some((k) => k === 'STATIC_SOURCE' || k === 'TEST_OBSERVATION'));
 
   const problems: Record<Step, string[]> = {
@@ -80,9 +83,11 @@ export default function NewEvaluation({ caps }: { caps: BackendCapabilities | nu
       hasRepo && (mode !== 'STATIC' || importResult) && !SHA.test(ref) && `${importResult && mode === 'STATIC' ? 'Imported Executioner evidence' : mode} needs the exact 40-character commit SHA in step 1.`,
       hasRepo && mode === 'REVIEWED' && !Object.keys(suites).length && readiness === 'NO' && 'Select at least one reviewed suite, or allow the readiness check.',
       hasRepo && mode === 'REVIEWED' && Object.entries(suites).some(([, c]) => Object.values(c).some((p) => !/^[A-Za-z0-9_./-]{1,230}$/.test(p) || p.startsWith('/') || p.split('/').includes('..'))) && 'Catalog paths must be relative paths inside the trusted review root.',
-      hasRepo && mode === 'REVIEWED' && vmCost > vmBudget && `The selected suites need ${vmCost} VM launches; raise the budget.`,
+      hasRepo && mode === 'REVIEWED' && !importResult && vmCost > vmBudget && `The selected suites need ${vmCost} VM launches; raise the budget.`,
       hasRepo && mode === 'RESUME' && modeLive && !resumeFrom.trim() && !resumeFile && !importResult && 'RESUME needs the earlier executioner_result.json.',
-      hasRepo && !modeLive && !importResult && `${mode} needs an operator VM configuration on the evaluation machine. Attach an existing Executioner result to import, or choose STATIC.`,
+      hasRepo && demo && !trustDemo && 'Confirm operator trust for this exact repository commit.',
+      hasRepo && demo && !modeLive && 'Automatic evaluation must be enabled by the local operator.',
+      hasRepo && !demo && !modeLive && !importResult && `${mode} needs an operator VM configuration on the evaluation machine. Attach an existing Executioner result to import, or choose STATIC.`,
       composed && !ack && 'Confirm that the Executioner evidence belongs to this submission and commit.',
     ].filter(Boolean) as string[],
     3: [],
@@ -102,10 +107,11 @@ export default function NewEvaluation({ caps }: { caps: BackendCapabilities | nu
       const req: EvaluationRequest = {
         title: title.trim(), submission_id: sid.trim(), students: students.split(',').map((s) => s.trim()).filter(Boolean), course: course.trim() || undefined,
         report_file_name: report!.name, report_file: report, repository_url: hasRepo ? repo.trim().replace(/\/$/, '') : null, ref: hasRepo && ref ? ref.trim() : null,
-        reference_files: refs.map((f) => f.name), reference_file_objects: refs, executioner_import_file: hasRepo ? importResult : null,
+        reference_files: refs.map((f) => f.name), reference_file_objects: refs, executioner_import_file: hasRepo && !demo ? importResult : null,
         resume_from_file: hasRepo && mode === 'RESUME' ? resumeFile : null, acknowledge_imported: composed && ack, rubric, research_required: research, verify_research: research && verify,
         executioner: hasRepo ? {
-          mode, run_readiness: readiness, max_vm_launches: mode === 'STATIC' ? 0 : vmBudget,
+          mode, run_readiness: demo ? 'AUTO' : readiness, max_vm_launches: demo ? 1 : mode === 'STATIC' ? 0 : vmBudget,
+          ...(demo ? { trust_demo_source: trustDemo, confirm_disposable_state: disposable } : {}),
           suites: mode === 'REVIEWED' ? Object.entries(suites).map(([kind, catalogs]) => ({ kind, catalogs })) : [],
           ...(mode === 'RESUME' ? { resume_target: resumeTarget, resume_from: resumeFrom || importResult?.name } : {}),
         } : null,
@@ -159,12 +165,12 @@ export default function NewEvaluation({ caps }: { caps: BackendCapabilities | nu
           <hr className="rule" />
           <div className="choice-cards g2 grid">
             <label className={`choice ${hasRepo ? 'on' : ''}`}><input type="radio" checked={hasRepo} onChange={() => setHasRepo(true)} /><div><strong>Report and GitHub repository</strong><div className="small muted">The Executioner inspects the code and can test it.</div></div></label>
-            <label className={`choice ${!hasRepo ? 'on' : ''}`}><input type="radio" checked={!hasRepo} onChange={() => setHasRepo(false)} /><div><strong>Report only</strong><div className="small muted">No repository. Code and testing criteria should be marked not applicable.</div></div></label>
+            <label className={`choice ${!hasRepo ? 'on' : ''}`}><input type="radio" checked={!hasRepo} onChange={() => { setHasRepo(false); setTrustDemo(false); setDisposable(false); }} /><div><strong>Report only</strong><div className="small muted">No repository. Code and testing criteria should be marked not applicable.</div></div></label>
           </div>
           {hasRepo && (
             <div className="grid g2 mt">
-              <label className="f">Repository URL<input className="in" value={repo} onChange={(e) => setRepo(e.target.value)} placeholder="https://github.com/owner/repo" /></label>
-              <label className="f">Branch, tag or commit<span className="hint">Optional for STATIC. REVIEWED and RESUME need the exact 40-character commit SHA.</span><input className="in" value={ref} onChange={(e) => setRef(e.target.value)} placeholder="main or a commit SHA" /></label>
+              <label className="f">Repository URL<input className="in" value={repo} onChange={(e) => { setRepo(e.target.value); setTrustDemo(false); setDisposable(false); }} placeholder="https://github.com/owner/repo" /></label>
+              <label className="f">Branch, tag or commit<span className="hint">Optional for STATIC. Runtime and imported evidence need the exact 40-character commit SHA.</span><input className="in" value={ref} onChange={(e) => { setRef(e.target.value); setTrustDemo(false); setDisposable(false); }} placeholder="main or a commit SHA" /></label>
             </div>
           )}
           {!hasRepo && codeCriteria.length > 0 && <div className="mt"><Callout tone="warn" title="The rubric expects source code or test results">{codeCriteria.map((c) => c.title).join(', ')} require evidence that a report-only submission cannot provide. They would stay unassessed. Use the “Report-only submission” template, or mark them not applicable in step 2.<div className="mt"><button className="btn sm" onClick={() => { applyTemplate('report_only'); setStep(1); }}>Use the report-only template</button></div></Callout></div>}
@@ -213,27 +219,32 @@ export default function NewEvaluation({ caps }: { caps: BackendCapabilities | nu
           </section>
 
           <section className="panel">
-            <div className="panel-head"><div><h2>Executioner mode</h2><p>{hasRepo ? 'How far the repository evaluation may go. Execution happens only for operator-approved suites in disposable VMs.' : 'Report-only submission: the Executioner does not run.'}</p></div></div>
+            <div className="panel-head"><div><h2>Executioner mode</h2><p>{hasRepo ? 'How far the repository evaluation may go. Runtime execution is local, disposable and requires operator trust or approved reviewed suites.' : 'Report-only submission: the Executioner does not run.'}</p></div></div>
             {hasRepo && (
               <>
                 <div className="grid g3 choice-cards">
-                  {(['STATIC', 'REVIEWED', 'RESUME'] as ExecutionerMode[]).map((m) => (
+                  {(['STATIC', ...(liveModes.includes('TRUSTED_DEMO') ? ['TRUSTED_DEMO'] : []), 'REVIEWED', 'RESUME'] as ExecutionerMode[]).map((m) => (
                     <label key={m} className={`choice ${mode === m ? 'on' : ''}`}>
-                      <input type="radio" checked={mode === m} onChange={() => setMode(m)} />
+                      <input type="radio" checked={mode === m} onChange={() => { setMode(m); setTrustDemo(false); setDisposable(false); if (m === 'TRUSTED_DEMO') setImportResult(null); }} />
                       <div>
-                        <div className="row between"><strong>{m}</strong>{liveModes.includes(m) ? <Badge tone="good">Available</Badge> : <Tip text="The Executioner supports this mode on its own, but the unified evaluator does not launch it yet. You can import an existing result."><Badge tone="warn">Import only</Badge></Tip>}</div>
-                        <div className="small muted">{m === 'STATIC' ? 'Inspect the pinned code, plan tests, analyse quality. Never runs student code. No VM.' : m === 'REVIEWED' ? 'Also run operator-approved suites in disposable VMs for an exact commit.' : 'Re-verify an earlier run’s receipts and reuse its evidence; optionally run only new approved work.'}</div>
+                        <div className="row between"><strong>{m === 'TRUSTED_DEMO' ? 'Automatic evaluation' : m}</strong>{liveModes.includes(m) ? <Badge tone="good">Available</Badge> : <Tip text="The Executioner supports this mode on its own, but the unified evaluator does not launch it yet. You can import an existing result."><Badge tone="warn">Import only</Badge></Tip>}</div>
+                        <div className="small muted">{m === 'STATIC' ? 'Inspect the pinned code, plan tests, analyse quality. Never runs student code. No VM.' : m === 'TRUSTED_DEMO' ? 'Trusted local demo: automatically prepare and test supported applications with at most one VM. No catalogs.' : m === 'REVIEWED' ? 'Also run operator-approved suites in disposable VMs for an exact commit.' : 'Re-verify an earlier run’s receipts and reuse its evidence; optionally run only new approved work.'}</div>
                       </div>
                     </label>
                   ))}
                 </div>
                 {mode === 'STATIC' && <div className="mt"><Callout tone="info">Planned tests will be listed but not executed, so functional-behaviour marks will need verified runs or your own judgment.</Callout></div>}
+                {demo && <div className="stack mt-l">
+                  <Callout tone="warn" title="Trusted local operator only">The automatic path is not security-attested for arbitrary student code. Unsupported profiles may return static or readiness-only evidence. Generated observations do not automatically earn reviewed marks.</Callout>
+                  <label className="check"><input type="checkbox" checked={trustDemo} onChange={(e) => setTrustDemo(e.target.checked)} /><span>I am the local operator and explicitly trust this exact repository commit for a disposable demo.</span></label>
+                  <label className="check"><input type="checkbox" checked={disposable} onChange={(e) => setDisposable(e.target.checked)} /><span>Allow supported adaptive CRUD mutations of synthetic disposable state (optional).</span></label>
+                </div>}
                 {mode === 'REVIEWED' && (
                   <div className="stack mt-l">
                     <div className="grid g3">
                       <label className="f">Readiness check<select className="in" value={readiness} onChange={(e) => setReadiness(e.target.value as any)}><option value="AUTO">Automatic</option><option value="YES">Always</option><option value="NO">Skip</option></select></label>
                       <label className="f">VM launch budget<span className="hint">0 to 12. Scenario isolation uses 2.</span><input className="in" type="number" min={0} max={12} value={vmBudget} onChange={(e) => setVmBudget(Math.max(0, Math.min(12, Number(e.target.value) || 0)))} /></label>
-                      <div className="sub small">Selected suites need <strong>{vmCost}</strong> launch{vmCost === 1 ? '' : 'es'}.</div>
+                      <div className="sub small">Estimated maximum including readiness: <strong>{vmCost}</strong> launch{vmCost === 1 ? '' : 'es'}.</div>
                     </div>
                     <div className="table-wrap"><table className="t">
                       <thead><tr><th>Suite</th><th>What it checks</th><th>Reviewed catalogs (relative paths)</th></tr></thead>
@@ -258,7 +269,7 @@ export default function NewEvaluation({ caps }: { caps: BackendCapabilities | nu
                     <label className="f">New VM launches allowed<span className="hint">0 forbids any new VM</span><input className="in" type="number" min={0} max={12} value={vmBudget} onChange={(e) => setVmBudget(Math.max(0, Math.min(12, Number(e.target.value) || 0)))} /></label>
                   </div>
                 )}
-                {mode !== 'STATIC' && modeLive && (
+                {!demo && mode !== 'STATIC' && modeLive && (
                   <div className="mt-l">
                     <Callout tone="info" title={`How ${mode} runs here`}>
                       The Executioner runs on its own with the operator’s VM configuration. The other agents then run live, and all results are bundled and re-verified as one imported evaluation. The results are labelled as imported evidence with your acknowledgment.
@@ -272,11 +283,11 @@ export default function NewEvaluation({ caps }: { caps: BackendCapabilities | nu
                     </Callout>
                   </div>
                 )}
-                <div className="sub mt">
+                {!demo && <div className="sub mt">
                   <h4>Import an existing Executioner result <span className="muted small">(optional)</span></h4>
                   <p className="small muted" style={{ margin: '4px 0 8px' }}>Use evidence already produced by a separate STATIC, REVIEWED or RESUME run for the same commit. The commit must match the SHA above.</p>
                   <input type="file" accept=".json" onChange={(e) => setImportResult(e.target.files?.[0] ?? null)} aria-label="Executioner result to import" />
-                </div>
+                </div>}
                 {composed && (
                   <label className="check mt"><input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /><span>I confirm the Executioner evidence belongs to this submission and commit. <span className="muted">Recorded as an operator acknowledgment, not independent authentication. Without it, imported evidence cannot support marks.</span></span></label>
                 )}
@@ -312,7 +323,7 @@ export default function NewEvaluation({ caps }: { caps: BackendCapabilities | nu
                 <li>Report summary (always)</li>
                 <li>Integrity: AI-like writing estimate{refs.length ? ' and similarity' : ''}</li>
                 <li>{research ? `Research${verify ? ' with online verification' : ' without online verification'}` : 'Research skipped (not in the rubric)'}</li>
-                <li>{hasRepo ? (importResult ? `Executioner result imported from ${importResult.name}` : `Executioner in ${mode} mode`) : 'Executioner skipped (report only)'}{composed && ', bundled as acknowledged imported evidence'}</li>
+                <li>{hasRepo ? (demo ? 'Automatic evaluation (trusted local demo, at most one VM)' : importResult ? `Executioner result imported from ${importResult.name}` : `Executioner in ${mode} mode`) : 'Executioner skipped (report only)'}{composed && ', bundled as acknowledged imported evidence'}</li>
                 <li>Rubric: {rubricMode === 'AUTOMATIC' ? 'AI proposals for your approval' : rubricMode === 'PREVIEW' ? 'no model calls' : 'objective criteria only'}</li>
               </ul>
             </div>

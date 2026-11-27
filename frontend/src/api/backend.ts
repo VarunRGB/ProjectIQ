@@ -29,7 +29,7 @@ export interface BackendCapabilities {
   name: string;
   kind: 'mock' | 'http';
   /** Modes the unified evaluate() can run live. Today the live collector is STATIC-only. */
-  liveExecutionerModes: ('STATIC' | 'REVIEWED' | 'RESUME')[];
+  liveExecutionerModes: ('STATIC' | 'REVIEWED' | 'RESUME' | 'TRUSTED_DEMO')[];
   /** Saved Executioner results (including REVIEWED/RESUME runs) can be imported with acknowledgment. */
   importExecutionerResults: boolean;
   onlineResearchVerification: boolean;
