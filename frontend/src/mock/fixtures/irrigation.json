@@ -1,0 +1,3429 @@
+{
+ "fixture_kind": "GENERATED_BY_REAL_BACKEND_WITH_SYNTHETIC_NATIVE_OUTPUTS",
+ "scenario": "irrigation",
+ "exit_code": 0,
+ "meta": {
+  "students": [
+   "Meera Iyer"
+  ],
+  "course": "Engineering Design Project (ME-3207)",
+  "cohort": "TY B.Tech Mechanical Engineering",
+  "submitted_utc": "2026-11-21T12:00:00Z",
+  "evaluated_utc": "2026-11-25T07:02:44Z",
+  "executioner_mode_requested": null,
+  "references_uploaded": 0,
+  "verify_research": false,
+  "elapsed_seconds": 64.9
+ },
+ "result": {
+  "schema_version": "2E.1",
+  "submission": {
+   "id": "IR-2026-030",
+   "project_title": "Feasibility Study: Soil-Moisture Smart Irrigation",
+   "report_name": "irrigation_report.txt",
+   "report_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+   "repository_url": null,
+   "requested_ref": null
+  },
+  "collection_mode": "LIVE",
+  "agent_actions": {
+   "summarizer": "COLLECTED",
+   "integrity": "COLLECTED",
+   "research": "SKIPPED",
+   "executioner": "SKIPPED"
+  },
+  "agents": {
+   "summarizer": {
+    "agent": "summarizer",
+    "status": "COMPLETED",
+    "native_status": "SUMMARY_GENERATED",
+    "metrics": [
+     {
+      "id": "word_count",
+      "label": "Report words",
+      "value": 619,
+      "unit": "count",
+      "scope": "Whitespace-delimited extracted report text"
+     }
+    ],
+    "details": {
+     "result_kind": "SUMMARY_ONLY",
+     "summary": {
+      "summary": "This report studies whether a low-cost soil-moisture based irrigation controller can reduce water use in the college botanical garden. The objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period. The system consists of three components: the sensor nodes, the controller and a logging module.",
+      "key_points": [
+       "Scenario 3 (negative check): when rainfall was recorded in the last six hours, a watering request should be rejected and the valve must stay closed.",
+       "Independent verification is required before installation.",
+       "The study covers only six beds and one season.",
+       "A soil-moisture based controller appears feasible and could reduce water use by about 40% in summer."
+      ]
+     },
+     "model": "grounded-extractive-L1",
+     "word_count": 619,
+     "chunks": 1,
+     "elapsed_s": 0.0013,
+     "summary_display_method": "EXTRACTIVE_REPORT_CLAIMS",
+     "summary_display_policy": "L2",
+     "collection_model": "grounded-extractive-L1",
+     "collection_elapsed_s": 0.0013
+    },
+    "limitations": [
+     "Summary-only overview; report claims are not independently verified and never contribute to the project grade. A missing historical summary is unavailable until separately collected."
+    ],
+    "error_code": null,
+    "ai_detection": null,
+    "evidence_check": "MATCHED",
+    "receipt_provenance": "NATIVE_RECEIPT_MATCHED"
+   },
+   "integrity": {
+    "agent": "integrity",
+    "status": "PARTIAL",
+    "native_status": "SIMILARITY_REPORT_GENERATED",
+    "metrics": [
+     {
+      "id": "reference_overlap",
+      "label": "Reference overlap",
+      "value": null,
+      "unit": "percent",
+      "scope": "Checked words; supplied references only"
+     },
+     {
+      "id": "copied_chunks",
+      "label": "Words in copied chunks",
+      "value": null,
+      "unit": "percent",
+      "scope": "Checked words"
+     },
+     {
+      "id": "references_compared",
+      "label": "References compared",
+      "value": 0,
+      "unit": "count",
+      "scope": "Supplied readable references"
+     }
+    ],
+    "details": {
+     "references": [],
+     "sentences_checked": 0,
+     "words_checked": 0,
+     "percent_by_category": {
+      "verbatim": null,
+      "near-verbatim": null,
+      "paraphrase": null,
+      "similar meaning (not confirmed)": null
+     },
+     "percent_by_reference": {},
+     "chunks": [],
+     "matches": [],
+     "backends": {
+      "embeddings": "not run",
+      "nli": "not run",
+      "secondary_nli": "not run"
+     },
+     "notes": [
+      "No readable reference documents in empty_reference_corpus.",
+      "Percentages are shares of the document's words (quoted text and the reference list excluded). They measure overlap for review, not misconduct.",
+      "Reference comparison unavailable: no usable corpus or comparison denominator."
+     ],
+     "ai_findings": [],
+     "ai_notes": [
+      "Little or no AI-like writing: 0.0% of the student's own words (0 of 742 scored, in 0 of 6 passages) read as machine-generated. Advisory, not proof."
+     ]
+    },
+    "limitations": [
+     "Similarity is overlap with supplied references, not a plagiarism verdict.",
+     "AI indicators are advisory, not proof of authorship or grounds for automatic deductions.",
+     "No usable reference comparison denominator; overlap withheld."
+    ],
+    "error_code": null,
+    "ai_detection": {
+     "status": "COMPLETED",
+     "estimated_percent": 0.0,
+     "interpretation": "Little or no AI-like writing: 0.0% of the student's own words (0 of 742 scored, in 0 of 6 passages) read as machine-generated. Advisory, not proof.",
+     "confidence": "medium",
+     "flagged_passages": [],
+     "limitations": [
+      "Advisory only: an AI estimate is a reason to talk with the student, never proof or grounds for a penalty.",
+      "Copied sentences are excluded; the estimate covers the student's own writing only.",
+      "Formal, formulaic or non-native writing can read as machine-like, and AI text edited by hand can read as human.",
+      "Detector: Desklib AI-text classifier (DeBERTa-v3-large). Threshold AI probability >= 0.91 is PROVISIONAL until checked on real student text (scripts/check_ai_thresholds.py)."
+     ]
+    },
+    "evidence_check": "MATCHED",
+    "receipt_provenance": "NATIVE_RECEIPT_MATCHED"
+   },
+   "research": {
+    "agent": "research",
+    "status": "NOT_RUN",
+    "native_status": null,
+    "metrics": [],
+    "details": {},
+    "limitations": [
+     "Agent not requested or required input unavailable."
+    ],
+    "error_code": null,
+    "ai_detection": null,
+    "evidence_check": "NOT_RUN",
+    "receipt_provenance": null,
+    "required_by_rubric": false
+   },
+   "executioner": {
+    "agent": "executioner",
+    "status": "NOT_RUN",
+    "native_status": null,
+    "metrics": [],
+    "details": {},
+    "limitations": [
+     "Agent not requested or required input unavailable."
+    ],
+    "error_code": null,
+    "ai_detection": null,
+    "evidence_check": "NOT_RUN",
+    "receipt_provenance": null
+   }
+  },
+  "rubric": {
+   "schema_version": "2.0",
+   "id": "report-only-study",
+   "title": "Report-only feasibility study",
+   "revision": "1",
+   "total_points": 50.0,
+   "group_weights": {
+    "problem": 20.0,
+    "report": 25.0,
+    "design": 25.0,
+    "implementation": 10.0,
+    "validation": 20.0,
+    "research": 10.0
+   },
+   "criteria": [
+    {
+     "id": "problem_scope",
+     "title": "Problem and scope",
+     "description": "Assess the problem, intended users, objectives, constraints and coherent scope.",
+     "group": "problem",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed evidence shows no coherent problem or objectives.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Problem is vague or objectives largely unclear.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Problem and main objectives understandable; important constraints or users omitted.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear problem, objectives and scope with only minor gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Precise and justified problem, user needs, measurable objectives and realistic constraints.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "REPORT"
+    },
+    {
+     "id": "report_quality",
+     "title": "Report quality and clarity",
+     "description": "Assess organization, clarity, specificity, and accurate separation of claims, plans and measured results.",
+     "group": "report",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed report is substantially incoherent or misrepresents critical results.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major organization or clarity gaps make understanding difficult.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Readable and structured, but limited specificity or evidence presentation.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear, organized, specific report with minor gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Excellent organization, precise technical communication, and transparent evidence and limitations.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "REPORT"
+    },
+    {
+     "id": "technical_design",
+     "title": "Architecture and technical design",
+     "description": "Assess design decisions, appropriate technology, interfaces/data model and explanation of trade-offs.",
+     "group": "design",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed design is incoherent or unsuitable for the stated problem.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major unexplained design choices or missing components.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Reasonable architecture with basic component/data explanation.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Coherent design with justified choices and relevant trade-offs.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Well-justified architecture, interfaces and data model with explicit constraints and trade-offs.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "DESIGN"
+    },
+    {
+     "id": "implementation_quality",
+     "title": "Implementation and engineering quality",
+     "description": "Assess source-supported implementation, maintainability, appropriate structure and security/reliability handling; do not equate heuristic indicators to marks.",
+     "group": "implementation",
+     "weight": 100.0,
+     "applicability": "EXCLUDED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "STATIC_SOURCE"
+     ],
+     "required_evidence": [
+      "STATIC_SOURCE"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed source demonstrates substantial implementation deficiencies.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major source-supported engineering problems or incomplete design realization.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Core implementation is plausible with significant engineering gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Source-supported implementation is coherent, with minor or bounded concerns.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Source-supported implementation demonstrates strong structure and robust handling of relevant concerns.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "IMPLEMENTATION"
+    },
+    {
+     "id": "functional_validation",
+     "title": "Functional behavior and validation",
+     "description": "Assess scoped, executed functional evidence and whether testing supports requirements. Static discovery and readiness alone do not prove functionality. No runtime observations means this criterion remains unassessed. This does not measure full application coverage.",
+     "group": "validation",
+     "weight": 90.0,
+     "applicability": "EXCLUDED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "STATIC_SOURCE",
+      "TEST_OBSERVATION"
+     ],
+     "required_evidence": [
+      "TEST_OBSERVATION"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed functional evidence demonstrates major failures of agreed requirements.",
+       "requires_failed_observation": true
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Reviewed executed evidence verifies only narrow agreed behavior or demonstrates significant failing behavior. Limited coverage is not evidence of failure.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Some agreed behaviors verified with material gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Most agreed behavior verified, with clearly bounded limitations.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Representative agreed behaviors verified, including relevant negative cases; limitations disclosed.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "FUNCTIONAL"
+    },
+    {
+     "id": "testing_strategy",
+     "title": "Testing strategy and limitations",
+     "description": "Assess the documented validation strategy, including clear expected outcomes, negative checks and honest limitations. Do not score executed correctness or penalize missing execution here.",
+     "group": "validation",
+     "weight": 10.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed text contains no meaningful validation strategy or substantially misrepresents what was tested.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Very limited scenarios or no clear expected outcomes.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Useful scenarios and some expected outcomes, but incomplete negative cases or reproducibility details.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear representative scenarios and expected outcomes with explicit limitations and some negative checks.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Comprehensive requirements-linked strategy with concrete oracles, negative cases, reproducibility details and honest limitations.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "TEST_STRATEGY"
+    },
+    {
+     "id": "research",
+     "title": "Research and use of sources",
+     "description": "Assess the assignment-required literature or documented technical sources, their relevance and use. If the assignment does not require this, explicitly exclude.",
+     "group": "research",
+     "weight": 100.0,
+     "applicability": "EXCLUDED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "RESEARCH_RECORD"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT",
+      "RESEARCH_RECORD"
+     ],
+     "minimum_evidence": 2,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Required sources are demonstrably absent or irrelevant after review.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Minimal or poorly connected source use.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Relevant sources cited but synthesis or coverage limited.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Relevant sources integrated and limitations understood.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Well-chosen, critically synthesized sources supporting the project with transparent provenance.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "RESEARCH"
+    }
+   ]
+  },
+  "assessment": {
+   "schema_version": "2.0",
+   "evidence_sha256": "0bedf4ebde5350ef9002132ec88ea5ac759a0eaf754260c9b909639ba5433b0d",
+   "rubric_sha256": "c70203f5b4635610dc70c5dbef54e220ca7659c28eee8b79eb544b15fdb21694",
+   "decisions_sha256": "34965e47111a75565f0bd91a6b0ca5393a3c701bd35f3256608f9e2f597146ac",
+   "status": "READY_FOR_TEACHER_REVIEW",
+   "max_points": 50.0,
+   "proposed_points": 31.25,
+   "reviewed_points": null,
+   "assessed_subtotal_points": 31.25,
+   "assessed_max_points": 50.0,
+   "assessed_weight_percent": 100.0,
+   "reviewed_weight_percent": 0.0,
+   "unresolved_criterion_ids": [],
+   "criteria": [
+    {
+     "id": "problem_scope",
+     "group": "problem",
+     "title": "Problem and scope",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 22.22,
+     "max_points": 11.11,
+     "earned_points": 8.33,
+     "fraction": 0.75,
+     "level_id": "strong",
+     "evidence_ids": [
+      "E-16d5b0b56c4f2217b5931efa",
+      "E-75bc910a1a734e8210c3da24",
+      "E-30c6ae554fad846c264f5ca5"
+     ],
+     "reason": "The study quantifies current use at about 6,000 litres per day and states four objectives for measurement, sensors, design and savings. Constraints such as gardener workload and maintenance are mentioned only briefly.",
+     "feedback": {
+      "strength": "The study quantifies current use at about 6,000 litres per day and states four objectives for measurement, sensors, design and savings.",
+      "limitation": "Constraints such as gardener workload and maintenance are mentioned only briefly.",
+      "improvement": "Add the maintenance and staffing constraints that a pilot must respect.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": [
+      {
+       "evidence_id": "E-16d5b0b56c4f2217b5931efa",
+       "kind": "REPORT_EXCERPT",
+       "label": "3. Objectives | Report characters 1021–1225",
+       "locator": "extracted_text:1021:1225",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n3. Objectives\nThe objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "3. Objectives",
+       "start": 1021,
+       "end": 1225
+      },
+      {
+       "evidence_id": "E-75bc910a1a734e8210c3da24",
+       "kind": "REPORT_EXCERPT",
+       "label": "2. Problem Statement | Report characters 750–1021",
+       "locator": "extracted_text:750:1021",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n2. Problem Statement\nThe garden uses about 6,000 litres of water per day in summer. The fixed schedule wastes water on cool or rainy days and does not respond to differences between beds. The garden committee wants to know whether an automatic system is worth building.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "2. Problem Statement",
+       "start": 750,
+       "end": 1021
+      },
+      {
+       "evidence_id": "E-30c6ae554fad846c264f5ca5",
+       "kind": "REPORT_EXCERPT",
+       "label": "8. Limitations | Report characters 3509–3661",
+       "locator": "extracted_text:3509:3661",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n8. Limitations\nThe study covers only six beds and one season. Sensor drift over time was not measured. The estimate does not include maintenance cost.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "8. Limitations",
+       "start": 3509,
+       "end": 3661
+      }
+     ]
+    },
+    {
+     "id": "report_quality",
+     "group": "report",
+     "title": "Report quality and clarity",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 27.78,
+     "max_points": 13.89,
+     "earned_points": 10.42,
+     "fraction": 0.75,
+     "level_id": "strong",
+     "evidence_ids": [
+      "E-30c6ae554fad846c264f5ca5",
+      "E-16d5b0b56c4f2217b5931efa",
+      "E-3ab959645b3108faf2678a47"
+     ],
+     "reason": "The report is concise and moves from measurement to design and estimated savings with specific figures. The comparison of the three sensor types is summarised without the underlying table.",
+     "feedback": {
+      "strength": "The report is concise and moves from measurement to design and estimated savings with specific figures.",
+      "limitation": "The comparison of the three sensor types is summarised without the underlying table.",
+      "improvement": "Include the sensor comparison table with cost, accuracy and expected life.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": [
+      {
+       "evidence_id": "E-30c6ae554fad846c264f5ca5",
+       "kind": "REPORT_EXCERPT",
+       "label": "8. Limitations | Report characters 3509–3661",
+       "locator": "extracted_text:3509:3661",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n8. Limitations\nThe study covers only six beds and one season. Sensor drift over time was not measured. The estimate does not include maintenance cost.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "8. Limitations",
+       "start": 3509,
+       "end": 3661
+      },
+      {
+       "evidence_id": "E-16d5b0b56c4f2217b5931efa",
+       "kind": "REPORT_EXCERPT",
+       "label": "3. Objectives | Report characters 1021–1225",
+       "locator": "extracted_text:1021:1225",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n3. Objectives\nThe objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "3. Objectives",
+       "start": 1021,
+       "end": 1225
+      },
+      {
+       "evidence_id": "E-3ab959645b3108faf2678a47",
+       "kind": "REPORT_EXCERPT",
+       "label": "1. Introduction | Report characters 477–750",
+       "locator": "extracted_text:477:750",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n1. Introduction\nThe botanical garden is watered by hand twice a day on a fixed schedule, regardless of rain or soil condition. Gardeners estimate that some beds are over-watered during the monsoon. A sensor-based controller could water each bed only when the soil is dry.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "1. Introduction",
+       "start": 477,
+       "end": 750
+      }
+     ]
+    },
+    {
+     "id": "technical_design",
+     "group": "design",
+     "title": "Architecture and technical design",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 27.78,
+     "max_points": 13.89,
+     "earned_points": 6.94,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-2a9277b0f65bbacc5b9ff986",
+      "E-5ec382e5d7f0ddb488a97dc4",
+      "E-16d5b0b56c4f2217b5931efa"
+     ],
+     "reason": "The design specifies one capacitive sensor and valve per bed, a threshold rule, a fifteen-minute maximum and a rain check. Threshold values and calibration steps are not defined, and failure behaviour of the valve is not described.",
+     "feedback": {
+      "strength": "The design specifies one capacitive sensor and valve per bed, a threshold rule, a fifteen-minute maximum and a rain check.",
+      "limitation": "Threshold values and calibration steps are not defined, and failure behaviour of the valve is not described.",
+      "improvement": "Define calibration and a fail-safe state for each valve.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": [
+      {
+       "evidence_id": "E-2a9277b0f65bbacc5b9ff986",
+       "kind": "REPORT_EXCERPT",
+       "label": "5. Design | Report characters 1595–2281",
+       "locator": "extracted_text:1595:2281",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n5. Design\nThe system consists of three components: the sensor nodes, the controller and a logging module. Each bed has a capacitive sensor that reports a moisture reading every ten minutes. The controller opens the valve for a bed when the reading falls below the threshold for that bed and closes it when the reading rises above the upper threshold or after a maximum of fifteen minutes. A rain check skips watering when rainfall was recorded in the last six hours. The controller connects to each valve through a relay board and writes each watering event to an SD card log, so the logging module stores the bed, start time, duration and moisture readings that gardeners can review.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "5. Design",
+       "start": 1595,
+       "end": 2281
+      },
+      {
+       "evidence_id": "E-5ec382e5d7f0ddb488a97dc4",
+       "kind": "REPORT_EXCERPT",
+       "label": "4. Methodology | Report characters 1225–1595",
+       "locator": "extracted_text:1225:1595",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n4. Methodology\nWe recorded the volume used per bed for fourteen days using the existing flow meter. We compared resistive, capacitive and tensiometer sensors on cost, accuracy and expected life. We designed a controller around an ESP32 board with one capacitive sensor and one solenoid valve per bed, and estimated savings using the measured data and a threshold rule.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "4. Methodology",
+       "start": 1225,
+       "end": 1595
+      },
+      {
+       "evidence_id": "E-16d5b0b56c4f2217b5931efa",
+       "kind": "REPORT_EXCERPT",
+       "label": "3. Objectives | Report characters 1021–1225",
+       "locator": "extracted_text:1021:1225",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n3. Objectives\nThe objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "3. Objectives",
+       "start": 1021,
+       "end": 1225
+      }
+     ]
+    },
+    {
+     "id": "implementation_quality",
+     "group": "implementation",
+     "title": "Implementation and engineering quality",
+     "applicability": "EXCLUDED",
+     "status": "EXCLUDED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 0.0,
+     "max_points": 0.0,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "Excluded by the teacher-defined rubric.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "functional_validation",
+     "group": "validation",
+     "title": "Functional behavior and validation",
+     "applicability": "EXCLUDED",
+     "status": "EXCLUDED",
+     "configured_weight": 90.0,
+     "effective_weight_percent": 0.0,
+     "max_points": 0.0,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "Excluded by the teacher-defined rubric.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "testing_strategy",
+     "group": "validation",
+     "title": "Testing strategy and limitations",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 10.0,
+     "effective_weight_percent": 22.22,
+     "max_points": 11.11,
+     "earned_points": 5.56,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-35958aa3118e58eafcf289a8",
+      "E-30c6ae554fad846c264f5ca5",
+      "E-4e5e1f01a2407f89a6c34028"
+     ],
+     "reason": "Four pilot scenarios define expected outcomes, including a negative rain check and handling of an invalid sensor reading. None of the scenarios has been executed, and pass criteria such as the ten-minute response are not tied to a measurement method.",
+     "feedback": {
+      "strength": "Four pilot scenarios define expected outcomes, including a negative rain check and handling of an invalid sensor reading.",
+      "limitation": "None of the scenarios has been executed, and pass criteria such as the ten-minute response are not tied to a measurement method.",
+      "improvement": "Run the scenarios on a two-bed pilot and record measured response times and water volumes.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": [
+      {
+       "evidence_id": "E-35958aa3118e58eafcf289a8",
+       "kind": "REPORT_EXCERPT",
+       "label": "7. Validation | Report characters 2615–3509",
+       "locator": "extracted_text:2615:3509",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n7. Validation\nWe did not build or test the controller. For the proposed pilot we defined test scenarios with expected outcomes. Scenario 1: when the moisture reading of a bed falls below its threshold, the controller should open that valve within ten minutes and the log should record the event. Scenario 2: when the reading rises above the upper threshold, the valve should close. Scenario 3 (negative check): when rainfall was recorded in the last six hours, a watering request should be rejected and the valve must stay closed. Scenario 4: if a sensor returns an invalid reading, the controller should skip that bed and record an error instead of watering. The savings estimate depends on the threshold values, which should be calibrated for each bed. The estimate assumes that the fourteen recorded days are typical of the season. Independent verification is required before installation.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "7. Validation",
+       "start": 2615,
+       "end": 3509
+      },
+      {
+       "evidence_id": "E-30c6ae554fad846c264f5ca5",
+       "kind": "REPORT_EXCERPT",
+       "label": "8. Limitations | Report characters 3509–3661",
+       "locator": "extracted_text:3509:3661",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n8. Limitations\nThe study covers only six beds and one season. Sensor drift over time was not measured. The estimate does not include maintenance cost.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "8. Limitations",
+       "start": 3509,
+       "end": 3661
+      },
+      {
+       "evidence_id": "E-4e5e1f01a2407f89a6c34028",
+       "kind": "REPORT_EXCERPT",
+       "label": "6. Results | Report characters 2281–2615",
+       "locator": "extracted_text:2281:2615",
+       "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n6. Results\nUsing the fourteen days of measured data, the threshold rule would have watered the beds 41% less often than the fixed schedule, saving an estimated 2,400 litres per day in summer. The estimated cost of the controller for six beds is 9,800 rupees, and the payback period is about seven months at the current water tariff.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "6. Results",
+       "start": 2281,
+       "end": 2615
+      }
+     ]
+    },
+    {
+     "id": "research",
+     "group": "research",
+     "title": "Research and use of sources",
+     "applicability": "EXCLUDED",
+     "status": "EXCLUDED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 0.0,
+     "max_points": 0.0,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "Excluded by the teacher-defined rubric.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    }
+   ],
+   "groups": [
+    {
+     "id": "problem",
+     "effective_weight_percent": 22.22,
+     "max_points": 11.11,
+     "assessed_max_points": 11.11,
+     "assessed_subtotal_points": 8.33,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "report",
+     "effective_weight_percent": 27.78,
+     "max_points": 13.89,
+     "assessed_max_points": 13.89,
+     "assessed_subtotal_points": 10.42,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "design",
+     "effective_weight_percent": 27.78,
+     "max_points": 13.89,
+     "assessed_max_points": 13.89,
+     "assessed_subtotal_points": 6.94,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "implementation",
+     "effective_weight_percent": 0.0,
+     "max_points": 0.0,
+     "assessed_max_points": 0.0,
+     "assessed_subtotal_points": 0.0,
+     "assessed_weight_percent": null,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "validation",
+     "effective_weight_percent": 22.22,
+     "max_points": 11.11,
+     "assessed_max_points": 11.11,
+     "assessed_subtotal_points": 5.56,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "research",
+     "effective_weight_percent": 0.0,
+     "max_points": 0.0,
+     "assessed_max_points": 0.0,
+     "assessed_subtotal_points": 0.0,
+     "assessed_weight_percent": null,
+     "unresolved_criterion_ids": []
+    }
+   ],
+   "limitations": [
+    "Integrity estimates and legacy Summarizer grades are advisory and never contribute to marks.",
+    "Evidence IDs establish traceability, not correctness of a qualitative judgment. Teacher review is required.",
+    "Excluded weights are redistributed proportionally; unresolved weights are not redistributed.",
+    "Objective scenario success and explicitly mapped requirement evidence coverage measure distinct properties; neither proves unrestricted correctness.",
+    "Display values are rounded independently; totals use unrounded arithmetic. Teacher-reviewed is a local operator status, not authenticated institutional approval."
+   ]
+  },
+  "evidence_intelligence": {
+   "evaluation_policy": {
+    "version": "L2",
+    "suspect_spans": [],
+    "automatic_judgment": "EVIDENCE_CONSTRAINED"
+   },
+   "report_signals": {
+    "test_scenarios": [
+     "E-35958aa3118e58eafcf289a8"
+    ],
+    "negative_checks": [
+     "E-35958aa3118e58eafcf289a8"
+    ],
+    "limitations": [
+     "E-35958aa3118e58eafcf289a8"
+    ],
+    "design_description": [
+     "E-2a9277b0f65bbacc5b9ff986"
+    ]
+   },
+   "research_facts": null,
+   "source_analysis": null,
+   "research": null,
+   "integrity_advisory": {
+    "comparison_status": "NOT_AVAILABLE",
+    "reference_overlap": null,
+    "references_compared": 0,
+    "words_checked": 0,
+    "advisory_only": true
+   },
+   "runtime": {
+    "by_scope": {
+     "EXACT_PLANNED_TEST": {
+      "passed": 0,
+      "failed": 0,
+      "decisive": 0,
+      "pass_rate": null
+     },
+     "REVIEWED_SCENARIO_ONLY": {
+      "passed": 0,
+      "failed": 0,
+      "decisive": 0,
+      "pass_rate": null
+     }
+    },
+    "scenario_groups": {},
+    "ambiguous_keys": [],
+    "overlapping_keys": [],
+    "planned_counts": null,
+    "planned_counts_scope": "NATIVE_REPORTED_NOT_ELIGIBILITY",
+    "unavailable_suites": [],
+    "readiness_passes_eligible": 0,
+    "requirements_coverage": null,
+    "limitations": [
+     "Counts describe eligible scoped observations only; exact and reviewed scopes must not be summed as independent tests.",
+     "No agreed requirements mapping is implied. Untested does not mean failed."
+    ]
+   },
+   "runtime_observations": [],
+   "static_finding_groups": [],
+   "limitations": [
+    "Static findings are not confirmed vulnerabilities; severity prioritizes review rather than directly deducting marks.",
+    "Report text extraction may omit figures or tables."
+   ]
+  },
+  "decision_reuse": {
+   "preserved_criterion_ids": [],
+   "dropped_decisions": {}
+  },
+  "research_required": false,
+  "evaluation_policy": "L2",
+  "criterion_review_states": {
+   "problem_scope": "PROPOSED",
+   "report_quality": "PROPOSED",
+   "technical_design": "PROPOSED",
+   "implementation_quality": "EXCLUDED",
+   "functional_validation": "EXCLUDED",
+   "testing_strategy": "PROPOSED",
+   "research": "EXCLUDED"
+  },
+  "legacy_judge_executed": false,
+  "rubric_mode": "AUTOMATIC",
+  "workflow_status": "COMPLETE",
+  "agent_failures": [],
+  "rubric_exit_code": 0,
+  "elapsed_seconds": 0.1926,
+  "artifacts": {
+   "evaluation": "collection/evaluation.json",
+   "assessment": "rubric/assessment.json",
+   "rubric": "rubric/rubric.json",
+   "decisions": "rubric/decisions.json",
+   "evidence": "rubric/evidence.json",
+   "intelligence": "rubric/evidence_intelligence.json",
+   "ieee_format": "collection/ieee_format.json"
+  },
+  "limitations": [
+   "Native receipts attest saved bytes only, not agent correctness or authenticity.",
+   "Private evaluation contains student text and code evidence; do not publish the output directory.",
+   "Receipt hashes verify saved bytes, not authenticity, accuracy or student authorship.",
+   "Report excerpts establish what the extracted text says, not what the software actually does. Scans, tables and figures may be missed by the report loader.",
+   "All output is private; treat displayed strings as untrusted text.",
+   "Integrity estimates and legacy Summarizer grades are advisory and never contribute to marks.",
+   "Evidence IDs establish traceability, not correctness of a qualitative judgment. Teacher review is required.",
+   "Excluded weights are redistributed proportionally; unresolved weights are not redistributed.",
+   "Objective scenario success and explicitly mapped requirement evidence coverage measure distinct properties; neither proves unrestricted correctness.",
+   "Display values are rounded independently; totals use unrounded arithmetic. Teacher-reviewed is a local operator status, not authenticated institutional approval.",
+   "Private local evaluation; no unrestricted execution or authenticated faculty approval.",
+   "Live Executioner collection is STATIC; runtime marks require eligible reviewed evidence.",
+   "Legacy judge never executed by this workflow. Imported historical summaries may have been produced by that judge."
+  ],
+  "ieee_format": {
+   "status": "COMPLETED",
+   "score": 62.2,
+   "max_score": 100,
+   "rating": "Major text-structure issues",
+   "format_verdict": "CANNOT_VERIFY_LAYOUT",
+   "assessment_scope": "structure_only",
+   "layout_verdict": "Column layout unavailable for this format",
+   "categories": [
+    {
+     "category": "Page layout",
+     "rubric_weight": 25,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "rubric_weight": 20,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Title and authors",
+     "rubric_weight": 10,
+     "earned": 10,
+     "possible": 10,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "rubric_weight": 15,
+     "earned": 8,
+     "possible": 15,
+     "status": "needs_attention"
+    },
+    {
+     "category": "Section structure",
+     "rubric_weight": 10,
+     "earned": 10,
+     "possible": 10,
+     "status": "pass"
+    },
+    {
+     "category": "Figures and tables",
+     "rubric_weight": 10,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "References and citations",
+     "rubric_weight": 10,
+     "earned": 0,
+     "possible": 10,
+     "status": "needs_attention"
+    }
+   ],
+   "checks": [
+    {
+     "category": "Page layout",
+     "criterion": "A4 or US Letter page size",
+     "earned": 0,
+     "possible": 8,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Page layout",
+     "criterion": "Two-column body layout",
+     "earned": 0,
+     "possible": 14,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Page layout",
+     "criterion": "Plausible and balanced outer margins",
+     "earned": 0,
+     "possible": 3,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "criterion": "Body text near 10 pt",
+     "earned": 0,
+     "possible": 12,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "criterion": "Serif/Times-like body font",
+     "earned": 0,
+     "possible": 8,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Title and authors",
+     "criterion": "Title text on first line",
+     "earned": 6,
+     "possible": 6,
+     "detail": "Potential title: Feasibility Study: Soil-Moisture Based Smart Irrigation for the College Botanical Garden",
+     "suggestion": "Place the research-paper title at the start of the document.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Title and authors",
+     "criterion": "Author / affiliation text",
+     "earned": 4,
+     "possible": 4,
+     "detail": "Text found between the title and abstract.",
+     "suggestion": "Add author names and affiliations below the title.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "criterion": "Abstract label",
+     "earned": 8,
+     "possible": 8,
+     "detail": "Abstract label found.",
+     "suggestion": "Include an Abstract paragraph following the chosen IEEE template.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "criterion": "Index Terms / Keywords label",
+     "earned": 0,
+     "possible": 7,
+     "detail": "Index Terms/Keywords label not found.",
+     "suggestion": "Include an 'Index Terms—' line beneath the abstract.",
+     "page": null,
+     "applicable": true,
+     "status": "fail"
+    },
+    {
+     "category": "Section structure",
+     "criterion": "Numbered main sections",
+     "earned": 6,
+     "possible": 6,
+     "detail": "9 numbered main section(s) detected.",
+     "suggestion": "Use headings such as 'I. INTRODUCTION', 'II. METHODS', 'III. RESULTS'.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Section structure",
+     "criterion": "Introduction section",
+     "earned": 4,
+     "possible": 4,
+     "detail": "Introduction section found.",
+     "suggestion": "Add an Introduction section using a consistent section-heading style.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Figures and tables",
+     "criterion": "Figure and table captions",
+     "earned": 0,
+     "possible": 10,
+     "detail": "No figure/table mentions detected; category excluded.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "References heading",
+     "earned": 0,
+     "possible": 4,
+     "detail": "References heading not found.",
+     "suggestion": "Add a References section at the end of the paper.",
+     "page": null,
+     "applicable": true,
+     "status": "fail"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "Numbered bibliography entries",
+     "earned": 0,
+     "possible": 4,
+     "detail": "0 numbered reference entry/entries found.",
+     "suggestion": "Use IEEE-style numbered reference entries such as [1] and [2].",
+     "page": null,
+     "applicable": true,
+     "status": "fail"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "Bracketed in-text citations",
+     "earned": 0,
+     "possible": 2,
+     "detail": "0 line(s) contain bracketed citations before the reference list.",
+     "suggestion": "Cite your sources in the main text using [1], [2], etc.",
+     "page": null,
+     "applicable": true,
+     "status": "fail"
+    }
+   ],
+   "notes": [
+    "This is a TEXT STRUCTURE score, not an IEEE layout/format-compliance score. Plain text does not store page dimensions, columns, margins, or fonts.",
+    "Export a formatted DOCX or PDF for a fuller formatting assessment.",
+    "For submission, validate the specific conference/journal template and run official PDF compliance checks separately."
+   ],
+   "disclaimer": "This is a teaching/demo formatting score, not an official IEEE score, publication decision or replacement for a venue's template and IEEE PDF Checker."
+  }
+ },
+ "evidence": {
+  "schema_version": "2.0",
+  "evaluation_sha256": "d97fa30cd20863e3574be7122b17b52987cfcdd6fa807d727bde4b65365959e6",
+  "submission_id": "IR-2026-030",
+  "report_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+  "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+  "report_extraction": "COMPLETE",
+  "repository_commit": null,
+  "agent_checks": {
+   "summarizer": "MATCHED",
+   "integrity": "MATCHED",
+   "research": "NOT_RUN",
+   "executioner": "NOT_RUN"
+  },
+  "items": [
+   {
+    "id": "E-e54785b803dea95a5f71aabe",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "Front matter | Report characters 0–134",
+    "text": "Feasibility Study: Soil-Moisture Based Smart Irrigation for the College Botanical Garden\nMini-Project Report (report-only submission)\n",
+    "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+    "locator": "extracted_text:0:134",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 0,
+     "end": 134,
+     "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+     "section": "Front matter"
+    }
+   },
+   {
+    "id": "E-f8bef6afc72415a1746f7814",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "Abstract | Report characters 134–477",
+    "text": "\nAbstract\nThis report studies whether a low-cost soil-moisture based irrigation controller can reduce water use in the college botanical garden. We surveyed the current watering schedule, compared three sensor options, designed a controller and estimated water savings. No hardware prototype or software repository is part of this submission.\n",
+    "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+    "locator": "extracted_text:134:477",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 134,
+     "end": 477,
+     "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+     "section": "Abstract"
+    }
+   },
+   {
+    "id": "E-3ab959645b3108faf2678a47",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "1. Introduction | Report characters 477–750",
+    "text": "\n1. Introduction\nThe botanical garden is watered by hand twice a day on a fixed schedule, regardless of rain or soil condition. Gardeners estimate that some beds are over-watered during the monsoon. A sensor-based controller could water each bed only when the soil is dry.\n",
+    "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+    "locator": "extracted_text:477:750",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 477,
+     "end": 750,
+     "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+     "section": "1. Introduction"
+    }
+   },
+   {
+    "id": "E-75bc910a1a734e8210c3da24",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "2. Problem Statement | Report characters 750–1021",
+    "text": "\n2. Problem Statement\nThe garden uses about 6,000 litres of water per day in summer. The fixed schedule wastes water on cool or rainy days and does not respond to differences between beds. The garden committee wants to know whether an automatic system is worth building.\n",
+    "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+    "locator": "extracted_text:750:1021",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 750,
+     "end": 1021,
+     "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+     "section": "2. Problem Statement"
+    }
+   },
+   {
+    "id": "E-16d5b0b56c4f2217b5931efa",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "3. Objectives | Report characters 1021–1225",
+    "text": "\n3. Objectives\nThe objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period.\n",
+    "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+    "locator": "extracted_text:1021:1225",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 1021,
+     "end": 1225,
+     "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+     "section": "3. Objectives"
+    }
+   },
+   {
+    "id": "E-5ec382e5d7f0ddb488a97dc4",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "4. Methodology | Report characters 1225–1595",
+    "text": "\n4. Methodology\nWe recorded the volume used per bed for fourteen days using the existing flow meter. We compared resistive, capacitive and tensiometer sensors on cost, accuracy and expected life. We designed a controller around an ESP32 board with one capacitive sensor and one solenoid valve per bed, and estimated savings using the measured data and a threshold rule.\n",
+    "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+    "locator": "extracted_text:1225:1595",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 1225,
+     "end": 1595,
+     "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+     "section": "4. Methodology"
+    }
+   },
+   {
+    "id": "E-2a9277b0f65bbacc5b9ff986",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "5. Design | Report characters 1595–2281",
+    "text": "\n5. Design\nThe system consists of three components: the sensor nodes, the controller and a logging module. Each bed has a capacitive sensor that reports a moisture reading every ten minutes. The controller opens the valve for a bed when the reading falls below the threshold for that bed and closes it when the reading rises above the upper threshold or after a maximum of fifteen minutes. A rain check skips watering when rainfall was recorded in the last six hours. The controller connects to each valve through a relay board and writes each watering event to an SD card log, so the logging module stores the bed, start time, duration and moisture readings that gardeners can review.\n",
+    "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+    "locator": "extracted_text:1595:2281",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 1595,
+     "end": 2281,
+     "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+     "section": "5. Design"
+    }
+   },
+   {
+    "id": "E-4e5e1f01a2407f89a6c34028",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "6. Results | Report characters 2281–2615",
+    "text": "\n6. Results\nUsing the fourteen days of measured data, the threshold rule would have watered the beds 41% less often than the fixed schedule, saving an estimated 2,400 litres per day in summer. The estimated cost of the controller for six beds is 9,800 rupees, and the payback period is about seven months at the current water tariff.\n",
+    "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+    "locator": "extracted_text:2281:2615",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 2281,
+     "end": 2615,
+     "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+     "section": "6. Results"
+    }
+   },
+   {
+    "id": "E-35958aa3118e58eafcf289a8",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "7. Validation | Report characters 2615–3509",
+    "text": "\n7. Validation\nWe did not build or test the controller. For the proposed pilot we defined test scenarios with expected outcomes. Scenario 1: when the moisture reading of a bed falls below its threshold, the controller should open that valve within ten minutes and the log should record the event. Scenario 2: when the reading rises above the upper threshold, the valve should close. Scenario 3 (negative check): when rainfall was recorded in the last six hours, a watering request should be rejected and the valve must stay closed. Scenario 4: if a sensor returns an invalid reading, the controller should skip that bed and record an error instead of watering. The savings estimate depends on the threshold values, which should be calibrated for each bed. The estimate assumes that the fourteen recorded days are typical of the season. Independent verification is required before installation.\n",
+    "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+    "locator": "extracted_text:2615:3509",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 2615,
+     "end": 3509,
+     "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+     "section": "7. Validation"
+    }
+   },
+   {
+    "id": "E-30c6ae554fad846c264f5ca5",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "8. Limitations | Report characters 3509–3661",
+    "text": "\n8. Limitations\nThe study covers only six beds and one season. Sensor drift over time was not measured. The estimate does not include maintenance cost.\n",
+    "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+    "locator": "extracted_text:3509:3661",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 3509,
+     "end": 3661,
+     "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+     "section": "8. Limitations"
+    }
+   },
+   {
+    "id": "E-fa809cc66b5ee6748e9b5b44",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "9. Conclusion | Report characters 3661–3850",
+    "text": "\n9. Conclusion\nA soil-moisture based controller appears feasible and could reduce water use by about 40% in summer. We recommend building a two-bed pilot before installing the full system.\n",
+    "artifact_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+    "locator": "extracted_text:3661:3850",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 3661,
+     "end": 3850,
+     "extracted_text_sha256": "8be681b7083fb4090644eb6c2df4fb99f86b56d139f8ed9bfa07b1ca0e60a14e",
+     "section": "9. Conclusion"
+    }
+   },
+   {
+    "id": "E-04094be6d42872dbbe7e0f29",
+    "agent": "summarizer",
+    "kind": "REPORT_SUMMARY",
+    "label": "Generated summary",
+    "text": "This report studies whether a low-cost soil-moisture based irrigation controller can reduce water use in the college botanical garden. The objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period. The system consists of three components: the sensor nodes, the controller and a logging module.",
+    "artifact_sha256": "68e8d9971501d8868415e8dff386ee40880410cbf6d304573e615382c780916a",
+    "locator": "/summary/summary",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Model-generated paraphrase; not a grading evidence source."
+    ],
+    "data": {}
+   },
+   {
+    "id": "E-261731db45ab0493721d25db",
+    "agent": "summarizer",
+    "kind": "REPORT_SUMMARY",
+    "label": "Generated key point",
+    "text": "Scenario 3 (negative check): when rainfall was recorded in the last six hours, a watering request should be rejected and the valve must stay closed.",
+    "artifact_sha256": "68e8d9971501d8868415e8dff386ee40880410cbf6d304573e615382c780916a",
+    "locator": "/summary/key_points/0",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Model-generated claim; check the report."
+    ],
+    "data": {}
+   },
+   {
+    "id": "E-25088d3231c8eba07b5e10aa",
+    "agent": "summarizer",
+    "kind": "REPORT_SUMMARY",
+    "label": "Generated key point",
+    "text": "Independent verification is required before installation.",
+    "artifact_sha256": "68e8d9971501d8868415e8dff386ee40880410cbf6d304573e615382c780916a",
+    "locator": "/summary/key_points/1",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Model-generated claim; check the report."
+    ],
+    "data": {}
+   },
+   {
+    "id": "E-bf7f376036b4bd32333f37d3",
+    "agent": "summarizer",
+    "kind": "REPORT_SUMMARY",
+    "label": "Generated key point",
+    "text": "The study covers only six beds and one season.",
+    "artifact_sha256": "68e8d9971501d8868415e8dff386ee40880410cbf6d304573e615382c780916a",
+    "locator": "/summary/key_points/2",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Model-generated claim; check the report."
+    ],
+    "data": {}
+   },
+   {
+    "id": "E-07ea065a97668acaeb6d0b50",
+    "agent": "summarizer",
+    "kind": "REPORT_SUMMARY",
+    "label": "Generated key point",
+    "text": "A soil-moisture based controller appears feasible and could reduce water use by about 40% in summer.",
+    "artifact_sha256": "68e8d9971501d8868415e8dff386ee40880410cbf6d304573e615382c780916a",
+    "locator": "/summary/key_points/3",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Model-generated claim; check the report."
+    ],
+    "data": {}
+   },
+   {
+    "id": "E-9623613ae6f81c8b1a61d081",
+    "agent": "integrity",
+    "kind": "INTEGRITY_ADVISORY",
+    "label": "Integrity coverage",
+    "text": "Reference overlap and AI indicators require human interpretation. No automatic deductions.",
+    "artifact_sha256": "bf5d65265f88a290359f866741a6762482cbfe2540f02a7df44afefd14daea50",
+    "locator": "/",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "No authorship or misconduct conclusion."
+    ],
+    "data": {
+     "comparison_available": false
+    }
+   },
+   {
+    "id": "E-6c940d3e1f04f6b57a5871b2",
+    "agent": "integrity",
+    "kind": "INTEGRITY_ADVISORY",
+    "label": "Native AI heuristic",
+    "text": "Little or no AI-like writing: 0.0% of the student's own words (0 of 742 scored, in 0 of 6 passages) read as machine-generated. Advisory, not proof.",
+    "artifact_sha256": "bf5d65265f88a290359f866741a6762482cbfe2540f02a7df44afefd14daea50",
+    "locator": "/ai_notes/0",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Advisory, not an AI percentage or proof."
+    ],
+    "data": {}
+   }
+  ],
+  "observations": {
+   "evaluation_policy": {
+    "version": "L2",
+    "suspect_spans": [],
+    "automatic_judgment": "EVIDENCE_CONSTRAINED"
+   },
+   "summarizer": {
+    "summary_only": true,
+    "legacy_quote_checks": [],
+    "summary": {
+     "summary": "This report studies whether a low-cost soil-moisture based irrigation controller can reduce water use in the college botanical garden. The objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period. The system consists of three components: the sensor nodes, the controller and a logging module.",
+     "key_points": [
+      "Scenario 3 (negative check): when rainfall was recorded in the last six hours, a watering request should be rejected and the valve must stay closed.",
+      "Independent verification is required before installation.",
+      "The study covers only six beds and one season.",
+      "A soil-moisture based controller appears feasible and could reduce water use by about 40% in summer."
+     ]
+    },
+    "grounded_summary": {
+     "summary": "This report studies whether a low-cost soil-moisture based irrigation controller can reduce water use in the college botanical garden. The objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period. The system consists of three components: the sensor nodes, the controller and a logging module.",
+     "key_points": [
+      "Scenario 3 (negative check): when rainfall was recorded in the last six hours, a watering request should be rejected and the valve must stay closed.",
+      "Independent verification is required before installation.",
+      "The study covers only six beds and one season.",
+      "A soil-moisture based controller appears feasible and could reduce water use by about 40% in summer."
+     ]
+    },
+    "summary_display_method": "EXTRACTIVE_REPORT_CLAIMS"
+   },
+   "integrity": {
+    "comparison_status": "NOT_AVAILABLE",
+    "reference_overlap": null,
+    "copied_chunks": null,
+    "category_percentages": {
+     "verbatim": null,
+     "near-verbatim": null,
+     "paraphrase": null,
+     "similar meaning (not confirmed)": null
+    },
+    "words_checked": 0,
+    "references_compared": 0,
+    "embedding_status": "NOT_APPLICABLE_NO_REFERENCE_CORPUS",
+    "ai_detection": {
+     "status": "COMPLETED",
+     "estimated_percent": 0.0,
+     "interpretation": "Little or no AI-like writing: 0.0% of the student's own words (0 of 742 scored, in 0 of 6 passages) read as machine-generated. Advisory, not proof.",
+     "confidence": "medium",
+     "flagged_passages": [],
+     "limitations": [
+      "Advisory only: an AI estimate is a reason to talk with the student, never proof or grounds for a penalty.",
+      "Copied sentences are excluded; the estimate covers the student's own writing only.",
+      "Formal, formulaic or non-native writing can read as machine-like, and AI text edited by hand can read as human.",
+      "Detector: Desklib AI-text classifier (DeBERTa-v3-large). Threshold AI probability >= 0.91 is PROVISIONAL until checked on real student text (scripts/check_ai_thresholds.py)."
+     ]
+    },
+    "advisory_only": true
+   }
+  },
+  "limitations": [
+   "Receipt hashes verify saved bytes, not authenticity, accuracy or student authorship.",
+   "Report excerpts establish what the extracted text says, not what the software actually does. Scans, tables and figures may be missed by the report loader.",
+   "All output is private; treat displayed strings as untrusted text."
+  ]
+ },
+ "decisions": {
+  "schema_version": "2.0",
+  "evidence_sha256": "0bedf4ebde5350ef9002132ec88ea5ac759a0eaf754260c9b909639ba5433b0d",
+  "rubric_sha256": "c70203f5b4635610dc70c5dbef54e220ca7659c28eee8b79eb544b15fdb21694",
+  "decisions": [
+   {
+    "criterion_id": "problem_scope",
+    "action": "SCORE",
+    "source": "MODEL",
+    "level_id": "strong",
+    "evidence_ids": [
+     "E-16d5b0b56c4f2217b5931efa",
+     "E-75bc910a1a734e8210c3da24",
+     "E-30c6ae554fad846c264f5ca5"
+    ],
+    "rationale": "The study quantifies current use at about 6,000 litres per day and states four objectives for measurement, sensors, design and savings. Constraints such as gardener workload and maintenance are mentioned only briefly.",
+    "feedback": {
+     "strength": "The study quantifies current use at about 6,000 litres per day and states four objectives for measurement, sensors, design and savings.",
+     "limitation": "Constraints such as gardener workload and maintenance are mentioned only briefly.",
+     "improvement": "Add the maintenance and staffing constraints that a pilot must respect.",
+     "observed_failure": false
+    }
+   },
+   {
+    "criterion_id": "report_quality",
+    "action": "SCORE",
+    "source": "MODEL",
+    "level_id": "strong",
+    "evidence_ids": [
+     "E-30c6ae554fad846c264f5ca5",
+     "E-16d5b0b56c4f2217b5931efa",
+     "E-3ab959645b3108faf2678a47"
+    ],
+    "rationale": "The report is concise and moves from measurement to design and estimated savings with specific figures. The comparison of the three sensor types is summarised without the underlying table.",
+    "feedback": {
+     "strength": "The report is concise and moves from measurement to design and estimated savings with specific figures.",
+     "limitation": "The comparison of the three sensor types is summarised without the underlying table.",
+     "improvement": "Include the sensor comparison table with cost, accuracy and expected life.",
+     "observed_failure": false
+    }
+   },
+   {
+    "criterion_id": "technical_design",
+    "action": "SCORE",
+    "source": "MODEL",
+    "level_id": "adequate",
+    "evidence_ids": [
+     "E-2a9277b0f65bbacc5b9ff986",
+     "E-5ec382e5d7f0ddb488a97dc4",
+     "E-16d5b0b56c4f2217b5931efa"
+    ],
+    "rationale": "The design specifies one capacitive sensor and valve per bed, a threshold rule, a fifteen-minute maximum and a rain check. Threshold values and calibration steps are not defined, and failure behaviour of the valve is not described.",
+    "feedback": {
+     "strength": "The design specifies one capacitive sensor and valve per bed, a threshold rule, a fifteen-minute maximum and a rain check.",
+     "limitation": "Threshold values and calibration steps are not defined, and failure behaviour of the valve is not described.",
+     "improvement": "Define calibration and a fail-safe state for each valve.",
+     "observed_failure": false
+    }
+   },
+   {
+    "criterion_id": "testing_strategy",
+    "action": "SCORE",
+    "source": "MODEL",
+    "level_id": "adequate",
+    "evidence_ids": [
+     "E-35958aa3118e58eafcf289a8",
+     "E-30c6ae554fad846c264f5ca5",
+     "E-4e5e1f01a2407f89a6c34028"
+    ],
+    "rationale": "Four pilot scenarios define expected outcomes, including a negative rain check and handling of an invalid sensor reading. None of the scenarios has been executed, and pass criteria such as the ten-minute response are not tied to a measurement method.",
+    "feedback": {
+     "strength": "Four pilot scenarios define expected outcomes, including a negative rain check and handling of an invalid sensor reading.",
+     "limitation": "None of the scenarios has been executed, and pass criteria such as the ten-minute response are not tied to a measurement method.",
+     "improvement": "Run the scenarios on a two-bed pilot and record measured response times and water volumes.",
+     "observed_failure": false
+    }
+   }
+  ]
+ },
+ "report_text": "Feasibility Study: Soil-Moisture Based Smart Irrigation for the College Botanical Garden\nMini-Project Report (report-only submission)\n\nAbstract\nThis report studies whether a low-cost soil-moisture based irrigation controller can reduce water use in the college botanical garden. We surveyed the current watering schedule, compared three sensor options, designed a controller and estimated water savings. No hardware prototype or software repository is part of this submission.\n\n1. Introduction\nThe botanical garden is watered by hand twice a day on a fixed schedule, regardless of rain or soil condition. Gardeners estimate that some beds are over-watered during the monsoon. A sensor-based controller could water each bed only when the soil is dry.\n\n2. Problem Statement\nThe garden uses about 6,000 litres of water per day in summer. The fixed schedule wastes water on cool or rainy days and does not respond to differences between beds. The garden committee wants to know whether an automatic system is worth building.\n\n3. Objectives\nThe objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period.\n\n4. Methodology\nWe recorded the volume used per bed for fourteen days using the existing flow meter. We compared resistive, capacitive and tensiometer sensors on cost, accuracy and expected life. We designed a controller around an ESP32 board with one capacitive sensor and one solenoid valve per bed, and estimated savings using the measured data and a threshold rule.\n\n5. Design\nThe system consists of three components: the sensor nodes, the controller and a logging module. Each bed has a capacitive sensor that reports a moisture reading every ten minutes. The controller opens the valve for a bed when the reading falls below the threshold for that bed and closes it when the reading rises above the upper threshold or after a maximum of fifteen minutes. A rain check skips watering when rainfall was recorded in the last six hours. The controller connects to each valve through a relay board and writes each watering event to an SD card log, so the logging module stores the bed, start time, duration and moisture readings that gardeners can review.\n\n6. Results\nUsing the fourteen days of measured data, the threshold rule would have watered the beds 41% less often than the fixed schedule, saving an estimated 2,400 litres per day in summer. The estimated cost of the controller for six beds is 9,800 rupees, and the payback period is about seven months at the current water tariff.\n\n7. Validation\nWe did not build or test the controller. For the proposed pilot we defined test scenarios with expected outcomes. Scenario 1: when the moisture reading of a bed falls below its threshold, the controller should open that valve within ten minutes and the log should record the event. Scenario 2: when the reading rises above the upper threshold, the valve should close. Scenario 3 (negative check): when rainfall was recorded in the last six hours, a watering request should be rejected and the valve must stay closed. Scenario 4: if a sensor returns an invalid reading, the controller should skip that bed and record an error instead of watering. The savings estimate depends on the threshold values, which should be calibrated for each bed. The estimate assumes that the fourteen recorded days are typical of the season. Independent verification is required before installation.\n\n8. Limitations\nThe study covers only six beds and one season. Sensor drift over time was not measured. The estimate does not include maintenance cost.\n\n9. Conclusion\nA soil-moisture based controller appears feasible and could reduce water use by about 40% in summer. We recommend building a two-bed pilot before installing the full system.\n",
+ "proposal_diagnostics": {
+  "schema_version": "2.0",
+  "mode": "PROPOSE_ALL",
+  "batches": [
+   {
+    "schema_version": "1.0",
+    "mode": "PROPOSE",
+    "prompt_characters": 6329,
+    "candidate_alias_map": {
+     "E1": "E-16d5b0b56c4f2217b5931efa",
+     "E2": "E-75bc910a1a734e8210c3da24",
+     "E3": "E-30c6ae554fad846c264f5ca5",
+     "E4": "E-3ab959645b3108faf2678a47",
+     "E5": "E-f8bef6afc72415a1746f7814",
+     "E6": "E-2a9277b0f65bbacc5b9ff986",
+     "E7": "E-5ec382e5d7f0ddb488a97dc4",
+     "E8": "E-4e5e1f01a2407f89a6c34028"
+    },
+    "request": {
+     "criteria": [
+      {
+       "criterion_alias": "C1",
+       "criterion_id": "problem_scope",
+       "description": "Problem and scope: Assess the problem, intended users, objectives, constraints and coherent scope.",
+       "levels": {
+        "L1": "Insufficient: Reviewed evidence shows no coherent problem or objectives.",
+        "L2": "Developing: Problem is vague or objectives largely unclear.",
+        "L3": "Adequate: Problem and main objectives understandable; important constraints or users omitted.",
+        "L4": "Strong: Clear problem, objectives and scope with only minor gaps.",
+        "L5": "Excellent: Precise and justified problem, user needs, measurable objectives and realistic constraints."
+       },
+       "minimum_evidence": 1,
+       "required_evidence": [
+        "REPORT_EXCERPT"
+       ],
+       "candidate_evidence_ids": [
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "E5"
+       ],
+       "feedback_required": true,
+       "evidence_slots": {
+        "REPORT_EXCERPT": [
+         "E1",
+         "E2",
+         "E3",
+         "E4",
+         "E5"
+        ]
+       },
+       "verified_report_signals": {
+        "test_scenarios": [],
+        "negative_checks": [],
+        "limitations": [],
+        "design_description": []
+       }
+      },
+      {
+       "criterion_alias": "C2",
+       "criterion_id": "report_quality",
+       "description": "Report quality and clarity: Assess organization, clarity, specificity, and accurate separation of claims, plans and measured results.",
+       "levels": {
+        "L1": "Insufficient: Reviewed report is substantially incoherent or misrepresents critical results.",
+        "L2": "Developing: Major organization or clarity gaps make understanding difficult.",
+        "L3": "Adequate: Readable and structured, but limited specificity or evidence presentation.",
+        "L4": "Strong: Clear, organized, specific report with minor gaps.",
+        "L5": "Excellent: Excellent organization, precise technical communication, and transparent evidence and limitations."
+       },
+       "minimum_evidence": 1,
+       "required_evidence": [
+        "REPORT_EXCERPT"
+       ],
+       "candidate_evidence_ids": [
+        "E3",
+        "E1",
+        "E4",
+        "E2",
+        "E5"
+       ],
+       "feedback_required": true,
+       "evidence_slots": {
+        "REPORT_EXCERPT": [
+         "E3",
+         "E1",
+         "E4",
+         "E2",
+         "E5"
+        ]
+       },
+       "verified_report_signals": {
+        "test_scenarios": [],
+        "negative_checks": [],
+        "limitations": [],
+        "design_description": []
+       }
+      },
+      {
+       "criterion_alias": "C3",
+       "criterion_id": "technical_design",
+       "description": "Architecture and technical design: Assess design decisions, appropriate technology, interfaces/data model and explanation of trade-offs.",
+       "levels": {
+        "L1": "Insufficient: Reviewed design is incoherent or unsuitable for the stated problem.",
+        "L2": "Developing: Major unexplained design choices or missing components.",
+        "L3": "Adequate: Reasonable architecture with basic component/data explanation.",
+        "L4": "Strong: Coherent design with justified choices and relevant trade-offs.",
+        "L5": "Excellent: Well-justified architecture, interfaces and data model with explicit constraints and trade-offs."
+       },
+       "minimum_evidence": 1,
+       "required_evidence": [
+        "REPORT_EXCERPT"
+       ],
+       "candidate_evidence_ids": [
+        "E6",
+        "E7",
+        "E1",
+        "E8",
+        "E3"
+       ],
+       "feedback_required": true,
+       "evidence_slots": {
+        "REPORT_EXCERPT": [
+         "E6",
+         "E7",
+         "E1",
+         "E8",
+         "E3"
+        ]
+       },
+       "verified_report_signals": {
+        "test_scenarios": [],
+        "negative_checks": [],
+        "limitations": [],
+        "design_description": [
+         "E6"
+        ]
+       }
+      }
+     ],
+     "evidence_by_id": {
+      "E1": {
+       "kind": "REPORT_EXCERPT",
+       "label": "3. Objectives | Report characters 1021–1225",
+       "text": "\n3. Objectives\nThe objectives are to measure the current water use, compare suitable soil-moisture sensors, propose a controller design for six beds, and estimate the water saving and the payback period.\n"
+      },
+      "E2": {
+       "kind": "REPORT_EXCERPT",
+       "label": "2. Problem Statement | Report characters 750–1021",
+       "text": "\n2. Problem Statement\nThe garden uses about 6,000 litres of water per day in summer. The fixed schedule wastes water on cool or rainy days and does not respond to differences between beds. The garden committee wants to know whether an automatic system is worth building.\n"
+      },
+      "E3": {
+       "kind": "REPORT_EXCERPT",
+       "label": "8. Limitations | Report characters 3509–3661",
+       "text": "\n8. Limitations\nThe study covers only six beds and one season. Sensor drift over time was not measured. The estimate does not include maintenance cost.\n"
+      },
+      "E4": {
+       "kind": "REPORT_EXCERPT",
+       "label": "1. Introduction | Report characters 477–750",
+       "text": "\n1. Introduction\nThe botanical garden is watered by hand twice a day on a fixed schedule, regardless of rain or soil condition. Gardeners estimate that some beds are over-watered during the monsoon. A sensor-based controller could water each bed only when the soil is dry.\n"
+      },
+      "E5": {
+       "kind": "REPORT_EXCERPT",
+       "label": "Abstract | Report characters 134–477",
+       "text": "\nAbstract\nThis report studies whether a low-cost soil-moisture based irrigation controller can reduce water use in the college botanical garden. We surveyed the current watering schedule, compared three sensor options, designed a controller and estimated water savings. No hardware prototype or software repository is part of this submission.\n"
+      },
+      "E6": {
+       "kind": "REPORT_EXCERPT",
+       "label": "5. Design | Report characters 1595–2281",
+       "text": "\n5. Design\nThe system consists of three components: the sensor nodes, the controller and a logging module. Each bed has a capacitive sensor that reports a moisture reading every ten minutes. The controller opens the valve for a bed when the reading falls below the threshold for that bed and closes it when the reading rises above the upper threshold or after a maximum of fifteen minutes. A rain check skips watering when rainfall was recorded in the last six hours. The controller connects to each valve through a relay board and writes each watering event to an SD card log, so the logging module stores the bed, start time, duration and moisture readings that gardeners can review.\n"
+      },
+      "E7": {
+       "kind": "REPORT_EXCERPT",
+       "label": "4. Methodology | Report characters 1225–1595",
+       "text": "\n4. Methodology\nWe recorded the volume used per bed for fourteen days using the existing flow meter. We compared resistive, capacitive and tensiometer sensors on cost, accuracy and expected life. We designed a controller around an ESP32 board with one capacitive sensor and one solenoid valve per bed, and estimated savings using the measured data and a threshold rule.\n"
+      },
+      "E8": {
+       "kind": "REPORT_EXCERPT",
+       "label": "6. Results | Report characters 2281–2615",
+       "text": "\n6. Results\nUsing the fourteen days of measured data, the threshold rule would have watered the beds 41% less often than the fixed schedule, saving an estimated 2,400 litres per day in summer. The estimated cost of the controller for six beds is 9,800 rupees, and the payback period is about seven months at the current water tariff.\n"
+      }
+     }
+    },
+    "criteria": {
+     "problem_scope": {
+      "code": "PROPOSAL_ACCEPTED",
+      "eligible_count": 11,
+      "candidate_aliases": [
+       "E1",
+       "E2",
+       "E3",
+       "E4",
+       "E5"
+      ]
+     },
+     "report_quality": {
+      "code": "PROPOSAL_ACCEPTED",
+      "eligible_count": 11,
+      "candidate_aliases": [
+       "E3",
+       "E1",
+       "E4",
+       "E2",
+       "E5"
+      ]
+     },
+     "technical_design": {
+      "code": "PROPOSAL_ACCEPTED",
+      "eligible_count": 11,
+      "candidate_aliases": [
+       "E6",
+       "E7",
+       "E1",
+       "E8",
+       "E3"
+      ]
+     }
+    },
+    "model_response": {
+     "C1": {
+      "choice": "L4",
+      "evidence": {
+       "REPORT_EXCERPT": "E1"
+      },
+      "additional_evidence_ids": [
+       "E2",
+       "E3"
+      ],
+      "feedback": {
+       "strength": "The study quantifies current use at about 6,000 litres per day and states four objectives for measurement, sensors, design and savings.",
+       "limitation": "Constraints such as gardener workload and maintenance are mentioned only briefly.",
+       "improvement": "Add the maintenance and staffing constraints that a pilot must respect.",
+       "observed_failure": false
+      }
+     },
+     "C2": {
+      "choice": "L4",
+      "evidence": {
+       "REPORT_EXCERPT": "E3"
+      },
+      "additional_evidence_ids": [
+       "E1",
+       "E4"
+      ],
+      "feedback": {
+       "strength": "The report is concise and moves from measurement to design and estimated savings with specific figures.",
+       "limitation": "The comparison of the three sensor types is summarised without the underlying table.",
+       "improvement": "Include the sensor comparison table with cost, accuracy and expected life.",
+       "observed_failure": false
+      }
+     },
+     "C3": {
+      "choice": "L3",
+      "evidence": {
+       "REPORT_EXCERPT": "E6"
+      },
+      "additional_evidence_ids": [
+       "E7",
+       "E1"
+      ],
+      "feedback": {
+       "strength": "The design specifies one capacitive sensor and valve per bed, a threshold rule, a fifteen-minute maximum and a rain check.",
+       "limitation": "Threshold values and calibration steps are not defined, and failure behaviour of the valve is not described.",
+       "improvement": "Define calibration and a fail-safe state for each valve.",
+       "observed_failure": false
+      }
+     }
+    },
+    "unexpected_criterion_ids": [],
+    "level_alias_map": {
+     "C1": {
+      "L1": "insufficient",
+      "L2": "developing",
+      "L3": "adequate",
+      "L4": "strong",
+      "L5": "excellent"
+     },
+     "C2": {
+      "L1": "insufficient",
+      "L2": "developing",
+      "L3": "adequate",
+      "L4": "strong",
+      "L5": "excellent"
+     },
+     "C3": {
+      "L1": "insufficient",
+      "L2": "developing",
+      "L3": "adequate",
+      "L4": "strong",
+      "L5": "excellent"
+     }
+    },
+    "response_schema": {
+     "$defs": {
+      "EvidenceSlots_C1": {
+       "additionalProperties": false,
+       "properties": {
+        "REPORT_EXCERPT": {
+         "enum": [
+          "E1",
+          "E2",
+          "E3",
+          "E4",
+          "E5"
+         ],
+         "title": "Report Excerpt",
+         "type": "string"
+        }
+       },
+       "required": [
+        "REPORT_EXCERPT"
+       ],
+       "title": "EvidenceSlots_C1",
+       "type": "object"
+      },
+      "EvidenceSlots_C2": {
+       "additionalProperties": false,
+       "properties": {
+        "REPORT_EXCERPT": {
+         "enum": [
+          "E3",
+          "E1",
+          "E4",
+          "E2",
+          "E5"
+         ],
+         "title": "Report Excerpt",
+         "type": "string"
+        }
+       },
+       "required": [
+        "REPORT_EXCERPT"
+       ],
+       "title": "EvidenceSlots_C2",
+       "type": "object"
+      },
+      "EvidenceSlots_C3": {
+       "additionalProperties": false,
+       "properties": {
+        "REPORT_EXCERPT": {
+         "enum": [
+          "E6",
+          "E7",
+          "E1",
+          "E8",
+          "E3"
+         ],
+         "title": "Report Excerpt",
+         "type": "string"
+        }
+       },
+       "required": [
+        "REPORT_EXCERPT"
+       ],
+       "title": "EvidenceSlots_C3",
+       "type": "object"
+      },
+      "Feedback": {
+       "additionalProperties": false,
+       "properties": {
+        "strength": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Strength",
+         "type": "string"
+        },
+        "limitation": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Limitation",
+         "type": "string"
+        },
+        "improvement": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Improvement",
+         "type": "string"
+        },
+        "observed_failure": {
+         "title": "Observed Failure",
+         "type": "boolean"
+        }
+       },
+       "required": [
+        "strength",
+        "limitation",
+        "improvement",
+        "observed_failure"
+       ],
+       "title": "Feedback",
+       "type": "object"
+      },
+      "Proposal_C1": {
+       "additionalProperties": false,
+       "properties": {
+        "choice": {
+         "enum": [
+          "L1",
+          "L2",
+          "L3",
+          "L4",
+          "L5",
+          "D"
+         ],
+         "title": "Choice",
+         "type": "string"
+        },
+        "evidence": {
+         "$ref": "#/$defs/EvidenceSlots_C1"
+        },
+        "additional_evidence_ids": {
+         "items": {
+          "enum": [
+           "E1",
+           "E2",
+           "E3",
+           "E4",
+           "E5"
+          ],
+          "type": "string"
+         },
+         "maxItems": 3,
+         "title": "Additional Evidence Ids",
+         "type": "array"
+        },
+        "feedback": {
+         "$ref": "#/$defs/Feedback"
+        }
+       },
+       "required": [
+        "choice",
+        "evidence",
+        "additional_evidence_ids",
+        "feedback"
+       ],
+       "title": "Proposal_C1",
+       "type": "object"
+      },
+      "Proposal_C2": {
+       "additionalProperties": false,
+       "properties": {
+        "choice": {
+         "enum": [
+          "L1",
+          "L2",
+          "L3",
+          "L4",
+          "L5",
+          "D"
+         ],
+         "title": "Choice",
+         "type": "string"
+        },
+        "evidence": {
+         "$ref": "#/$defs/EvidenceSlots_C2"
+        },
+        "additional_evidence_ids": {
+         "items": {
+          "enum": [
+           "E3",
+           "E1",
+           "E4",
+           "E2",
+           "E5"
+          ],
+          "type": "string"
+         },
+         "maxItems": 3,
+         "title": "Additional Evidence Ids",
+         "type": "array"
+        },
+        "feedback": {
+         "$ref": "#/$defs/Feedback"
+        }
+       },
+       "required": [
+        "choice",
+        "evidence",
+        "additional_evidence_ids",
+        "feedback"
+       ],
+       "title": "Proposal_C2",
+       "type": "object"
+      },
+      "Proposal_C3": {
+       "additionalProperties": false,
+       "properties": {
+        "choice": {
+         "enum": [
+          "L1",
+          "L2",
+          "L3",
+          "L4",
+          "L5",
+          "D"
+         ],
+         "title": "Choice",
+         "type": "string"
+        },
+        "evidence": {
+         "$ref": "#/$defs/EvidenceSlots_C3"
+        },
+        "additional_evidence_ids": {
+         "items": {
+          "enum": [
+           "E6",
+           "E7",
+           "E1",
+           "E8",
+           "E3"
+          ],
+          "type": "string"
+         },
+         "maxItems": 3,
+         "title": "Additional Evidence Ids",
+         "type": "array"
+        },
+        "feedback": {
+         "$ref": "#/$defs/Feedback"
+        }
+       },
+       "required": [
+        "choice",
+        "evidence",
+        "additional_evidence_ids",
+        "feedback"
+       ],
+       "title": "Proposal_C3",
+       "type": "object"
+      }
+     },
+     "additionalProperties": false,
+     "properties": {
+      "C1": {
+       "$ref": "#/$defs/Proposal_C1"
+      },
+      "C2": {
+       "$ref": "#/$defs/Proposal_C2"
+      },
+      "C3": {
+       "$ref": "#/$defs/Proposal_C3"
+      }
+     },
+     "required": [
+      "C1",
+      "C2",
+      "C3"
+     ],
+     "title": "ConstrainedRubricProposals",
+     "type": "object"
+    },
+    "decoded_response": {
+     "decisions": [
+      {
+       "criterion_id": "problem_scope",
+       "action": "SCORE",
+       "level_id": "strong",
+       "evidence_ids": [
+        "E1",
+        "E2",
+        "E3"
+       ],
+       "rationale": "The study quantifies current use at about 6,000 litres per day and states four objectives for measurement, sensors, design and savings. Constraints such as gardener workload and maintenance are mentioned only briefly.",
+       "feedback": {
+        "strength": "The study quantifies current use at about 6,000 litres per day and states four objectives for measurement, sensors, design and savings.",
+        "limitation": "Constraints such as gardener workload and maintenance are mentioned only briefly.",
+        "improvement": "Add the maintenance and staffing constraints that a pilot must respect.",
+        "observed_failure": false
+       }
+      },
+      {
+       "criterion_id": "report_quality",
+       "action": "SCORE",
+       "level_id": "strong",
+       "evidence_ids": [
+        "E3",
+        "E1",
+        "E4"
+       ],
+       "rationale": "The report is concise and moves from measurement to design and estimated savings with specific figures. The comparison of the three sensor types is summarised without the underlying table.",
+       "feedback": {
+        "strength": "The report is concise and moves from measurement to design and estimated savings with specific figures.",
+        "limitation": "The comparison of the three sensor types is summarised without the underlying table.",
+        "improvement": "Include the sensor comparison table with cost, accuracy and expected life.",
+        "observed_failure": false
+       }
+      },
+      {
+       "criterion_id": "technical_design",
+       "action": "SCORE",
+       "level_id": "adequate",
+       "evidence_ids": [
+        "E6",
+        "E7",
+        "E1"
+       ],
+       "rationale": "The design specifies one capacitive sensor and valve per bed, a threshold rule, a fifteen-minute maximum and a rain check. Threshold values and calibration steps are not defined, and failure behaviour of the valve is not described.",
+       "feedback": {
+        "strength": "The design specifies one capacitive sensor and valve per bed, a threshold rule, a fifteen-minute maximum and a rain check.",
+        "limitation": "Threshold values and calibration steps are not defined, and failure behaviour of the valve is not described.",
+        "improvement": "Define calibration and a fail-safe state for each valve.",
+        "observed_failure": false
+       }
+      }
+     ]
+    },
+    "recovery_attempts": []
+   },
+   {
+    "schema_version": "1.0",
+    "mode": "PROPOSE",
+    "prompt_characters": 4001,
+    "candidate_alias_map": {
+     "E1": "E-35958aa3118e58eafcf289a8",
+     "E2": "E-30c6ae554fad846c264f5ca5",
+     "E3": "E-4e5e1f01a2407f89a6c34028",
+     "E4": "E-5ec382e5d7f0ddb488a97dc4",
+     "E5": "E-75bc910a1a734e8210c3da24"
+    },
+    "request": {
+     "criteria": [
+      {
+       "criterion_alias": "C1",
+       "criterion_id": "testing_strategy",
+       "description": "Testing strategy and limitations: Assess the documented validation strategy, including clear expected outcomes, negative checks and honest limitations. Do not score executed correctness or penalize missing execution here. Negative scenarios ARE documented. Do not say they are absent; identify specific missing coverage or reproducibility instead. Limitations ARE documented. Do not say they are absent; identify a specific additional limitation if needed.",
+       "levels": {
+        "L1": "Insufficient: Reviewed text contains no meaningful validation strategy or substantially misrepresents what was tested.",
+        "L2": "Developing: Very limited scenarios or no clear expected outcomes.",
+        "L3": "Adequate: Useful scenarios and some expected outcomes, but incomplete negative cases or reproducibility details.",
+        "L4": "Strong: Clear representative scenarios and expected outcomes with explicit limitations and some negative checks.",
+        "L5": "Excellent: Comprehensive requirements-linked strategy with concrete oracles, negative cases, reproducibility details and honest limitations."
+       },
+       "minimum_evidence": 1,
+       "required_evidence": [
+        "REPORT_EXCERPT"
+       ],
+       "candidate_evidence_ids": [
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "E5"
+       ],
+       "feedback_required": true,
+       "evidence_slots": {
+        "REPORT_EXCERPT": [
+         "E1",
+         "E2",
+         "E3",
+         "E4",
+         "E5"
+        ]
+       },
+       "verified_report_signals": {
+        "test_scenarios": [
+         "E1"
+        ],
+        "negative_checks": [
+         "E1"
+        ],
+        "limitations": [
+         "E1"
+        ],
+        "design_description": []
+       }
+      }
+     ],
+     "evidence_by_id": {
+      "E1": {
+       "kind": "REPORT_EXCERPT",
+       "label": "7. Validation | Report characters 2615–3509",
+       "text": "\n7. Validation\nWe did not build or test the controller. For the proposed pilot we defined test scenarios with expected outcomes. Scenario 1: when the moisture reading of a bed falls below its threshold, the controller should open that valve within ten minutes and the log should record the event. Scenario 2: when the reading rises above the upper threshold, the valve should close. Scenario 3 (negative check): when rainfall was recorded in the last six hours, a watering request should be rejected and the valve must stay closed. Scenario 4: if a sensor returns an invalid reading, the controller should skip that bed and record an error instead of watering. The savings estimate depends on the threshold values, which should be calibrated for each bed. The estimate assumes that the fourteen recorded days are typical of the season. Independent verification is required before installation.\n"
+      },
+      "E2": {
+       "kind": "REPORT_EXCERPT",
+       "label": "8. Limitations | Report characters 3509–3661",
+       "text": "\n8. Limitations\nThe study covers only six beds and one season. Sensor drift over time was not measured. The estimate does not include maintenance cost.\n"
+      },
+      "E3": {
+       "kind": "REPORT_EXCERPT",
+       "label": "6. Results | Report characters 2281–2615",
+       "text": "\n6. Results\nUsing the fourteen days of measured data, the threshold rule would have watered the beds 41% less often than the fixed schedule, saving an estimated 2,400 litres per day in summer. The estimated cost of the controller for six beds is 9,800 rupees, and the payback period is about seven months at the current water tariff.\n"
+      },
+      "E4": {
+       "kind": "REPORT_EXCERPT",
+       "label": "4. Methodology | Report characters 1225–1595",
+       "text": "\n4. Methodology\nWe recorded the volume used per bed for fourteen days using the existing flow meter. We compared resistive, capacitive and tensiometer sensors on cost, accuracy and expected life. We designed a controller around an ESP32 board with one capacitive sensor and one solenoid valve per bed, and estimated savings using the measured data and a threshold rule.\n"
+      },
+      "E5": {
+       "kind": "REPORT_EXCERPT",
+       "label": "2. Problem Statement | Report characters 750–1021",
+       "text": "\n2. Problem Statement\nThe garden uses about 6,000 litres of water per day in summer. The fixed schedule wastes water on cool or rainy days and does not respond to differences between beds. The garden committee wants to know whether an automatic system is worth building.\n"
+      }
+     }
+    },
+    "criteria": {
+     "testing_strategy": {
+      "code": "PROPOSAL_ACCEPTED",
+      "eligible_count": 11,
+      "candidate_aliases": [
+       "E1",
+       "E2",
+       "E3",
+       "E4",
+       "E5"
+      ]
+     }
+    },
+    "model_response": {
+     "C1": {
+      "choice": "L3",
+      "evidence": {
+       "REPORT_EXCERPT": "E1"
+      },
+      "additional_evidence_ids": [
+       "E2",
+       "E3"
+      ],
+      "feedback": {
+       "strength": "Four pilot scenarios define expected outcomes, including a negative rain check and handling of an invalid sensor reading.",
+       "limitation": "None of the scenarios has been executed, and pass criteria such as the ten-minute response are not tied to a measurement method.",
+       "improvement": "Run the scenarios on a two-bed pilot and record measured response times and water volumes.",
+       "observed_failure": false
+      }
+     }
+    },
+    "unexpected_criterion_ids": [],
+    "level_alias_map": {
+     "C1": {
+      "L1": "insufficient",
+      "L2": "developing",
+      "L3": "adequate",
+      "L4": "strong",
+      "L5": "excellent"
+     }
+    },
+    "response_schema": {
+     "$defs": {
+      "EvidenceSlots_C1": {
+       "additionalProperties": false,
+       "properties": {
+        "REPORT_EXCERPT": {
+         "enum": [
+          "E1",
+          "E2",
+          "E3",
+          "E4",
+          "E5"
+         ],
+         "title": "Report Excerpt",
+         "type": "string"
+        }
+       },
+       "required": [
+        "REPORT_EXCERPT"
+       ],
+       "title": "EvidenceSlots_C1",
+       "type": "object"
+      },
+      "Feedback": {
+       "additionalProperties": false,
+       "properties": {
+        "strength": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Strength",
+         "type": "string"
+        },
+        "limitation": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Limitation",
+         "type": "string"
+        },
+        "improvement": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Improvement",
+         "type": "string"
+        },
+        "observed_failure": {
+         "title": "Observed Failure",
+         "type": "boolean"
+        }
+       },
+       "required": [
+        "strength",
+        "limitation",
+        "improvement",
+        "observed_failure"
+       ],
+       "title": "Feedback",
+       "type": "object"
+      },
+      "Proposal_C1": {
+       "additionalProperties": false,
+       "properties": {
+        "choice": {
+         "enum": [
+          "L1",
+          "L2",
+          "L3",
+          "L4",
+          "L5",
+          "D"
+         ],
+         "title": "Choice",
+         "type": "string"
+        },
+        "evidence": {
+         "$ref": "#/$defs/EvidenceSlots_C1"
+        },
+        "additional_evidence_ids": {
+         "items": {
+          "enum": [
+           "E1",
+           "E2",
+           "E3",
+           "E4",
+           "E5"
+          ],
+          "type": "string"
+         },
+         "maxItems": 3,
+         "title": "Additional Evidence Ids",
+         "type": "array"
+        },
+        "feedback": {
+         "$ref": "#/$defs/Feedback"
+        }
+       },
+       "required": [
+        "choice",
+        "evidence",
+        "additional_evidence_ids",
+        "feedback"
+       ],
+       "title": "Proposal_C1",
+       "type": "object"
+      }
+     },
+     "additionalProperties": false,
+     "properties": {
+      "C1": {
+       "$ref": "#/$defs/Proposal_C1"
+      }
+     },
+     "required": [
+      "C1"
+     ],
+     "title": "ConstrainedRubricProposals",
+     "type": "object"
+    },
+    "decoded_response": {
+     "decisions": [
+      {
+       "criterion_id": "testing_strategy",
+       "action": "SCORE",
+       "level_id": "adequate",
+       "evidence_ids": [
+        "E1",
+        "E2",
+        "E3"
+       ],
+       "rationale": "Four pilot scenarios define expected outcomes, including a negative rain check and handling of an invalid sensor reading. None of the scenarios has been executed, and pass criteria such as the ten-minute response are not tied to a measurement method.",
+       "feedback": {
+        "strength": "Four pilot scenarios define expected outcomes, including a negative rain check and handling of an invalid sensor reading.",
+        "limitation": "None of the scenarios has been executed, and pass criteria such as the ten-minute response are not tied to a measurement method.",
+        "improvement": "Run the scenarios on a two-bed pilot and record measured response times and water volumes.",
+        "observed_failure": false
+       }
+      }
+     ]
+    },
+    "recovery_attempts": []
+   }
+  ],
+  "planned_batches": [
+   [
+    "problem_scope",
+    "report_quality",
+    "technical_design"
+   ],
+   [
+    "testing_strategy"
+   ]
+  ]
+ },
+ "reweight_check": {
+  "rubric": {
+   "schema_version": "2.0",
+   "id": "report-only-study",
+   "title": "Report-only feasibility study",
+   "revision": "1",
+   "total_points": 80.0,
+   "group_weights": {
+    "problem": 20.0,
+    "report": 25.0,
+    "design": 50.0,
+    "implementation": 20.0,
+    "validation": 20.0,
+    "research": 10.0
+   },
+   "criteria": [
+    {
+     "id": "problem_scope",
+     "title": "Problem and scope",
+     "description": "Assess the problem, intended users, objectives, constraints and coherent scope.",
+     "group": "problem",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed evidence shows no coherent problem or objectives.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Problem is vague or objectives largely unclear.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Problem and main objectives understandable; important constraints or users omitted.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear problem, objectives and scope with only minor gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Precise and justified problem, user needs, measurable objectives and realistic constraints.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "REPORT"
+    },
+    {
+     "id": "report_quality",
+     "title": "Report quality and clarity",
+     "description": "Assess organization, clarity, specificity, and accurate separation of claims, plans and measured results.",
+     "group": "report",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed report is substantially incoherent or misrepresents critical results.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major organization or clarity gaps make understanding difficult.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Readable and structured, but limited specificity or evidence presentation.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear, organized, specific report with minor gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Excellent organization, precise technical communication, and transparent evidence and limitations.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "REPORT"
+    },
+    {
+     "id": "technical_design",
+     "title": "Architecture and technical design",
+     "description": "Assess design decisions, appropriate technology, interfaces/data model and explanation of trade-offs.",
+     "group": "design",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed design is incoherent or unsuitable for the stated problem.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major unexplained design choices or missing components.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Reasonable architecture with basic component/data explanation.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Coherent design with justified choices and relevant trade-offs.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Well-justified architecture, interfaces and data model with explicit constraints and trade-offs.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "DESIGN"
+    },
+    {
+     "id": "implementation_quality",
+     "title": "Implementation and engineering quality",
+     "description": "Assess source-supported implementation, maintainability, appropriate structure and security/reliability handling; do not equate heuristic indicators to marks.",
+     "group": "implementation",
+     "weight": 100.0,
+     "applicability": "EXCLUDED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "STATIC_SOURCE"
+     ],
+     "required_evidence": [
+      "STATIC_SOURCE"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed source demonstrates substantial implementation deficiencies.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major source-supported engineering problems or incomplete design realization.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Core implementation is plausible with significant engineering gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Source-supported implementation is coherent, with minor or bounded concerns.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Source-supported implementation demonstrates strong structure and robust handling of relevant concerns.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "IMPLEMENTATION"
+    },
+    {
+     "id": "functional_validation",
+     "title": "Functional behavior and validation",
+     "description": "Assess scoped, executed functional evidence and whether testing supports requirements. Static discovery and readiness alone do not prove functionality. No runtime observations means this criterion remains unassessed. This does not measure full application coverage.",
+     "group": "validation",
+     "weight": 90.0,
+     "applicability": "EXCLUDED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "STATIC_SOURCE",
+      "TEST_OBSERVATION"
+     ],
+     "required_evidence": [
+      "TEST_OBSERVATION"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed functional evidence demonstrates major failures of agreed requirements.",
+       "requires_failed_observation": true
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Reviewed executed evidence verifies only narrow agreed behavior or demonstrates significant failing behavior. Limited coverage is not evidence of failure.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Some agreed behaviors verified with material gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Most agreed behavior verified, with clearly bounded limitations.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Representative agreed behaviors verified, including relevant negative cases; limitations disclosed.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "FUNCTIONAL"
+    },
+    {
+     "id": "testing_strategy",
+     "title": "Testing strategy and limitations",
+     "description": "Assess the documented validation strategy, including clear expected outcomes, negative checks and honest limitations. Do not score executed correctness or penalize missing execution here.",
+     "group": "validation",
+     "weight": 10.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed text contains no meaningful validation strategy or substantially misrepresents what was tested.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Very limited scenarios or no clear expected outcomes.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Useful scenarios and some expected outcomes, but incomplete negative cases or reproducibility details.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear representative scenarios and expected outcomes with explicit limitations and some negative checks.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Comprehensive requirements-linked strategy with concrete oracles, negative cases, reproducibility details and honest limitations.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "TEST_STRATEGY"
+    },
+    {
+     "id": "research",
+     "title": "Research and use of sources",
+     "description": "Assess the assignment-required literature or documented technical sources, their relevance and use. If the assignment does not require this, explicitly exclude.",
+     "group": "research",
+     "weight": 100.0,
+     "applicability": "EXCLUDED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "RESEARCH_RECORD"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT",
+      "RESEARCH_RECORD"
+     ],
+     "minimum_evidence": 2,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Required sources are demonstrably absent or irrelevant after review.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Minimal or poorly connected source use.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Relevant sources cited but synthesis or coverage limited.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Relevant sources integrated and limitations understood.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Well-chosen, critically synthesized sources supporting the project with transparent provenance.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "RESEARCH"
+    }
+   ]
+  },
+  "assessment": {
+   "schema_version": "2.0",
+   "evidence_sha256": "0bedf4ebde5350ef9002132ec88ea5ac759a0eaf754260c9b909639ba5433b0d",
+   "rubric_sha256": "a544c026133afdcbbf2d858287122a66e0506c8374847a273ef87ddf59cc27fd",
+   "decisions_sha256": "470cce883cdd7ec670bc0453e9fe0b6ba569899cc64e5c32b8686868991472e4",
+   "status": "READY_FOR_TEACHER_REVIEW",
+   "max_points": 80.0,
+   "proposed_points": 47.83,
+   "reviewed_points": null,
+   "assessed_subtotal_points": 47.83,
+   "assessed_max_points": 80.0,
+   "assessed_weight_percent": 100.0,
+   "reviewed_weight_percent": 0.0,
+   "unresolved_criterion_ids": [],
+   "criteria": [
+    {
+     "id": "problem_scope",
+     "group": "problem",
+     "title": "Problem and scope",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 17.39,
+     "max_points": 13.91,
+     "earned_points": 10.43,
+     "fraction": 0.75,
+     "level_id": "strong",
+     "evidence_ids": [
+      "E-16d5b0b56c4f2217b5931efa",
+      "E-75bc910a1a734e8210c3da24",
+      "E-30c6ae554fad846c264f5ca5"
+     ],
+     "reason": "The study quantifies current use at about 6,000 litres per day and states four objectives for measurement, sensors, design and savings. Constraints such as gardener workload and maintenance are mentioned only briefly.",
+     "feedback": {
+      "strength": "The study quantifies current use at about 6,000 litres per day and states four objectives for measurement, sensors, design and savings.",
+      "limitation": "Constraints such as gardener workload and maintenance are mentioned only briefly.",
+      "improvement": "Add the maintenance and staffing constraints that a pilot must respect.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "report_quality",
+     "group": "report",
+     "title": "Report quality and clarity",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 21.74,
+     "max_points": 17.39,
+     "earned_points": 13.04,
+     "fraction": 0.75,
+     "level_id": "strong",
+     "evidence_ids": [
+      "E-30c6ae554fad846c264f5ca5",
+      "E-16d5b0b56c4f2217b5931efa",
+      "E-3ab959645b3108faf2678a47"
+     ],
+     "reason": "The report is concise and moves from measurement to design and estimated savings with specific figures. The comparison of the three sensor types is summarised without the underlying table.",
+     "feedback": {
+      "strength": "The report is concise and moves from measurement to design and estimated savings with specific figures.",
+      "limitation": "The comparison of the three sensor types is summarised without the underlying table.",
+      "improvement": "Include the sensor comparison table with cost, accuracy and expected life.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "technical_design",
+     "group": "design",
+     "title": "Architecture and technical design",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 43.48,
+     "max_points": 34.78,
+     "earned_points": 17.39,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-2a9277b0f65bbacc5b9ff986",
+      "E-5ec382e5d7f0ddb488a97dc4",
+      "E-16d5b0b56c4f2217b5931efa"
+     ],
+     "reason": "The design specifies one capacitive sensor and valve per bed, a threshold rule, a fifteen-minute maximum and a rain check. Threshold values and calibration steps are not defined, and failure behaviour of the valve is not described.",
+     "feedback": {
+      "strength": "The design specifies one capacitive sensor and valve per bed, a threshold rule, a fifteen-minute maximum and a rain check.",
+      "limitation": "Threshold values and calibration steps are not defined, and failure behaviour of the valve is not described.",
+      "improvement": "Define calibration and a fail-safe state for each valve.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "implementation_quality",
+     "group": "implementation",
+     "title": "Implementation and engineering quality",
+     "applicability": "EXCLUDED",
+     "status": "EXCLUDED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 0.0,
+     "max_points": 0.0,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "Excluded by the teacher-defined rubric.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "functional_validation",
+     "group": "validation",
+     "title": "Functional behavior and validation",
+     "applicability": "EXCLUDED",
+     "status": "EXCLUDED",
+     "configured_weight": 90.0,
+     "effective_weight_percent": 0.0,
+     "max_points": 0.0,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "Excluded by the teacher-defined rubric.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "testing_strategy",
+     "group": "validation",
+     "title": "Testing strategy and limitations",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 10.0,
+     "effective_weight_percent": 17.39,
+     "max_points": 13.91,
+     "earned_points": 6.96,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-35958aa3118e58eafcf289a8",
+      "E-30c6ae554fad846c264f5ca5",
+      "E-4e5e1f01a2407f89a6c34028"
+     ],
+     "reason": "Four pilot scenarios define expected outcomes, including a negative rain check and handling of an invalid sensor reading. None of the scenarios has been executed, and pass criteria such as the ten-minute response are not tied to a measurement method.",
+     "feedback": {
+      "strength": "Four pilot scenarios define expected outcomes, including a negative rain check and handling of an invalid sensor reading.",
+      "limitation": "None of the scenarios has been executed, and pass criteria such as the ten-minute response are not tied to a measurement method.",
+      "improvement": "Run the scenarios on a two-bed pilot and record measured response times and water volumes.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "research",
+     "group": "research",
+     "title": "Research and use of sources",
+     "applicability": "EXCLUDED",
+     "status": "EXCLUDED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 0.0,
+     "max_points": 0.0,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "Excluded by the teacher-defined rubric.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    }
+   ],
+   "groups": [
+    {
+     "id": "problem",
+     "effective_weight_percent": 17.39,
+     "max_points": 13.91,
+     "assessed_max_points": 13.91,
+     "assessed_subtotal_points": 10.43,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "report",
+     "effective_weight_percent": 21.74,
+     "max_points": 17.39,
+     "assessed_max_points": 17.39,
+     "assessed_subtotal_points": 13.04,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "design",
+     "effective_weight_percent": 43.48,
+     "max_points": 34.78,
+     "assessed_max_points": 34.78,
+     "assessed_subtotal_points": 17.39,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "implementation",
+     "effective_weight_percent": 0.0,
+     "max_points": 0.0,
+     "assessed_max_points": 0.0,
+     "assessed_subtotal_points": 0.0,
+     "assessed_weight_percent": null,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "validation",
+     "effective_weight_percent": 17.39,
+     "max_points": 13.91,
+     "assessed_max_points": 13.91,
+     "assessed_subtotal_points": 6.96,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "research",
+     "effective_weight_percent": 0.0,
+     "max_points": 0.0,
+     "assessed_max_points": 0.0,
+     "assessed_subtotal_points": 0.0,
+     "assessed_weight_percent": null,
+     "unresolved_criterion_ids": []
+    }
+   ],
+   "limitations": [
+    "Integrity estimates and legacy Summarizer grades are advisory and never contribute to marks.",
+    "Evidence IDs establish traceability, not correctness of a qualitative judgment. Teacher review is required.",
+    "Excluded weights are redistributed proportionally; unresolved weights are not redistributed.",
+    "Objective scenario success and explicitly mapped requirement evidence coverage measure distinct properties; neither proves unrestricted correctness.",
+    "Display values are rounded independently; totals use unrounded arithmetic. Teacher-reviewed is a local operator status, not authenticated institutional approval."
+   ]
+  }
+ }
+}

@@ -1,0 +1,37 @@
+MediTrack: Medicine Reminder and Inventory Tracker for Small Clinics
+Mini-Project Report
+
+Abstract
+MediTrack is a Flask web application that helps small clinics track medicine stock and remind patients about their doses. Staff can add medicines, record stock changes and see which medicines will expire soon. Patients receive a daily reminder list. The application uses Flask, SQLite and Bootstrap.
+
+1. Introduction
+Small clinics in our area keep medicine stock in paper registers. Expired medicines are often found only during a monthly check, and patients forget follow-up doses. MediTrack moves the register to a simple web application and adds expiry warnings and dose reminders.
+
+2. Problem Statement
+Clinic staff need to know the current stock of each medicine, which batches expire within 30 days and which patients have doses due today. The paper register cannot answer these questions quickly.
+
+3. Objectives
+The objectives are to record medicines and batches with expiry dates, to show a dashboard of low stock and soon-to-expire batches, to let staff create dose schedules for patients and to show a daily reminder list.
+
+4. Literature Review
+Medication adherence is a well-known problem in outpatient care, and reminder systems have been shown to improve adherence [1]. Inventory management in small pharmacies benefits from first-expiry-first-out tracking [2]. We used the Flask documentation for application structure [3].
+
+5. System Design
+The application has three blueprints: inventory, patients and reminders. Each blueprint has its own routes and templates. SQLite stores four tables: medicines, batches, patients and schedules. A batch belongs to a medicine, and a schedule links a patient to a medicine with a dose time. The dashboard queries batches whose expiry date is within 30 days and medicines whose total stock is below the reorder level.
+
+6. Implementation
+We used Flask with SQLAlchemy for the models and WTForms for form validation. The reminders page builds the list of doses due today from the schedules table. Staff log in with a single shared password stored in the configuration file. The project includes a requirements.txt file and a run.py entry point.
+
+7. Testing
+We tested the main pages manually. Adding a medicine with a negative quantity should show a validation error. Creating a schedule for a patient who does not exist should be rejected. The dashboard should list a batch that expires in ten days. All of these checks passed when we ran them on our laptops. We did not write automated tests.
+
+8. Limitations
+Login uses one shared staff password, so actions cannot be traced to a person. Reminders are only shown on the web page and are not sent by SMS. The system has not been tested with real clinic data.
+
+9. Conclusion
+MediTrack replaces the paper register for stock and expiry tracking and gives staff a daily reminder list. Future work includes individual staff accounts, SMS reminders and import from the clinic's billing software.
+
+References
+[1] L. Osterberg and T. Blaschke, "Adherence to medication," New England Journal of Medicine, vol. 353, no. 5, pp. 487-497, 2005.
+[2] S. Gupta, "Inventory practices in small retail pharmacies," Journal of Pharmacy Practice, 2019.
+[3] Pallets Projects, "Flask Documentation," https://flask.palletsprojects.com/.
