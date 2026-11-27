@@ -285,7 +285,7 @@ def evaluate(*, out: Path, rubric: Rubric, report=None, title=None, submission_i
              repository_url=None, ref=None, references=None, evaluation=None,
              previous_assessment=None, acknowledge_imported=False,
              verify_research=False, research_artifact=None, preview=False,
-             objective_only=False, retry_deferred=False):
+             objective_only=False, retry_deferred=False, demo=None):
     """Synchronous local orchestration API; result is a private versioned JSON.
 
     Caller must provide a new output directory; no old artifacts are modified.
@@ -295,6 +295,10 @@ def evaluate(*, out: Path, rubric: Rubric, report=None, title=None, submission_i
     start = perf_counter()
     if (report is None) == (evaluation is None):
         raise ValueError('CHOOSE_REPORT_OR_SAVED_EVALUATION')
+    if demo is not None:
+        from projectiq_executioner.phase9b.unified import DemoOptions
+        if type(demo) is not DemoOptions or evaluation is not None or not repository_url:
+            raise ValueError('LOCAL_DEMO_REQUIRES_FRESH_REPOSITORY_EVALUATION')
     if preview and objective_only:
         raise ValueError('CHOOSE_PREVIEW_OR_OBJECTIVE_ONLY')
     if previous_assessment is not None and evaluation is None:
@@ -335,7 +339,7 @@ def evaluate(*, out: Path, rubric: Rubric, report=None, title=None, submission_i
     if evaluation is None:
         requested = selected_agents(rubric, repository_url=repository_url)
         funcs = live_sources(sub, references=references, agents=requested, summary_only=True,
-                             verify_research=verify_research)
+                             verify_research=verify_research, **({'demo':demo} if demo is not None else {}))
         ev = collect(submission=sub, report_bytes=data, out=collection, mode='LIVE', sources=funcs)
         actions = {a: 'COLLECTED' if a in funcs else 'SKIPPED' for a in AGENTS}
     else:
@@ -442,7 +446,7 @@ def evaluate(*, out: Path, rubric: Rubric, report=None, title=None, submission_i
                            'decisions':'rubric/decisions.json','evidence':'rubric/evidence.json','intelligence':'rubric/evidence_intelligence.json'},
               'limitations':list(dict.fromkeys([*[x for x in ev.limitations if x != 'No final project grade is calculated in Phase 1.'],*bundle.limitations,*final.limitations,
                   'Private local evaluation; no unrestricted execution or authenticated faculty approval.',
-                  'Live Executioner collection is STATIC; runtime marks require eligible reviewed evidence.',
+                  ('Live Executioner includes separate operator-trusted demo observations; runtime marks still require eligible reviewed evidence.' if ev.agents['executioner'].details.get('trusted_demo') else 'Live Executioner collection is STATIC; runtime marks require eligible reviewed evidence.'),
                   'Legacy judge never executed by this workflow. Imported historical summaries may have been produced by that judge.']))}
     
     result["ieee_format"] = ieee_result
@@ -476,9 +480,13 @@ def add_evaluate_parser(sub):
     mode.add_argument('--preview', action='store_true', help='No rubric LLM calls; fresh collection can still run selected agents')
     mode.add_argument('--objective-only', action='store_true', help='Calculate objective and preserved marks without rubric LLM')
     p.add_argument('--retry-deferred', action='store_true', help='Explicitly retry preserved MODEL deferrals only')
+    from projectiq_executioner.phase9b.unified import add_demo_arguments
+    add_demo_arguments(p)
 
 
 def evaluate_args(args):
+    from projectiq_executioner.phase9b.unified import demo_options
+    demo=demo_options(args)
     base = args.rubric or (args.previous_assessment/'rubric.json' if args.previous_assessment else DEFAULT_RUBRIC)
     rubric = configure_rubric(Rubric.model_validate(load_json(base)),
         weights=load_json(args.weights) if args.weights else None,
@@ -489,4 +497,4 @@ def evaluate_args(args):
         references=args.references, evaluation=args.evaluation, previous_assessment=args.previous_assessment,
         acknowledge_imported=args.acknowledge_imported,
         verify_research=args.verify_research, research_artifact=args.research_artifact,
-        preview=args.preview, objective_only=args.objective_only, retry_deferred=args.retry_deferred)
+        preview=args.preview, objective_only=args.objective_only, retry_deferred=args.retry_deferred, **({'demo':demo} if demo is not None else {}))

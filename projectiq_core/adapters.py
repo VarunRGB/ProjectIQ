@@ -89,6 +89,12 @@ def research(d, receipt):
         limitations=['Metadata verification, relevance and factual claim support are distinct; inspect coverage and per-reference statuses.'])
 
 def executioner(d, receipt):
+    demo=None
+    if 'trusted_demo' in d:
+        from projectiq_executioner.phase9b.unified import validate_extension
+        try: demo=validate_extension(d)
+        except (ValueError,TypeError,KeyError): raise AdapterError('INVALID_TRUSTED_DEMO_EXTENSION') from None
+        if demo is None: raise AdapterError('INVALID_TRUSTED_DEMO_EXTENSION')
     native=d.get('status')
     if native not in ('COMPLETED','COMPLETED_WITH_LIMITATIONS','NEEDS_REVIEW','SECURITY_HOLD','FAILED'):
         raise AdapterError('UNKNOWN_EXECUTIONER_STATUS')
@@ -108,8 +114,8 @@ def executioner(d, receipt):
                  metric('reviewed_passes','Reviewed scenarios passed',counts.get('PASSED'),'count','Separate from whole-route coverage',integer=True),
                  metric('planned_passes','Exact planned passes',planned.get('PASSED'),'count','Original planned test specifications',integer=True),
                  metric('maintainability','Maintainability indicator',q.get('score') if q.get('status')=='PROVISIONAL' else None,'out_of_100','Provisional indicator; not a grade',high=100)],
-        details=subset(d,('source','mode','effective_mode','security_attestation','workflow','project_intelligence','runtime_plan','test_plan','test_case_matrix','suites','code_quality','diagnostics','recommendations','review_requests','limitations','error_codes','vm_attempts_scheduled','vm_attempt_budget')),
-        limitations=['VM evidence is scoped to reviewed tests; a pass is not whole-project correctness.', 'No sandbox attestation is inferred by this adapter.'])
+        details={**subset(d,('source','mode','effective_mode','security_attestation','workflow','project_intelligence','runtime_plan','test_plan','test_case_matrix','suites','code_quality','diagnostics','recommendations','review_requests','limitations','error_codes','vm_attempts_scheduled','vm_attempt_budget')),**({'trusted_demo':demo} if demo is not None else {})},
+        limitations=['VM evidence is scoped to reviewed tests; a pass is not whole-project correctness.', 'No sandbox attestation is inferred by this adapter.']+(['Trusted-demo observations are separate characterization evidence; no automatic rubric credit.'] if demo is not None else []))
 
 ADAPTERS={'summarizer':summarizer,'integrity':integrity,'research':research,'executioner':executioner}
 
