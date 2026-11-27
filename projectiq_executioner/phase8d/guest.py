@@ -217,6 +217,10 @@ def run(g,base,req,python_verify,npm_constraint):
             require(result['status']=='HTTP_2XX_OBSERVED','HTTP_READINESS_UNVERIFIED')
             require(listener_uid(port,g.pwd.getpwnam(g.APP_USER).pw_uid),'HTTP_LISTENER_UID_UNVERIFIED')
             evidence.update(status='HTTP_READINESS_OBSERVED',service_port=port,http=result,server_placement_observed=True,application_uid_listener_observed=True)
+            if 'functional_suite' in req:
+                functional=_piq_functional['execute_suite'](req['functional_suite'],port,lambda:proc.poll() is None and listener_uid(port,g.pwd.getpwnam(g.APP_USER).pw_uid))
+                evidence['functional']=functional
+                evidence['functional_tests_executed']=sum(r['request_attempted'] for r in functional['cases'])
         finally:
             if proc is not None:g._d4_stop_process(proc)
     return evidence

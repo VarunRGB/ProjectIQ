@@ -16,7 +16,15 @@ BUILDS={'NODE_NEXT','NODE_VITE','NODE_CRA','NODE_ASTRO','NODE_NUXT','NODE_SVELTE
 def validate_receipt(guest,req):
     if type(guest) is not dict:return False
     if any(guest.get(k)!=req[k] for k in ('source','component_id','adapter','snapshot_sha256','plan_sha256','dependency_kind')):return False
-    if guest.get('dependency_sha256')!=req.get('bundle_sha256') or guest.get('host_gateway_denied') is not True or guest.get('workspace_mib')!=1536 or type(guest.get('functional_tests_executed')) is not int or guest['functional_tests_executed']!=0:return False
+    if guest.get('dependency_sha256')!=req.get('bundle_sha256') or guest.get('host_gateway_denied') is not True or guest.get('workspace_mib')!=1536 or type(guest.get('functional_tests_executed')) is not int:return False
+    if 'functional_suite' in req:
+        if req['adapter'] not in {'NODE_HTTP','PY_FLASK','PY_ASGI','STATIC_HTTP'}:return False
+        from ..phase9b.http_runner import validate_results
+        try:
+            functional=validate_results(guest.get('functional'),req['functional_suite'])
+            if guest['functional_tests_executed']!=sum(r['request_attempted'] for r in functional['cases']):return False
+        except (ValueError,TypeError,KeyError,RecursionError):return False
+    elif guest['functional_tests_executed']!=0 or 'functional' in guest:return False
     kind=req['adapter'];dep=req['dependency_kind']
     expected={'build_handoffs':int(kind in BUILDS),'npm_install_handoffs':int(dep=='NPM'),'pip_install_handoffs':2 if dep=='PYTHON' else 0}
     if any(type(guest.get(k)) is not int or guest[k]!=v for k,v in expected.items()):return False
@@ -25,16 +33,20 @@ def validate_receipt(guest,req):
     return (guest.get('status')=='HTTP_READINESS_OBSERVED' and guest.get('server_placement_observed') is True and guest.get('application_uid_listener_observed') is True and type(h) is dict and h.get('status')=='HTTP_2XX_OBSERVED' and isinstance(h.get('path'),str) and h['path'] in paths and guest.get('service_port',8765)==req.get('service_port',8765) and type(h.get('http_status')) is int and 200<=h['http_status']<300)
 
 
-def trusted_guest_payload():
+def trusted_guest_payload(functional=False):
     # Fixed operator-owned Python verification module, never submitted source.
     p=Path(__file__).resolve().parents[1]/'phase8c_final/python_guest.py'
     py=p.read_text('utf-8');g=Path(__file__).with_name('guest.py').read_text('utf-8')
     from .versions import node_constraint
     ver='import re\n'+inspect.getsource(node_constraint)
-    return ("_piq_version={'__name__':'piq_trusted_versions'}\nexec(compile("+repr(ver)+",'piq_trusted_versions','exec'),_piq_version)\n"+"_piq_verify={'__name__':'piq_trusted_python_verify'}\nexec(compile("+repr(py)+",'piq_trusted_python_verify','exec'),_piq_verify)\n"+g+"\nraise SystemExit(main(_piq_verify['assemble'],_piq_version['node_constraint']))\n").encode('utf-8')
+    extra=''
+    if functional:
+        code=(Path(__file__).resolve().parents[1]/'phase9b/http_runner.py').read_text('utf-8')
+        extra="_piq_functional={'__name__':'piq_trusted_functional'}\nexec(compile("+repr(code)+",'piq_trusted_functional','exec'),_piq_functional)\n"
+    return (extra+"_piq_version={'__name__':'piq_trusted_versions'}\nexec(compile("+repr(ver)+",'piq_trusted_versions','exec'),_piq_version)\n"+"_piq_verify={'__name__':'piq_trusted_python_verify'}\nexec(compile("+repr(py)+",'piq_trusted_python_verify','exec'),_piq_verify)\n"+g+"\nraise SystemExit(main(_piq_verify['assemble'],_piq_version['node_constraint']))\n").encode('utf-8')
 
 
-def execute_reviewed(*,source,plan,component,snapshot,vm_config,expected_config,bundle=None,lock=None,node_tarball=None,node_sha256=None,pip_wheel=None,pip_sha256=None,require_bounded_volume=False):
+def execute_reviewed(*,source,plan,component,snapshot,vm_config,expected_config,bundle=None,lock=None,node_tarball=None,node_sha256=None,pip_wheel=None,pip_sha256=None,require_bounded_volume=False,functional_suite=None):
     from ..phase2.vm_worker.orchestrator import load_config
     from ..phase2.vm_worker.qemu import (QemuWorker,SSHControl,verify_host_toolchain,make_ssh_key,make_nocloud_iso,_free_loopback_port,effective_vm_vcpus)
     from ..phase2.vm_worker.d5c_runtime_workspace import ManagedRuntimeRun
@@ -48,6 +60,10 @@ def execute_reviewed(*,source,plan,component,snapshot,vm_config,expected_config,
     kind=component['adapter'];dep=component['dependency']['kind'];require(kind in SUPPORTED and dep in {'NONE','NPM','PYTHON'},'RUNTIME_ADAPTER_UNSUPPORTED')
     inputs=[(Path(snapshot),'snapshot.zip',30_000_000,checked_file(snapshot,30_000_000))]
     req={'source':source,'component_id':component['id'],'root':component['root'],'adapter':kind,'entrypoint':component['entrypoint'],'application_symbol':component['application_symbol'],'probe_path':component['probe_path'],'service_port':component['service_port'],'plan_sha256':plan['plan_sha256'],'dependency_kind':dep,'snapshot_sha256':inputs[0][3]['sha256']}
+    if functional_suite is not None:
+        from ..phase9b.http_runner import validate_suite
+        require(kind in {'NODE_HTTP','PY_FLASK','PY_ASGI','STATIC_HTTP'},'FUNCTIONAL_ADAPTER_UNSUPPORTED')
+        req['functional_suite']=validate_suite(functional_suite)
     if kind.startswith('NODE_'):
         version=component['toolchain'];require(node_tarball is not None and Path(node_tarball).name==f'node-{version}-linux-x64.tar.xz','NODE_ASSET_REQUIRED')
         asset=checked_file(node_tarball,65_000_000);require(asset['sha256']==node_sha256,'NODE_ASSET_MISMATCH');inputs.append((Path(node_tarball),'node_runtime.tar.xz',65_000_000,asset));req.update(node_version=version,node_sha256=node_sha256,npm_constraints=component['dependency'].get('npm_constraints',[]))
@@ -58,6 +74,7 @@ def execute_reviewed(*,source,plan,component,snapshot,vm_config,expected_config,
         require(pip_wheel is not None and Path(pip_wheel).name=='pip-25.2-py3-none-any.whl','PIP_ASSET_REQUIRED');asset=checked_file(pip_wheel,5_000_000);require(asset['sha256']==pip_sha256,'PIP_ASSET_MISMATCH');inputs.append((Path(pip_wheel),'python_pip.whl',5_000_000,asset))
         require(lock is not None and lock['lock_sha256']==digest({k:v for k,v in lock.items() if k!='lock_sha256'}) and lock['target_python']==component['toolchain'],'LOCK_CHANGED')
         receipt=checked_file(bundle,120_000_000);inputs.append((Path(bundle),'python_wheelhouse.zip',120_000_000,receipt));req.update(bundle_sha256=receipt['sha256'],pip_sha256=pip_sha256,lock_sha256=lock['lock_sha256'],direct_pins=lock['direct_pins'],wheels=[{k:r[k] for k in ('name','version','filename','sha256')} for r in lock['wheels']])
+    if functional_suite is not None:require(len(json.dumps({**req,'sentinel_port':65535}).encode('utf-8'))<=64_000,'REQUEST_SIZE_LIMIT')
     info=verify_host_toolchain(config);require(info.get('status')=='TOOLCHAIN_AND_IMAGE_VERIFIED_NOT_SANDBOX_ATTESTED','HOST_TOOLCHAIN_UNVERIFIED')
     audit=acl.audit(Path(vm_config));require(audit.get('status')==acl.SUCCESS and len(audit.get('checks',{}))==5 and all(v=='PASS' for v in audit['checks'].values()),'MANAGED_ROOT_ACL_UNVERIFIED')
     require(checked_file(vm_config,100_000)==config_receipt,'CONFIG_CHANGED')
@@ -90,8 +107,8 @@ def execute_reviewed(*,source,plan,component,snapshot,vm_config,expected_config,
             require(checked_file(p,limit)==receipt,'INPUT_CHANGED')
             if remote=='snapshot.zip':ssh.copy(p,remote,timeout=90)
             else:ssh.copy_offline_asset(p,remote)
-        result['stage']='OFFLINE_RUNTIME';cmd=ssh.ssh('python3','-I','-',input=trusted_guest_payload(),timeout=650)
-        guest_path=work/'result.json';ssh.receive('result.json',guest_path);require(0<guest_path.stat().st_size<=8192,'GUEST_RESULT_LIMIT');guest=json.loads(guest_path.read_text('utf-8'))
+        result['stage']='OFFLINE_RUNTIME';cmd=ssh.ssh('python3','-I','-',input=trusted_guest_payload(functional=True) if functional_suite is not None else trusted_guest_payload(),timeout=650)
+        guest_path=work/'result.json';ssh.receive('result.json',guest_path);require(0<guest_path.stat().st_size<=(32768 if functional_suite is not None else 8192),'GUEST_RESULT_LIMIT');guest=json.loads(guest_path.read_text('utf-8'))
         if cmd.returncode or not validate_receipt(guest,req):
             code=guest.get('error_code') if type(guest) is dict else None;result['error_code']=code if isinstance(code,str) and code in ERRORS else 'GUEST_RECEIPT_OR_RUNTIME_UNVERIFIED';raise ValueError('GUEST_RECEIPT_OR_RUNTIME_UNVERIFIED')
         require(not contact.is_set() and not watch.tripped.is_set() and all(checked_file(p,limit)==receipt for p,_,limit,receipt in inputs),'WORKER_OR_INPUT_CHANGED')
@@ -99,6 +116,7 @@ def execute_reviewed(*,source,plan,component,snapshot,vm_config,expected_config,
         evidence={k:guest[k] for k in ('status','source','component_id','adapter','snapshot_sha256','plan_sha256','dependency_kind','dependency_sha256','host_gateway_denied','workspace_mib','build_handoffs','npm_install_handoffs','pip_install_handoffs','functional_tests_executed')}
         if kind in CLI:evidence.update(cli_exit_code=0,cli_preexec_handoff=True)
         else:evidence.update(service_port=req['service_port'],server_placement_observed=True,application_uid_listener_observed=True,http={k:guest['http'][k] for k in ('status','path','http_status')})
+        if functional_suite is not None:evidence['functional']=guest['functional']
         result.update(status='RUNTIME_CANDIDATE',evidence=evidence,network='QEMU_RESTRICT_ON')
     except (Exception,KeyboardInterrupt) as exc:
         known={'HOST_DISK_HEADROOM_INSUFFICIENT','SEPARATE_BOUNDED_VOLUME_REQUIRED','OFFLINE_WORKER_POLICY_MISMATCH','HOST_SENTINEL_POSITIVE_CONTROL_FAILED','CONFIG_CHANGED','INPUT_CHANGED','GUEST_RESULT_LIMIT','WORKER_OR_INPUT_CHANGED','STORAGE_GUARD_TRIPPED','REQUEST_SIZE_LIMIT'}
@@ -125,6 +143,7 @@ def execute_reviewed(*,source,plan,component,snapshot,vm_config,expected_config,
         if expired.is_set():result['error_code']='WORKER_WALL_TIMEOUT'
         if watch is not None and watch.tripped.is_set():result['error_code']=watch.reason
     if result['status']=='RUNTIME_CANDIDATE' and result['cleanup']==CLEAN and not result.get('error_code') and watch is not None and watch.samples>0 and not watch.tripped.is_set():
+        if functional_suite is not None:result['functional_tests_executed']=evidence['functional_tests_executed']
         result.update(status='REVIEWED_HTTP_READINESS_VERIFIED' if kind not in CLI else 'REVIEWED_CLI_EXIT_ZERO_VERIFIED',stage='COMPLETE')
     else:result.pop('evidence',None);result['status']='REVIEWED_RUNTIME_FAILED_OR_UNVERIFIED'
     return result
