@@ -21,6 +21,8 @@ def main(argv=None):
             q.add_argument('--agents',nargs='+',choices=AGENTS,default=None)
             q.add_argument('--samples',type=int,default=None,help='Deprecated legacy judge option')
             q.add_argument('--verify-research',action='store_true',help='Opt into online bibliography metadata verification')
+            from projectiq_executioner.phase9b.unified import add_demo_arguments
+            add_demo_arguments(q)
         else:
             for a in AGENTS:q.add_argument('--'+a,type=Path)
     q=sub.add_parser('schema');q.add_argument('--out',type=Path)
@@ -40,7 +42,9 @@ def main(argv=None):
             if args.rubric is not None or args.samples is not None:raise ValueError('LEGACY_JUDGE_DISABLED_USE_EVALUATE')
             agents=args.agents if args.agents is not None else ['summarizer','integrity','executioner']+(['research'] if args.verify_research else [])
             if args.verify_research and 'research' not in agents:raise ValueError('VERIFY_RESEARCH_REQUIRES_RESEARCH_AGENT')
-            funcs=live_sources(submission,references=args.references,agents=agents,summary_only=True,verify_research=args.verify_research)
+            from projectiq_executioner.phase9b.unified import demo_options
+            demo=demo_options(args)
+            funcs=live_sources(submission,references=args.references,agents=agents,summary_only=True,verify_research=args.verify_research,**({'demo':demo} if demo is not None else {}))
             mode='LIVE'
         else:
             funcs={a:(lambda report,out,path=getattr(args,a):load_json(path)) for a in AGENTS if getattr(args,a)}

@@ -69,8 +69,9 @@ function CriterionCard({ c, crit, vm, onOpen, onQuickApprove }: { c: RecomputedC
           </div>
         )}
         {c.evidence_ids.length > 0 && (
-          <div className="row tiny muted mt" style={{ gap: 6 }}>
-            Cites {c.evidence_ids.length} evidence item{c.evidence_ids.length > 1 ? 's' : ''}: {kinds.map((k) => <Badge key={k} tone="muted">{EVIDENCE_KIND[k].label}</Badge>)}
+          <div className="f3-evidence">
+            <div className="row tiny muted" style={{ gap: 6 }}>Cites {c.evidence_ids.length} evidence item{c.evidence_ids.length > 1 ? 's' : ''}: {kinds.map((k) => <Badge key={k} tone="muted">{EVIDENCE_KIND[k].label}</Badge>)}</div>
+            <More summary="Inspect cited evidence before approving"><div className="stack">{c.evidence_ids.map((id) => {const ev=vm.evidenceById.get(id); return ev ? <EvidenceCard key={id} e={ev} /> : <p className="small muted" key={id}>Evidence {id} is unavailable in the saved bundle.</p>;})}</div><p className="tiny muted">A citation provides traceability, not proof that the model interpreted it correctly. Review the underlying observation or excerpt.</p></More>
           </div>
         )}
       </div>
@@ -305,12 +306,16 @@ export default function Grading({ vm, setReview, caps, reload }: { vm: ViewModel
   const saved = (r: TeacherReview, msg?: string) => { setReview(r); if (msg) { setToast(msg); setTimeout(() => setToast(null), 4000); } };
   const proposals = a.criteria.filter((c) => c.status === 'PROPOSED' || c.status === 'OBJECTIVE_PROVISIONAL');
   const [err, setErr] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const approveAll = async () => {
+    if (bulkBusy || !confirm(`Approve ${proposals.length} proposed or provisional criteria? Review their cited evidence first.`)) return;
+    setBulkBusy(true);
     let r: TeacherReview | null = null; let n = 0; setErr(null);
     try {
       for (const c of proposals) { r = await backend.saveTeacherDecision(vm.rec.id, approveEntry(c, critById.get(c.id)!)); n++; }
     } catch (e) { setErr(engineMessage(e)); }
     if (r) saved(r, `Approved ${n} proposal${n === 1 ? '' : 's'}.`);
+    setBulkBusy(false);
   };
   return (
     <>
@@ -321,7 +326,7 @@ export default function Grading({ vm, setReview, caps, reload }: { vm: ViewModel
             <CoverageMeter a={a} />
             <div className="row">
               <button className="btn" onClick={() => setEditRubric(true)}>Adjust rubric and weights</button>
-              {proposals.length > 0 && <button className="btn approve" onClick={approveAll}>Approve all {proposals.length} proposals</button>}
+              {proposals.length > 0 && <button className="btn approve" disabled={bulkBusy} onClick={approveAll}>{bulkBusy ? 'Saving…' : `Approve all ${proposals.length} proposals`}</button>}
               {Object.keys(vm.rec.review.decisions).length > 0 && <button className="btn ghost danger" onClick={async () => { if (confirm('Remove all your decisions and rubric changes for this evaluation?')) saved(await backend.resetReview(vm.rec.id), 'Review reset.'); }}>Reset my review</button>}
             </div>
             <p className="small muted" style={{ margin: 0 }}>

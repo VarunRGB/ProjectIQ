@@ -11,7 +11,7 @@ any agent, the orchestrator or the rubric engine.
 ```powershell
 cd frontend
 npm install
-npm run dev          # http://localhost:5173, demo backend with generated fixtures
+npm run dev          # http://127.0.0.1:5173, demo backend with generated fixtures
 npm test             # scoring parity tests against the real engine
 npm run build
 ```
@@ -19,14 +19,15 @@ npm run build
 ### Run it against the real backend
 
 ```powershell
-# From the ProjectIQ root, in the environment where the agents and models are installed
-python frontend\bridge\server.py --root outputs\unified
-# Optional, enables REVIEWED and RESUME (operator-owned files only):
-python frontend\bridge\server.py --root outputs\unified --vm-config vm_config.json --review-root reviewed_catalogs
+# From the combined ProjectIQ root, in its activated Python environment
+$env:PROJECTIQ_BRIDGE_TOKEN = (python -c "import secrets; print(secrets.token_urlsafe(32))").Trim()
+Write-Host "Local operator token: $env:PROJECTIQ_BRIDGE_TOKEN"
+python frontend\bridge\server.py --root outputs\unified --allow-origin http://127.0.0.1:5173 --vm-config vm_config.json --review-root outputs\executioner --enable-trusted-demo
 
-# In another terminal
+# In another terminal (no token in Vite environment or build)
 cd frontend
 $env:VITE_BACKEND="http"; npm run dev
+# Open http://127.0.0.1:5173 and enter the local operator token when prompted.
 ```
 
 The bridge (`bridge/server.py`, Python standard library only, binds to 127.0.0.1) composes
@@ -46,9 +47,14 @@ Teacher work is saved beside each run in `faculty/` (`review.json`, `decisions.j
 `result.json`, `rubric/` and `collection/` files are never modified. Put
 `faculty_meta.json` (`{"students": [...], "course": "..."}`) next to older runs to show names.
 
-REVIEWED and RESUME runs end up as one acknowledged imported evaluation, because the
-unified `evaluate()` itself still collects the Executioner in STATIC mode. The UI asks for the
-acknowledgment and labels this evidence as imported.
+REVIEWED and RESUME retain their specialized run-then-bundle path and acknowledged
+imported receipt provenance. Bridge job actions separately describe what ran now.
+Automatic evaluation (TRUSTED_DEMO) uses the existing unified `evaluate()` directly
+with `--trust-demo-source --demo-vm-config` and optional `--confirm-disposable-state`.
+It is opt-in at server startup and requires the local operator to confirm an exact
+commit. It never requires reviewed catalogs or imported-evidence acknowledgment.
+Generated observations do not become independently reviewed marks. Unsupported
+projects may retain only static/readiness evidence. See `F1_GUIDE.md`.
 
 ## Where the data comes from
 
@@ -110,9 +116,10 @@ directories so the bridge can serve and re-grade them.
 
 ## Limits that remain
 
-* The unified `evaluate()` collects the Executioner in STATIC mode only, so REVIEWED and RESUME
-  go through the bridge's run-then-bundle path and are shown as acknowledged imported evidence.
-  They also need the operator's VM configuration and approved catalogs.
+* The unified `evaluate()` supports STATIC and explicit TRUSTED_DEMO. REVIEWED and RESUME
+  retain the separate reviewed/import path and operator approvals.
+* Stop requests wait for the current backend command to finish; a unified command may finish
+  the whole evaluation. Never kill the bridge or VM while active. One bridge process only.
 * The bridge is a trusted local operator tool for one machine, not a multi-user service.
 * Reassessment needs the local Ollama model; if it is not running, the UI says so and the
   criterion stays deferred for the teacher.

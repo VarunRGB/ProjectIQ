@@ -3,6 +3,7 @@ import type { AgentName } from '../../api/types';
 import { CoverageMeter, GradeHeadline, LedgerBar, SectionRings } from '../../components/Ledger';
 import { Ring, toneFor, toneForRisk } from '../../components/Visuals';
 import { FormatSummary } from './FormatTab';
+import { FunctionalOverview } from './FunctionalEvidence';
 import { AgentStatusBadge, Badge, Callout, ProvenanceBadge, Tip } from '../../components/ui';
 import { AGENT_INFO, humanize } from '../../lib/labels';
 import { pct, type ViewModel } from '../../lib/viewModel';
@@ -12,12 +13,14 @@ export interface AttentionItem { tone: 'warn' | 'bad' | 'info' | 'muted'; text: 
 export function attentionItems(vm: ViewModel, base: string): AttentionItem[] {
   const a = vm.assessment; const out: AttentionItem[] = [];
   const un = a.criteria.filter((c) => c.status === 'UNASSESSED');
-  if (un.length) out.push({ tone: 'warn', text: `${un.map((c) => c.title).join(', ')} could not be assessed automatically. Score ${un.length === 1 ? 'it' : 'them'} from the evidence to release the complete grade.`, to: `${base}/grading?criterion=${un[0].id}`, action: 'Assess now' });
+  if (un.length) out.push({ tone: 'warn', text: `${un.length} ${un.length === 1 ? 'criterion still needs' : 'criteria still need'} assessment. Open grading to review the available evidence and decide marks.`, to: `${base}/grading?criterion=${un[0].id}`, action: 'Assess now' });
   const prop = a.criteria.filter((c) => c.status === 'PROPOSED' || c.status === 'OBJECTIVE_PROVISIONAL');
   if (prop.length) out.push({ tone: 'info', text: `${prop.length} AI-proposed or objective mark${prop.length > 1 ? 's are' : ' is'} waiting for your approval.`, to: `${base}/grading`, action: 'Review proposals' });
   for (const f of vm.rec.result.agent_failures) out.push({ tone: 'bad', text: `The ${AGENT_INFO[f].name} agent failed. Criteria that need its evidence stay unassessed; nothing is scored as zero.`, to: `${base}/${f === 'summarizer' ? 'summary' : f}`, action: 'See details' });
   if (vm.provenance.acknowledgmentRequired) out.push({ tone: 'bad', text: 'Some imported results are not acknowledged. Their evidence is shown for information only and cannot support marks.', to: `${base}/activity`, action: 'See provenance' });
   const ex = vm.executioner;
+  const auto=ex?.automatic;
+  if (auto && (auto.inventoryIssue || auto.status==='SECURITY_HOLD' || auto.status==='RUNTIME_INCOMPLETE' || auto.inventory?.failed || auto.inventory?.inconclusive || (auto.inventory?.workflow && auto.inventory.workflow.status!=='PASS'))) out.push({tone:'warn',text:'Automatic execution needs review. Inspect the scoped observations or runtime limitation before assigning responsibility.',to:`${base}/executioner`,action:'See automatic evidence'});
   if (ex && ex.counts.FAILED) out.push({ tone: 'bad', text: `${ex.counts.FAILED} planned test${ex.counts.FAILED > 1 ? 's' : ''} failed in a verified run. Check the expectation before attributing the failure to the student.`, to: `${base}/executioner`, action: 'See failed tests' });
   const blocked = ex?.suites.filter((s: any) => !s.vm_verified).length ?? 0;
   if (blocked) out.push({ tone: 'muted', text: `${blocked} test suite${blocked > 1 ? 's' : ''} could not run because of the execution environment. This is not a student defect.`, to: `${base}/executioner`, action: 'See why' });
@@ -34,6 +37,7 @@ function agentFacts(vm: ViewModel, n: AgentName) {
   if (card.status === 'FAILED') return <p className="small c-bad">{card.limitations[0] ?? 'The agent failed.'} {card.error_code && <code>{card.error_code}</code>}</p>;
   if (n === 'executioner' && vm.executioner) {
     const e = vm.executioner;
+    if (e.automatic) return <FunctionalOverview f={e.automatic} />;
     const run = (e.counts.PASSED ?? 0) + (e.counts.FAILED ?? 0);
     const rv = e.reviewed.length; const rvPass = e.reviewedCounts.PASSED ?? 0;
     return (
@@ -100,9 +104,9 @@ export default function Overview({ vm, base }: { vm: ViewModel; base: string }) 
         <SectionRings a={a} />
       </section>
 
-      <div className="grid g2 mt-l" style={{ alignItems: 'start' }}>
+      <div className="grid g2 mt-l f3-attention" style={{ alignItems: 'start' }}>
         <section className="panel" aria-label="Needs attention">
-          <div className="panel-head"><h2>What needs your attention</h2></div>
+          <div className="panel-head"><h2>Review priorities</h2></div>
           {!items.length && <Callout tone="good">Nothing outstanding. All marks are approved.</Callout>}
           <div className="stack">
             {items.map((it, i) => (
@@ -126,7 +130,7 @@ export default function Overview({ vm, base }: { vm: ViewModel; base: string }) 
                 return (
                   <tr key={n}>
                     <td><strong>{AGENT_INFO[n].name}</strong></td>
-                    <td><Tip text={p.action === 'REUSED' ? 'Reused from the saved collection. The agent was not rerun.' : p.action === 'COLLECTED' ? 'Collected live in this evaluation.' : p.action === 'SKIPPED' ? 'Not needed for this rubric or submission.' : 'Not available.'}><Badge tone={p.action === 'COLLECTED' ? 'good' : p.action === 'REUSED' ? 'info' : 'muted'}>{humanize(p.action)}</Badge></Tip></td>
+                    <td><Tip text={p.action === 'COLLECTED_THIS_RUN' ? 'Collected during this bridge job, then bundled as imported evidence.' : p.action === 'RESUME_THIS_RUN' ? 'Resume ran in this job and may reuse earlier suites.' : p.action === 'IMPORTED_FILE' ? 'Supplied from an existing result file.' : p.action === 'REUSED' ? 'Reused from the saved collection. The agent was not rerun.' : p.action === 'COLLECTED' ? 'Collected live in this evaluation.' : p.action === 'SKIPPED' ? 'Not needed for this rubric or submission.' : 'Not available.'}><Badge tone={p.action === 'COLLECTED' || p.action === 'COLLECTED_THIS_RUN' ? 'good' : p.action === 'REUSED' ? 'info' : 'muted'}>{humanize(p.action)}</Badge></Tip></td>
                     <td>{p.provenance ? <ProvenanceBadge p={p.provenance as any} /> : <span className="small muted">{p.check === 'MATCHED' ? 'Matched' : humanize(p.check)}</span>}</td>
                   </tr>
                 );
@@ -147,7 +151,7 @@ export default function Overview({ vm, base }: { vm: ViewModel; base: string }) 
             <section key={n} className="panel" style={{ marginTop: 0 }}>
               <div className="panel-head" style={{ marginBottom: 10 }}>
                 <div><h3>{AGENT_INFO[n].name}</h3><p className="small">{AGENT_INFO[n].role}</p></div>
-                <AgentStatusBadge status={card.status} />
+                {n === 'executioner' && card.status === 'PARTIAL' && vm.executioner?.automatic?.inventory ? <Tip text="Automatic observations are available, but coverage and reviewed grading evidence remain limited."><Badge tone="info">Scoped evidence</Badge></Tip> : <AgentStatusBadge status={card.status} />}
               </div>
               {agentFacts(vm, n)}
               <div className="mt"><Link to={`${base}/${tabOf[n]}`} className="btn sm">Open {AGENT_INFO[n].name.toLowerCase()} results</Link></div>

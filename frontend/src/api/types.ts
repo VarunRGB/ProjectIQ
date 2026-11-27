@@ -326,6 +326,7 @@ export interface EvaluationRecord {
   /** Teacher review state layered on top of the backend decisions. */
   review: TeacherReview;
   source: 'MOCK_FIXTURE' | 'BACKEND';
+  engineAssessment?: Assessment | null;
 }
 
 export interface EvaluationMeta {
@@ -335,6 +336,7 @@ export interface EvaluationMeta {
   submitted_utc?: string;
   evaluated_utc?: string;
   executioner_mode_requested?: ExecutionerMode | null;
+  bridge_job_actions?: Partial<Record<AgentName, string>>;
   references_uploaded?: number;
   verify_research?: boolean;
   elapsed_seconds?: number;
@@ -366,7 +368,7 @@ export interface ReviewEvent {
 }
 
 // ------------------------------------------------- Evaluation requests
-export type ExecutionerMode = 'STATIC' | 'REVIEWED' | 'RESUME';
+export type ExecutionerMode = 'STATIC' | 'REVIEWED' | 'RESUME' | 'TRUSTED_DEMO';
 
 export interface EvaluationRequest {
   title: string;
@@ -395,6 +397,8 @@ export interface EvaluationRequest {
 
 export interface ExecutionerRequest {
   mode: ExecutionerMode;
+  trust_demo_source?: boolean;
+  confirm_disposable_state?: boolean;
   run_readiness: 'AUTO' | 'YES' | 'NO';
   max_vm_launches: number;
   suites: { kind: string; catalogs: Record<string, string> }[];
@@ -422,4 +426,6 @@ export interface RunStatus {
   state: 'RUNNING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
   agents: Record<AgentName | 'rubric' | 'format', { state: 'waiting' | 'running' | 'done' | 'skipped' | 'failed' | 'partial'; detail?: string; elapsed_ms?: number; /** Real progress when the backend reports it (rubric batches). */ progress?: number }>;
   events: RunEvent[];
+  cancel_requested?: boolean;
+  executioner_mode?: ExecutionerMode;
 }

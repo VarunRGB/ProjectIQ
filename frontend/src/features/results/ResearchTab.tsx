@@ -42,7 +42,7 @@ export default function ResearchTab({ vm }: { vm: ViewModel }) {
           <Fact value={p4.reliable_publication_year_count ? pct(p4.recent_reliable_percent, 0) : null} label="Published in the last 5 years" scope={`Of ${p4.reliable_publication_year_count} with a confirmed year`} tip="Unconfirmed years are shown but excluded. Older foundational sources are not automatically a problem." />
         </div>
         <div className="mt">
-          <Callout tone={online ? 'info' : 'muted'}>{online ? 'Online metadata verification was enabled for this evaluation (opt-in). Identities were looked up in academic databases.' : 'Online metadata verification was not enabled, so paper identities are unchecked.'} A missing database match does not prove a paper is fabricated.</Callout>
+          <Callout tone={online ? 'info' : 'muted'}>{online ? (p1.reference_entries === 0 ? 'Online verification was enabled, but no bibliography entries were detected.' : 'Online metadata verification was enabled (opt-in). See the individual reference statuses for the recorded outcomes.') : 'Online metadata verification was not enabled, so paper identities are unchecked.'} A missing database match does not prove a paper is fabricated.</Callout>
         </div>
       </section>
 

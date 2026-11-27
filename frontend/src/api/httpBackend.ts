@@ -28,15 +28,18 @@ async function b64(f: File): Promise<{ name: string; b64: string }> {
 
 export class HttpBackend implements Backend {
   private reviews = new Map<string, TeacherReview>();
-  constructor(private base: string) {}
+  constructor(private base: string, private token: string) {
+    if (!/^http:\/\/(127\.0\.0\.1|localhost):[0-9]+$/.test(base)) throw new Error('The local bridge URL must be loopback HTTP.');
+  }
 
   private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
     const res = await fetch(this.base + path, {
-      method, headers: body ? { 'Content-Type': 'application/json' } : { Accept: 'application/json' },
+      method, headers: { Accept: 'application/json', 'X-ProjectIQ-Token': this.token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await res.json().catch(() => ({}));
-    if (res.status === 422) throw new EngineError(data.error ?? 'REJECTED');
+    if (res.status === 403) sessionStorage.removeItem('projectiq.localOperatorToken');
+    if ([403, 409, 422].includes(res.status)) throw new EngineError(data.error ?? 'REJECTED');
     if (!res.ok) throw new Error(data.detail || data.error || `${res.status} ${res.statusText}`);
     return data as T;
   }
@@ -45,7 +48,7 @@ export class HttpBackend implements Backend {
     try { return await this.call<BackendCapabilities>('GET', '/api/capabilities'); } catch {
       return { name: 'Local bridge (not reachable)', kind: 'http', liveExecutionerModes: [], importExecutionerResults: false, onlineResearchVerification: false,
         integrityReferenceUpload: false, aiDetection: 'NOT_INSTALLED', rubricReassessment: false, persistsTeacherDecisions: 'BROWSER_ONLY',
-        notes: ['The local bridge did not respond. Start it with: python frontend/bridge/server.py'] };
+        notes: ['Check that the local bridge is running. Refresh to enter the operator token again if authorization failed.'] };
     }
   }
 
@@ -55,7 +58,7 @@ export class HttpBackend implements Backend {
     const d = await this.call<any>('GET', `/api/evaluations/${encodeURIComponent(id)}`);
     const review: TeacherReview = { ...emptyReview(), ...(d.review ?? {}) };
     this.reviews.set(id, review);
-    return { id, result: d.result, evidence: d.evidence ?? null, decisions: d.decisions ?? null, reportText: null, meta: d.meta ?? {}, review, source: 'BACKEND' };
+    return { id, result: d.result, evidence: d.evidence ?? null, decisions: d.decisions ?? null, reportText: null, meta: d.meta ?? {}, review, engineAssessment: d.engine_assessment ?? d.result.assessment, source: 'BACKEND' };
   }
 
   async startEvaluation(req: EvaluationRequest) {

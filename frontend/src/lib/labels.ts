@@ -11,7 +11,7 @@ export const AGENT_INFO: Record<AgentName, { name: string; role: string }> = {
   summarizer: { name: 'Summary', role: 'Extracts the report’s own key sentences. Never contributes marks.' },
   integrity: { name: 'Integrity', role: 'Compares the report with supplied references and estimates AI-like writing. Advisory only.' },
   research: { name: 'Research', role: 'Extracts the bibliography, checks paper identity, relevance, citation links and recency.' },
-  executioner: { name: 'Executioner', role: 'Inspects the repository and, when approved, runs reviewed tests in a disposable VM.' },
+  executioner: { name: 'Executioner', role: 'Inspects source code and, with operator authorization, runs supported automatic or reviewed tests in disposable VMs.' },
 };
 
 export const AGENT_STATUS: Record<AgentStatus, { label: string; tone: Tone; explain: string }> = {

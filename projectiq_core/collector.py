@@ -1,7 +1,7 @@
 """Sequential local collection, or explicit import of operator-selected JSON artifacts.
 
 All outputs are private local data. This is not a server or a sandbox. STATIC is
- the only live Executioner mode exposed by this phase.
+ the default; an explicit operator-only demo adds separately scoped observations.
 """
 from __future__ import annotations
 from datetime import datetime, timezone
@@ -143,8 +143,12 @@ def collect(*, submission: Submission, report_bytes: bytes, out: Path, mode: str
 
 
 def live_sources(submission, *, references: Path|None=None, agents=AGENTS, rubric: Path|None=None,
-                 samples: int=1, verify_research=False, summary_only: bool=False):
-    """Lazy imports keep missing model dependencies isolated. No reviewed VM path."""
+                 samples: int=1, verify_research=False, summary_only: bool=False, demo=None):
+    """Lazy imports; demo options are supplied only by a trusted local operator."""
+    if demo is not None:
+        from projectiq_executioner.phase9b.unified import DemoOptions
+        if type(demo) is not DemoOptions or not submission.repository_url or 'executioner' not in agents:
+            raise ValueError('LOCAL_DEMO_REQUIRES_EXECUTIONER_AND_REPO')
     if summary_only and rubric is not None: raise ValueError('LEGACY_RUBRIC_NOT_ALLOWED_IN_SUMMARY_ONLY')
     if not 1<=samples<=5: raise ValueError('JUDGE_SAMPLES_OUT_OF_RANGE')
     # Local model weights should be prepared by the operator; don't silently download.
@@ -200,6 +204,9 @@ def live_sources(submission, *, references: Path|None=None, agents=AGENTS, rubri
         from projectiq_research.agent import analyze_research_document
         return analyze_research_document(report,verify=verify_research).to_dict()
     def executioner(report,out):
+        if demo is not None:
+            from projectiq_executioner.phase9b.unified import evaluate_project
+            return evaluate_project(submission.repository_url,submission.requested_ref,out/'executioner_artifacts',submission_id=submission.id,options=demo)
         from projectiq_executioner.orchestration import evaluate
         return evaluate({'submission_id':submission.id,'repository_url':submission.repository_url,'ref':submission.requested_ref,
                          'mode':'STATIC','max_vm_launches':0},output_dir=out/'executioner_artifacts')

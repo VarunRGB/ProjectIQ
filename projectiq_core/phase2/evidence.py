@@ -308,5 +308,14 @@ def build_evidence(evaluation_path: Path, *, acknowledge_imported=False, loader=
         ex=observations['executioner'];raw=raws['executioner']
         ex['unavailable_suites']=[{'suite':clip(s.get('kind'),80),'state':clip(s.get('state'),80),'reason':clip(s.get('reuse_refusal') or s.get('reason') or s.get('vm_preflight_reason') or s.get('result_status'),160)} for s in rows(raw.get('suites')) if isinstance(s,dict) and s.get('state') not in ('PASS','FAIL')]
         ex['planned_counts_scope']='NATIVE_REPORTED_NOT_ELIGIBILITY'
+        if 'trusted_demo' in raw:
+            # Receipt normalization already checked the extension. Display only;
+            # never emit an eligible TEST_OBSERVATION or modify reviewed counts.
+            demo=raw['trusted_demo']
+            inv=obj(demo.get('functional_inventory'))
+            ex['trusted_demo']={'status':demo.get('status'),'selected_path':demo.get('selected_path'),
+                'vm_start_attempts':demo.get('vm_start_attempts'),'vm_attempt_count_uncertain':demo.get('vm_attempt_count_uncertain'),
+                'summary':inv.get('summary'),'workflow_status':obj(inv.get('workflow')).get('status'),
+                'scope':'CHARACTERIZATION_DISPLAY_ONLY','grade_credit':None}
     return EvidenceBundle(evaluation_sha256=sha(original),submission_id=ev.submission.id,report_sha256=ev.submission.report_sha256,
         extracted_text_sha256=extracted_hash,report_extraction=extraction,repository_commit=commit,agent_checks=checks,items=items,observations=observations,limitations=notes)

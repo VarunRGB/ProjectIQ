@@ -4,7 +4,7 @@ import unittest
 from projectiq_executioner.phase6.contracts import EvidenceError
 from projectiq_executioner.phase6.pipeline import build
 from projectiq_executioner.phase6.report import validate_report,markdown
-from test_phase6_core import SRC,DIGEST,vm,run,quality
+from projectiq_executioner.tests.test_phase6_core import SRC,DIGEST,vm,run,quality
 
 
 def stage_run(stage,status,checks=None,source=None):

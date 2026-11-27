@@ -8,6 +8,8 @@ import { AGENT_INFO, AGE_BAND, CRITERION_STATUS, DIAG_CATEGORY, EVIDENCE_KIND, F
 import { useEvaluation } from '../../lib/useEvaluation';
 import { fmtPoints, pct, type ViewModel } from '../../lib/viewModel';
 import { verifiedFindings } from '../results/SummaryTab';
+import { FunctionalReport } from '../results/FunctionalEvidence';
+import { evaluationModeLabel, reportStatusText } from '../../lib/facultyExperience';
 import type { AgentName } from '../../api/types';
 
 function Tag({ status }: { status: keyof typeof CRITERION_STATUS }) {
@@ -39,6 +41,8 @@ export default function ReportPage() {
   const { rec, vm, error } = useEvaluation(id);
   const [audience, setAudience] = useState<'faculty' | 'student'>('faculty');
   const [excerpts, setExcerpts] = useState(true);
+  const [detail, setDetail] = useState<'concise' | 'detailed'>('concise');
+  const detailed = detail === 'detailed';
   useEffect(() => { if (rec) document.title = `ProjectIQ report: ${rec.result.submission.project_title}`; }, [rec]);
   if (error) return <div className="r-wrap"><p>{error}</p></div>;
   if (!rec || !vm) return <div className="r-wrap"><p>Preparing report…</p></div>;
@@ -46,7 +50,8 @@ export default function ReportPage() {
   const critById = new Map(vm.rubric.criteria.map((c) => [c.id, c]));
   const faculty = audience === 'faculty';
   const final = a.status === 'TEACHER_REVIEWED';
-  const ex = vm.executioner; const rs = vm.research; const ig = vm.integrity;
+  const gradeTotal = a.reviewed_points ?? a.proposed_points;
+  const ex = vm.executioner; const demo = ex?.automatic; const rs = vm.research; const ig = vm.integrity;
   const findings = verifiedFindings(vm);
   const improvements = a.criteria.filter((c) => c.feedback && c.status !== 'EXCLUDED').map((c) => ({ title: c.title, text: c.feedback!.improvement }));
   let n = 0;
@@ -55,20 +60,22 @@ export default function ReportPage() {
       <div className="r-toolbar no-print">
         <Link to={`/evaluations/${id}`} className="btn">Back to the dashboard</Link>
         <div className="row">
-          <label className="row small">Version
+          <label className="row small">Audience
             <select className="in" style={{ width: 190 }} value={audience} onChange={(e) => setAudience(e.target.value as any)}>
-              <option value="faculty">Faculty (complete)</option>
+              <option value="faculty">Faculty</option>
               <option value="student">Student feedback</option>
             </select></label>
-          <label className="check small"><input type="checkbox" checked={excerpts} onChange={(e) => setExcerpts(e.target.checked)} />Evidence excerpts</label>
+          <label className="row small">Detail<select className="in" style={{width:150}} value={detail} onChange={e=>setDetail(e.target.value as 'concise'|'detailed')}><option value="concise">Concise</option><option value="detailed">Detailed</option></select></label>
+          {detailed && faculty && <label className="check small"><input type="checkbox" checked={excerpts} onChange={(e) => setExcerpts(e.target.checked)} />Evidence excerpts</label>}
           <button className="btn primary" onClick={() => window.print()}>Print or save as PDF</button>
         </div>
       </div>
       {!final && <div className="r-draftnote no-print">This report is a draft: {a.proposed_points === null ? 'some criteria are not assessed yet' : 'not every mark is approved'}. It will be marked as draft when printed.</div>}
 
-      <article className={`r-doc ${final ? '' : 'draft'}`}>
+      <p className="r-print-help no-print">For a searchable PDF, choose the browser’s Save as PDF destination, A4 paper and turn off Headers and footers in More settings. The displayed report is the version that will print.</p>
+      <article className={`r-doc ${final ? '' : 'draft'} ${detailed?'':'r-compact'}`}>
         <header className="r-cover">
-          <div className="r-brand">ProjectIQ evaluation report{!final && <span className="r-draft">Draft</span>}</div>
+          <div className="r-brand">ProjectIQ · {detailed ? 'Detailed evaluation report' : 'Concise evaluation report'}{!final && <span className="r-draft">Draft</span>}</div>
           <h1>{sub.project_title}</h1>
           <p className="r-who">{rec.meta.students?.join(', ') || 'Students not recorded'}{rec.meta.course ? `. ${rec.meta.course}` : ''}{rec.meta.cohort ? `, ${rec.meta.cohort}` : ''}</p>
           <div className="r-cover-grid">
@@ -79,14 +86,14 @@ export default function ReportPage() {
               <dt>Repository</dt><dd>{sub.repository_url ? <>{sub.repository_url.replace('https://github.com/', '')}{ex?.commit && <> at {ex.commit.slice(0, 10)}</>}</> : 'None (report-only submission)'}</dd>
               <dt>Rubric</dt><dd>{vm.rubric.title}, {vm.rubric.total_points} marks</dd>
               <dt>Evaluated</dt><dd>{rec.meta.evaluated_utc ? new Date(rec.meta.evaluated_utc).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' }) : 'Not recorded'}</dd>
-              {faculty && <><dt>Evidence</dt><dd>{r.collection_mode === 'LIVE' ? 'Collected live' : 'Imported from earlier runs, acknowledged by an operator'}</dd></>}
+              {faculty && <><dt>Evidence</dt><dd>{r.collection_mode === 'LIVE' ? 'Collected live' : 'Bundled as imported evidence, acknowledged by an operator'}</dd></>}
             </dl>
           </div>
         </header>
 
+        <div className="r-executive"><h2>Evaluation at a glance</h2><p>{reportStatusText(a.assessed_weight_percent,a.unresolved_criterion_ids.length,a.reviewed_weight_percent)}</p>{demo && <p>Automatic testing is scoped to the trusted component; observations are separate from reviewed grading credit.</p>}<p>{r.agent_failures.length ? `Agent failures: ${r.agent_failures.map(k=>AGENT_INFO[k].name).join(', ')}. Review limitations before making a decision.` : 'No agent failures recorded. Coverage and evidence limitations still apply.'}</p><ul>{findings.slice(0,4).map((f,i)=><li key={i}>{f.text}</li>)}</ul></div>
         <Section n={++n} title="Mark sheet" lead="Each criterion with its share of the grade, the level awarded and who decided it. Criteria that are not assessed are not counted as zero.">
-          <LedgerBar a={a} interactive={false} />
-          <div className="r-rings"><SectionRings a={a} size={70} animate={false} /></div>
+          {detailed && <><LedgerBar a={a} interactive={false} /><div className="r-rings"><SectionRings a={a} size={64} animate={false} /></div></>}
           <table className="r-table mt">
             <thead><tr><th>Criterion</th><th className="num">Weight</th><th>Level</th><th className="num">Marks</th><th>Status</th></tr></thead>
             <tbody>
@@ -103,7 +110,7 @@ export default function ReportPage() {
                   </tr>
                 );
               })}
-              <tr className="r-total"><td>Total</td><td className="num">100%</td><td /><td className="num">{a.proposed_points !== null ? `${fmtPoints(a.proposed_points)} / ${fmtPoints(a.max_points)}` : `Withheld (${fmtPoints(a.assessed_subtotal_points)} / ${fmtPoints(a.assessed_max_points)} assessed)`}</td><td>{final ? <span className="r-tag ink">Approved</span> : <span className="r-tag warn">Draft</span>}</td></tr>
+              <tr className="r-total"><td>Total</td><td className="num">100%</td><td /><td className="num">{gradeTotal !== null ? `${fmtPoints(gradeTotal)} / ${fmtPoints(a.max_points)}` : `Withheld (${fmtPoints(a.assessed_subtotal_points)} / ${fmtPoints(a.assessed_max_points)} assessed)`}</td><td>{final ? <span className="r-tag ink">Approved</span> : <span className="r-tag warn">Draft</span>}</td></tr>
             </tbody>
           </table>
           <div className="r-legend">
@@ -112,7 +119,7 @@ export default function ReportPage() {
         </Section>
 
         <Section n={++n} title="Assessment by criterion" lead="The reasoning behind each mark, the evidence it rests on and what would improve it.">
-          {a.criteria.filter((c) => c.status !== 'EXCLUDED').map((c) => {
+          {a.criteria.filter((c) => c.status !== 'EXCLUDED' && (detailed || c.status !== 'UNASSESSED' || c.feedback || rec.review.decisions[c.id])).map((c) => {
             const crit = critById.get(c.id)!;
             const t = rec.review.decisions[c.id];
             const lvl = crit.levels.find((l) => l.id === c.level_id);
@@ -120,10 +127,10 @@ export default function ReportPage() {
             return (
               <div key={c.id} className="r-crit">
                 <div className="r-crit-head">
-                  <div><h3>{c.title}</h3><div className="r-small">{crit.description}</div></div>
+                  <div><h3>{c.title}</h3>{detailed && <div className="r-small">{crit.description}</div>}</div>
                   <div className="r-crit-mark"><span className={`r-pts ${c.status === 'TEACHER_REVIEWED' ? 'ink' : c.status === 'PROPOSED' ? 'pencil' : ''}`}>{c.earned_points === null ? 'Not assessed' : `${fmtPoints(c.earned_points)} / ${fmtPoints(c.max_points)}`}</span><Tag status={c.status} /></div>
                 </div>
-                {lvl && <p className="r-level"><strong>{lvl.label}.</strong> {lvl.descriptor}</p>}
+                {lvl && <p className="r-level"><strong>{lvl.label}.</strong> {detailed && lvl.descriptor}</p>}
                 {c.status === 'UNASSESSED' && <p className="r-note">{rec.review.pendingReassessment.includes(c.id) ? 'The criterion changed after evaluation and needs reassessment.' : reasonText(c.reason)} This criterion is not counted as zero.</p>}
                 {c.feedback && (
                   <dl className="r-fb">
@@ -134,7 +141,7 @@ export default function ReportPage() {
                 )}
                 {t?.remarks && <div className="r-remark"><strong>Teacher’s remark{t.basis === 'OVERRIDE' ? ' (changed from the AI proposal)' : ''}:</strong> {t.remarks}</div>}
                 {faculty && c.review_flags.map((f) => <p key={f} className="r-note">{FLAG_TEXT[f] ?? humanize(f)}</p>)}
-                {faculty && excerpts && ev.length > 0 && (
+                {detailed && faculty && excerpts && ev.length > 0 && (
                   <div className="r-ev">
                     <div className="r-ev-h">Evidence cited ({ev.length})</div>
                     {ev.slice(0, 6).map((e) => (
@@ -151,12 +158,13 @@ export default function ReportPage() {
               </div>
             );
           })}
+          {!detailed && a.unresolved_criterion_ids.length>0 && <p className="r-note">Unassessed criteria are listed in the mark sheet above; open the detailed report for individual reasons.</p>}
           {a.criteria.some((c) => c.status === 'EXCLUDED') && <p className="r-small">Not applicable to this submission: {a.criteria.filter((c) => c.status === 'EXCLUDED').map((c) => c.title).join(', ')}. Their weight was shared among the other criteria.</p>}
         </Section>
 
-        <Section n={++n} title="What the report claims and what was checked" lead="The left column repeats sentences from the report itself. The right column lists what the agents observed independently.">
+        <Section n={++n} title="What the report claims and what was checked" lead="Report claims are distinct from the agents’ scoped observations.">
           <div className="r-two">
-            <div><h4>The report says</h4>{vm.summary ? <><p className="r-serif">{vm.summary.summary}</p><ul className="r-serif">{vm.summary.key_points.slice(0, 4).map((k, i) => <li key={i}>{k}</li>)}</ul></> : <p className="r-small">No summary available.</p>}</div>
+            <div><h4>The report says</h4>{vm.summary ? <><p className="r-serif">{detailed ? vm.summary.summary : clip(vm.summary.summary ?? '', 500)}</p><ul className="r-serif">{vm.summary.key_points.slice(0, detailed ? 4 : 2).map((k, i) => <li key={i}>{k}</li>)}</ul></> : <p className="r-small">No summary available.</p>}</div>
             <div><h4>Checked independently</h4><ul>{findings.map((f, i) => <li key={i}>{f.text} <span className="r-small">({f.source})</span></li>)}{!findings.length && <li>Nothing could be verified independently.</li>}</ul></div>
           </div>
         </Section>
@@ -164,15 +172,13 @@ export default function ReportPage() {
         {ex && ex.mode && (
           <Section n={++n} title="Repository and testing" lead={ex.intelligence.overview}>
             <div className="r-facts">
-              <div><b>{ex.mode}</b><span>Executioner mode{ex.effectiveMode !== ex.mode ? ` (${ex.effectiveMode} evidence)` : ''}</span></div>
+              <div><b>{evaluationModeLabel(demo ? 'TRUSTED_DEMO' : ex.mode)}</b><span>Executioner mode{demo ? ' (separate automatic observations)' : ex.effectiveMode !== ex.mode ? ` (${ex.effectiveMode} evidence)` : ''}</span></div>
               <div><b>{ex.intelligence.server_endpoint_count ?? 0}</b><span>Endpoints found</span></div>
-              <div><b>{ex.counts.PASSED ?? 0} / {(ex.counts.PASSED ?? 0) + (ex.counts.FAILED ?? 0)}</b><span>Executed planned tests passed</span></div>
-              <div><b>{ex.counts.NOT_TESTED ?? 0}</b><span>Planned tests not executed</span></div>
-              <div><b>{ex.reviewedCounts.PASSED ?? 0} / {ex.reviewed.length}</b><span>Reviewed scenarios passed</span></div>
+              {demo ? <><div><b>{demo.inventory ? `${demo.inventory.passed}/${demo.inventory.attempted}` : 'Unavailable'}</b><span>Independent checks passed / attempted</span></div><div><b>{demo.inventory ? `${demo.inventory.covered}/${demo.inventory.routes.length}` : 'Unavailable'}</b><span>Unique route cases exercised</span></div><div><b>{demo.inventory?.workflow ? `${demo.inventory.workflow.passed}/${demo.inventory.workflow.attempted}` : 'n/a'}</b><span>Workflow requests passed / attempted</span></div></> : <><div><b>{ex.counts.PASSED ?? 0} / {(ex.counts.PASSED ?? 0) + (ex.counts.FAILED ?? 0)}</b><span>Executed planned tests passed</span></div><div><b>{ex.counts.NOT_TESTED ?? 0}</b><span>Planned tests not executed</span></div><div><b>{ex.reviewedCounts.PASSED ?? 0} / {ex.reviewed.length}</b><span>Reviewed scenarios passed</span></div></>}
               <div><b>{ex.quality?.quality?.score ?? 'Withheld'}</b><span>Maintainability indicator (not a grade)</span></div>
             </div>
-            <p className="r-small">Technologies: {(ex.intelligence.technologies ?? []).map((t: any) => t.name).join(', ')}. Features found in the source: {(ex.intelligence.features ?? []).map((f: any) => f.name).join('; ')}.</p>
-            {ex.mode === 'STATIC' && <p className="r-note">STATIC mode: no student code was executed. Planned tests are specifications only.</p>}
+            <p className="r-small">Technologies: {(ex.intelligence.technologies ?? []).map((t: any) => t.name).join(', ')}. Feature candidates from source or documentation: {(ex.intelligence.features ?? []).map((f: any) => f.name).join('; ')}.</p>
+            {demo ? <FunctionalReport f={demo} faculty={faculty && detailed} /> : ex.mode === 'STATIC' && <p className="r-note">STATIC mode: no student code was executed. Planned tests are specifications only.</p>}
             {[...ex.planned, ...ex.reviewed].some((t) => t.outcome === 'FAILED') && (
               <>
                 <h4>Failed tests</h4>
@@ -200,11 +206,11 @@ export default function ReportPage() {
             {(ex.quality?.findings ?? []).length > 0 && (
               <>
                 <h4>Code-quality findings</h4>
-                <ul className="r-list">{ex.quality.findings.slice(0, 8).map((f: any, i: number) => <li key={i}><strong>{humanize(f.severity)}</strong>: {f.message} <span className="r-small">{f.path}:{f.line}. {f.recommendation}</span></li>)}</ul>
+                <ul className="r-list">{ex.quality.findings.slice(0, detailed ? 8 : 3).map((f: any, i: number) => <li key={i}><strong>{humanize(f.severity)}</strong>: {f.message} <span className="r-small">{f.path}:{f.line}. {f.recommendation}</span></li>)}</ul>
               </>
             )}
             {faculty && ex.suites.some((s: any) => !s.vm_verified) && <p className="r-small">Not executed because of the evaluation environment: {ex.suites.filter((s: any) => !s.vm_verified).map((s: any) => `${humanize(s.kind)} (${humanize(s.reason ?? s.result_status)})`).join(', ')}. These are not student defects.</p>}
-            {faculty && <p className="r-small">Untested planned cases: {ex.planned.filter((t) => t.outcome === 'NOT_TESTED').map((t) => `${t.title} (${(TEST_REASON[t.reason] ?? humanize(t.reason)).toLowerCase()})`).join('; ') || 'none'}.</p>}
+            {faculty && detailed && <p className="r-small">{demo ? 'Untested legacy reviewed specifications (not automatic coverage)' : 'Untested planned cases'}: {ex.planned.filter((t) => t.outcome === 'NOT_TESTED').map((t) => `${t.title} (${(TEST_REASON[t.reason] ?? humanize(t.reason)).toLowerCase()})`).join('; ') || 'none'}.</p>}
           </Section>
         )}
 
@@ -212,14 +218,15 @@ export default function ReportPage() {
           <Section n={++n} title="Research and citations" lead={rs.report.overview}>
             <table className="r-table">
               <thead><tr><th className="num">#</th><th>Paper</th><th>Identity</th><th>Relevance</th><th>Year</th></tr></thead>
-              <tbody>{rs.refs.map((x) => (
+              <tbody>{(detailed ? rs.refs : rs.refs.slice(0, 5)).map((x) => (
                 <tr key={x.n}><td className="num">{x.n}</td><td>{x.title}{x.attention && <div className="r-small">{x.attention.reasons.join('. ')}.</div>}</td>
                   <td>{RESEARCH_VERIFICATION[x.verification]?.label ?? x.verification}</td><td>{RESEARCH_RELEVANCE[x.relevance]?.label ?? x.relevance}</td>
                   <td>{x.year ?? 'Unknown'}{x.yearSource !== 'verified_metadata' && x.year ? ' (unconfirmed)' : ''}<div className="r-small">{AGE_BAND[x.ageBand] ?? ''}</div></td></tr>
               ))}</tbody>
             </table>
+            {!detailed && rs.refs.length > 5 && <p className="r-small">Showing the first five of {rs.refs.length} bibliography entries. See the detailed report for the full inventory.</p>}
             <h4>Recommended checks</h4>
-            <ul className="r-list">{rs.report.recommended_checks.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>
+            <ul className="r-list">{rs.report.recommended_checks.slice(0, detailed ? undefined : 3).map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>
             <p className="r-small">A missing database match does not prove a paper is fabricated. Relevance is a heuristic estimate, not proof that a source supports a specific claim.</p>
           </Section>
         )}
@@ -233,7 +240,7 @@ export default function ReportPage() {
                   <div><b>{pct(ig.overlap)}</b><span>Confirmed overlap with {ig.references.length} references</span></div>
                   {Object.entries(ig.byCategory).map(([k, v]) => <div key={k}><b>{pct(v)}</b><span>{INTEGRITY_CATEGORY[k]?.label ?? k}{INTEGRITY_CATEGORY[k] && !INTEGRITY_CATEGORY[k].counted ? ' (not counted)' : ''}</span></div>)}
                 </div>
-                {ig.matches.filter((m) => INTEGRITY_CATEGORY[m.category]?.counted).slice(0, 4).map((m, i) => (
+                {detailed && ig.matches.filter((m) => INTEGRITY_CATEGORY[m.category]?.counted).slice(0, 4).map((m, i) => (
                   <div key={i} className="r-pair"><div><span className="r-small">{INTEGRITY_CATEGORY[m.category]?.label}, report {m.location}{m.cited ? ', cited' : ', no citation marker'}</span><p className="r-serif">{m.text}</p></div><div><span className="r-small">{m.reference}, {m.reference_location}</span><p className="r-serif">{m.reference_text}</p></div></div>
                 ))}
               </>
@@ -255,13 +262,13 @@ export default function ReportPage() {
           </Section>
         )}
 
-        <Section n={++n} title={faculty ? 'Recommendations' : 'How to improve'} lead={faculty ? 'Actions drawn from the criterion feedback and the agents’ findings.' : undefined}>
+        {(improvements.length > 0 || ex?.recommendations.some((x: any)=>x.source==='PHASE5' && (x.priority==='HIGH'||x.priority==='MEDIUM')) || rs?.report?.recommended_checks?.length > 0) && <Section n={++n} title={faculty ? 'Recommendations' : 'How to improve'} lead={faculty ? 'Actions drawn from the criterion feedback and the agents’ findings.' : undefined}>
           <ol className="r-list">
             {improvements.map((x, i) => <li key={i}><strong>{x.title}:</strong> {x.text}</li>)}
             {ex?.recommendations.filter((x: any) => x.source === 'PHASE5' && (x.priority === 'HIGH' || x.priority === 'MEDIUM')).slice(0, 4).map((x: any, i: number) => <li key={'e' + i}><strong>Code ({x.path}):</strong> {x.recommendation}</li>)}
             {rs?.report?.recommended_checks.slice(0, 2).map((x: string, i: number) => <li key={'r' + i}><strong>Sources:</strong> {x}</li>)}
           </ol>
-        </Section>
+        </Section>}
 
         {faculty && (
           <Section n={++n} title="Evidence sources and limitations">
@@ -269,7 +276,7 @@ export default function ReportPage() {
               <thead><tr><th>Agent</th><th>Status</th><th>In this evaluation</th><th>Provenance</th></tr></thead>
               <tbody>{(['summarizer', 'integrity', 'research', 'executioner'] as AgentName[]).map((k) => {
                 const ag = r.agents[k]; const p = ag.receipt_provenance;
-                return <tr key={k}><td>{AGENT_INFO[k].name}</td><td>{humanize(ag.status)}</td><td>{humanize(r.agent_actions[k])}</td><td>{p ? PROVENANCE[p].label : humanize(ag.evidence_check)}</td></tr>;
+                return <tr key={k}><td>{AGENT_INFO[k].name}</td><td>{humanize(ag.status)}</td><td>{humanize(vm.provenance.perAgent[k].action)}</td><td>{p ? PROVENANCE[p].label : humanize(ag.evidence_check)}</td></tr>;
               })}</tbody>
             </table>
             {vm.provenance.acknowledged && <p className="r-small">Imported results were acknowledged by an operator as belonging to this submission. The acknowledgment is recorded but is not independent authentication.</p>}

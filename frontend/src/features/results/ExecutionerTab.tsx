@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ObservationTable } from '../../components/EvidenceCard';
+import { FunctionalPanel } from './FunctionalEvidence';
+import { evaluationModeLabel } from '../../lib/facultyExperience';
 import { AgentStatusBadge, Badge, Callout, Empty, Fact, HBar, More, OutcomeBadge, SourceLoc, Tip, shortSha } from '../../components/ui';
 import { DIAG_CATEGORY, OWNER_INFO, TEST_OUTCOME, TEST_REASON, humanize, type Tone } from '../../lib/labels';
 import type { TestRow, ViewModel } from '../../lib/viewModel';
@@ -65,6 +67,7 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
   if (card.status === 'FAILED' || !e.mode) {
     return <div className="panel"><div className="panel-head"><h2>Executioner</h2><AgentStatusBadge status={card.status} /></div><Callout tone="bad" title="No usable Executioner result">{card.limitations.join(' ')} {card.error_code && <code>{card.error_code}</code>}</Callout></div>;
   }
+  const demo = e.automatic;
   const pi = e.intelligence;
   const planned = e.planned; const reviewed = e.reviewed;
   const pc = e.counts; const rc = e.reviewedCounts;
@@ -81,29 +84,30 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
       <section className="panel">
         <div className="panel-head">
           <div><h2>Repository evaluation</h2><p>{pi.overview}</p></div>
-          <AgentStatusBadge status={card.status} />
+          {demo?.inventory && card.status==='PARTIAL' ? <Tip text="Automatic observations are available, but coverage and reviewed grading evidence remain limited."><Badge tone="info">Scoped evidence</Badge></Tip> : <AgentStatusBadge status={card.status} />}
         </div>
         <div className="grid g4">
-          <Fact value={e.mode} label="Mode requested" scope={e.effectiveMode !== e.mode ? `Effective evidence: ${e.effectiveMode}` : undefined} />
+          <Fact value={evaluationModeLabel(demo ? 'TRUSTED_DEMO' : e.mode)} label="Mode requested" scope={demo ? 'Separate automatic evidence + static matrix' : e.effectiveMode !== e.mode ? `Effective evidence: ${e.effectiveMode}` : undefined} />
           <Fact value={shortSha(e.commit)} label="Pinned commit" scope={e.repository ?? undefined} />
-          <Fact value={`${e.freshSuites} fresh, ${e.reusedSuites} reused`} label="Verified test suites" tip="Fresh: executed in a new disposable VM during this call. Reused: saved evidence whose receipts were re-verified." />
-          <Fact value={`${e.card.details.vm_attempts_scheduled ?? 0} of ${e.card.details.vm_attempt_budget ?? 0}`} label="VM launches used" />
+          {demo ? <Fact value={demo.inventory ? `${demo.inventory.passed}/${demo.inventory.attempted}` : null} label="Independent checks passed / attempted" /> : <Fact value={`${e.freshSuites} fresh, ${e.reusedSuites} reused`} label="Verified reviewed suites" tip="Fresh: executed in a new disposable VM during this call. Reused: saved evidence whose receipts were re-verified." />}
+          <Fact value={demo ? (demo.vmStarts===null ? null : `${demo.vmStarts} of 1`) : `${e.card.details.vm_attempts_scheduled ?? 0} of ${e.card.details.vm_attempt_budget ?? 0}`} label="VM launches used" />
         </div>
-        <div className="grid g3 mt-l">
+        {!demo && <div className="grid g3 mt-l">
           {(Object.keys(MODE_INFO) as (keyof typeof MODE_INFO)[]).map((m) => (
-            <div key={m} className="sub" style={m === e.mode ? { borderColor: 'var(--ink)', background: '#f4f6fb' } : undefined}>
-              <div className="row between"><strong>{MODE_INFO[m].title}</strong>{m === e.mode && <Badge tone="info">This result</Badge>}</div>
+            <div key={m} className="sub" style={!demo && m === e.mode ? { borderColor: 'var(--ink)', background: '#f4f6fb' } : undefined}>
+              <div className="row between"><strong>{MODE_INFO[m].title}</strong>{!demo && m === e.mode && <Badge tone="info">This result</Badge>}</div>
               <p className="small muted" style={{ margin: '4px 0 0' }}>{MODE_INFO[m].text}</p>
             </div>
           ))}
-        </div>
+        </div>}
         <div className="mt">
-          {e.mode === 'STATIC'
+          {demo ? <Callout tone="info" title="Automatic trusted demo">The automatic evidence below is separate from the legacy reviewed grading matrix.</Callout> : e.mode === 'STATIC'
             ? <Callout tone="info">Nothing was executed. Planned tests are specifications only, so functional criteria need verified runs or your own judgment.</Callout>
-            : <Callout tone="warn" title={imported ? 'Imported reviewed evidence' : 'Reviewed execution'}>{imported ? `This ${e.mode} result was produced by a separate Executioner run and imported with operator acknowledgment. The unified evaluator currently runs STATIC only; reviewed and resume runs still need to be wired into it.` : 'Only operator-approved suites ran.'} VM runs are not security-attested for arbitrary student code.</Callout>}
+            : <Callout tone="warn" title={imported ? 'Imported reviewed evidence' : 'Reviewed execution'}>{imported ? `This ${e.mode} result was produced by a separate Executioner run and imported with operator acknowledgment. Reviewed and resume retain their specialized composition path.` : 'Only operator-approved suites ran.'} VM runs are not security-attested for arbitrary student code.</Callout>}
         </div>
       </section>
 
+      {demo && <FunctionalPanel f={demo} />}
       <section className="panel">
         <div className="panel-head"><div><h2>What the code contains</h2><p>Found by reading the source. Recognised does not mean runnable, and runnable does not mean tested.</p></div></div>
         <div className="grid g2">
@@ -112,7 +116,7 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
             <div className="row mt" style={{ gap: 6 }}>
               {(pi.technologies ?? []).map((t: any) => <Tip key={t.name} text={`${humanize(t.category)}, ${String(t.confidence).toLowerCase()} confidence`}><Badge tone={t.confidence === 'HIGH' ? 'info' : 'muted'}>{t.name}</Badge></Tip>)}
             </div>
-            <h4 className="mt-l">Languages by lines of code</h4>
+            <h4 className="mt-l">Files by language</h4>
             <div className="mt">{langs.map(([l, n]) => <HBar key={l} label={l} value={n} max={langTotal} tone="info" display={String(n)} />)}</div>
             <dl className="kv mt-l">
               <dt>Architecture</dt><dd>{humanize(pi.architecture)} <span className="muted small">({String(pi.architecture_confidence).toLowerCase()} confidence)</span></dd>
@@ -123,7 +127,7 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
             </dl>
           </div>
           <div>
-            <h4>Features ({pi.features_discovered ?? 0})</h4>
+            <h4>Feature candidates ({pi.features_discovered ?? 0})</h4>
             <table className="t mt">
               <thead><tr><th>Feature</th><th>Found in</th><th>Confidence</th></tr></thead>
               <tbody>{(pi.features ?? []).map((f: any) => (
@@ -152,9 +156,10 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
 
       <section className="panel">
         <div className="panel-head">
-          <div><h2>Tests</h2><p>Planned tests come from the project; reviewed scenarios come from operator-approved suites. They are counted separately and never added together.</p></div>
+          <div><h2>{demo ? 'Legacy reviewed grading matrix' : 'Tests'}</h2><p>{demo ? 'These static specifications are not the automatic route inventory. No reviewed test credit is implied by automatic execution.' : 'Planned tests come from the project; reviewed scenarios come from operator-approved suites. They are counted separately and never added together.'}</p></div>
         </div>
-        <div className="grid g2">
+        <details open={!demo}><summary className="small muted">{demo ? 'Inspect legacy matrix' : 'Planned and reviewed results'}</summary>
+        <div className="grid g2 mt">
           <div className="sub">
             <div className="row between"><h4>Planned tests ({planned.length})</h4><span className="small muted">{executedPlanned} executed</span></div>
             <div className="row mt" style={{ gap: 22, flexWrap: 'nowrap' }}>
@@ -194,10 +199,11 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
           })}
         </div>
         <div className="mt">{list.map((t) => <TestItem key={t.scope + t.id} t={t} vm={vm} />)}{!list.length && <Empty title="No tests in this group" />}</div>
+        </details>
       </section>
 
       <section className="panel">
-        <div className="panel-head"><div><h2>Diagnosis</h2><p>Who each issue belongs to. Hypotheses are unproven; a failed check alone does not establish student fault.</p></div></div>
+        <div className="panel-head"><div><h2>{demo ? 'Static / reviewed diagnosis' : 'Diagnosis'}</h2><p>Who each issue belongs to. Hypotheses are unproven; a failed check alone does not establish student fault.</p></div></div>
         {!e.diagnoses.length && <Empty title="No diagnoses" />}
         <div className="stack">
           {owners.filter((o) => e.diagnoses.some((d) => d.owner === o)).map((o) => (
@@ -263,7 +269,7 @@ export default function ExecutionerTab({ vm }: { vm: ViewModel }) {
       <section className="panel">
         <div className="panel-head"><h2>Limitations of this result</h2></div>
         <ul className="small" style={{ margin: 0, paddingLeft: 18 }}>
-          {e.limitations.map((l) => <li key={l}>{LIMIT_TEXT[l] ?? humanize(l)}</li>)}
+          {e.limitations.map((l) => <li key={l}>{demo && l === 'FUNCTIONAL_BEHAVIOR_NOT_EXECUTED' ? 'Legacy reviewed matrix has no executed functional tests; see automatic evidence separately.' : LIMIT_TEXT[l] ?? humanize(l)}</li>)}
           {e.reviewRequests.map((r: any, i: number) => <li key={'r' + i}>Operator review requested: {humanize(r.type)} ({humanize(r.stage)})</li>)}
           {card.limitations.map((l, i) => <li key={'c' + i}>{l}</li>)}
         </ul>
