@@ -32,3 +32,4 @@ data/cache/
 
 # Local VM execution configuration
 vm_config.json
+phase8f_demo_assets.local.json
