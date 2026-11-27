@@ -5,6 +5,7 @@
 import type { AgentCard, AgentName, EvaluationRecord, Evidence, Rubric } from '../api/types';
 import { recompute, type Recomputed } from './scoring';
 import { DIAG_CATEGORY } from './labels';
+import { functionalEvidence, reviewedDiagnosis, type FunctionalEvidence } from './functionalEvidence';
 
 export interface ViewModel {
   rec: EvaluationRecord;
@@ -106,6 +107,7 @@ export interface ExecutionerVM {
   reviewRequests: any[];
   limitations: string[];
   workflow: any[];
+  automatic: FunctionalEvidence | null;
   freshSuites: number;
   reusedSuites: number;
 }
@@ -126,9 +128,10 @@ function executionerVM(card: AgentCard): ExecutionerVM | null {
     category: c.suite, scope: 'REVIEWED_SCENARIO', target: null, outcome: c.outcome, reason: c.reason, suite: c.suite,
     expected: [], observations: c.evidence ?? [], reused: reusedOf(c.suite), related: [],
   }));
-  const diagnoses = (d.diagnostics?.diagnoses ?? []).map((x: any) => ({ ...x, owner: DIAG_CATEGORY[x.category]?.owner ?? 'evidence' }));
+  const automatic = functionalEvidence(d.trusted_demo, card.evidence_check);
+  const diagnoses = (d.diagnostics?.diagnoses ?? []).map((x: any) => ({ ...reviewedDiagnosis(x, automatic), owner: DIAG_CATEGORY[x.category]?.owner ?? 'evidence' }));
   return {
-    card, mode: d.mode, effectiveMode: d.effective_mode, status: card.native_status ?? '', commit: d.source?.commit_sha ?? null,
+    automatic, card, mode: d.mode, effectiveMode: d.effective_mode, status: card.native_status ?? '', commit: d.source?.commit_sha ?? null,
     repository: d.source?.repository ?? null, intelligence: d.project_intelligence ?? {}, plan: d.test_plan ?? {}, planned, reviewed,
     counts: m.counts ?? {}, reviewedCounts: m.reviewed_check_counts ?? {}, suites, quality: d.code_quality ?? null, diagnoses,
     hypotheses: d.diagnostics?.root_cause_hypotheses ?? [], recommendations: d.recommendations ?? [], reviewRequests: d.review_requests ?? [],
@@ -139,7 +142,7 @@ function executionerVM(card: AgentCard): ExecutionerVM | null {
 }
 
 function emptyExec(card: AgentCard): ExecutionerVM {
-  return { card, mode: '', effectiveMode: '', status: card.native_status ?? card.status, commit: null, repository: null, intelligence: {}, plan: {}, planned: [], reviewed: [],
+  return { automatic: null, card, mode: '', effectiveMode: '', status: card.native_status ?? card.status, commit: null, repository: null, intelligence: {}, plan: {}, planned: [], reviewed: [],
     counts: {}, reviewedCounts: {}, suites: [], quality: null, diagnoses: [], hypotheses: [], recommendations: [], reviewRequests: [], limitations: card.limitations, workflow: [], freshSuites: 0, reusedSuites: 0 };
 }
 

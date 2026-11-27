@@ -8,6 +8,7 @@ import { AGENT_INFO, AGE_BAND, CRITERION_STATUS, DIAG_CATEGORY, EVIDENCE_KIND, F
 import { useEvaluation } from '../../lib/useEvaluation';
 import { fmtPoints, pct, type ViewModel } from '../../lib/viewModel';
 import { verifiedFindings } from '../results/SummaryTab';
+import { FunctionalReport } from '../results/FunctionalEvidence';
 import type { AgentName } from '../../api/types';
 
 function Tag({ status }: { status: keyof typeof CRITERION_STATUS }) {
@@ -46,7 +47,7 @@ export default function ReportPage() {
   const critById = new Map(vm.rubric.criteria.map((c) => [c.id, c]));
   const faculty = audience === 'faculty';
   const final = a.status === 'TEACHER_REVIEWED';
-  const ex = vm.executioner; const demo = ex?.card.details.trusted_demo; const rs = vm.research; const ig = vm.integrity;
+  const ex = vm.executioner; const demo = ex?.automatic; const rs = vm.research; const ig = vm.integrity;
   const findings = verifiedFindings(vm);
   const improvements = a.criteria.filter((c) => c.feedback && c.status !== 'EXCLUDED').map((c) => ({ title: c.title, text: c.feedback!.improvement }));
   let n = 0;
@@ -166,13 +167,11 @@ export default function ReportPage() {
             <div className="r-facts">
               <div><b>{demo ? 'TRUSTED_DEMO' : ex.mode}</b><span>Executioner mode{demo ? ' (separate automatic observations)' : ex.effectiveMode !== ex.mode ? ` (${ex.effectiveMode} evidence)` : ''}</span></div>
               <div><b>{ex.intelligence.server_endpoint_count ?? 0}</b><span>Endpoints found</span></div>
-              <div><b>{ex.counts.PASSED ?? 0} / {(ex.counts.PASSED ?? 0) + (ex.counts.FAILED ?? 0)}</b><span>Executed planned tests passed</span></div>
-              <div><b>{ex.counts.NOT_TESTED ?? 0}</b><span>Planned tests not executed</span></div>
-              <div><b>{ex.reviewedCounts.PASSED ?? 0} / {ex.reviewed.length}</b><span>Reviewed scenarios passed</span></div>
+              {demo ? <><div><b>{demo.inventory ? `${demo.inventory.passed}/${demo.inventory.attempted}` : 'Unavailable'}</b><span>Independent checks passed / attempted</span></div><div><b>{demo.inventory ? `${demo.inventory.covered}/${demo.inventory.routes.length}` : 'Unavailable'}</b><span>Unique route cases exercised</span></div><div><b>{demo.inventory?.workflow ? `${demo.inventory.workflow.passed}/${demo.inventory.workflow.attempted}` : 'n/a'}</b><span>Workflow requests passed / attempted</span></div></> : <><div><b>{ex.counts.PASSED ?? 0} / {(ex.counts.PASSED ?? 0) + (ex.counts.FAILED ?? 0)}</b><span>Executed planned tests passed</span></div><div><b>{ex.counts.NOT_TESTED ?? 0}</b><span>Planned tests not executed</span></div><div><b>{ex.reviewedCounts.PASSED ?? 0} / {ex.reviewed.length}</b><span>Reviewed scenarios passed</span></div></>}
               <div><b>{ex.quality?.quality?.score ?? 'Withheld'}</b><span>Maintainability indicator (not a grade)</span></div>
             </div>
-            <p className="r-small">Technologies: {(ex.intelligence.technologies ?? []).map((t: any) => t.name).join(', ')}. Features found in the source: {(ex.intelligence.features ?? []).map((f: any) => f.name).join('; ')}.</p>
-            {demo ? <p className="r-note">Automatic trusted demo: {humanize(demo.status)}. {demo.functional_tests_executed ?? 0} independent tests, {demo.workflow_requests_attempted ?? 0} workflow requests reported. These observations are separate from the original static matrix and are not reviewed grading evidence.</p> : ex.mode === 'STATIC' && <p className="r-note">STATIC mode: no student code was executed. Planned tests are specifications only.</p>}
+            <p className="r-small">Technologies: {(ex.intelligence.technologies ?? []).map((t: any) => t.name).join(', ')}. Feature candidates from source or documentation: {(ex.intelligence.features ?? []).map((f: any) => f.name).join('; ')}.</p>
+            {demo ? <FunctionalReport f={demo} faculty={faculty} /> : ex.mode === 'STATIC' && <p className="r-note">STATIC mode: no student code was executed. Planned tests are specifications only.</p>}
             {[...ex.planned, ...ex.reviewed].some((t) => t.outcome === 'FAILED') && (
               <>
                 <h4>Failed tests</h4>
@@ -204,7 +203,7 @@ export default function ReportPage() {
               </>
             )}
             {faculty && ex.suites.some((s: any) => !s.vm_verified) && <p className="r-small">Not executed because of the evaluation environment: {ex.suites.filter((s: any) => !s.vm_verified).map((s: any) => `${humanize(s.kind)} (${humanize(s.reason ?? s.result_status)})`).join(', ')}. These are not student defects.</p>}
-            {faculty && <p className="r-small">Untested planned cases: {ex.planned.filter((t) => t.outcome === 'NOT_TESTED').map((t) => `${t.title} (${(TEST_REASON[t.reason] ?? humanize(t.reason)).toLowerCase()})`).join('; ') || 'none'}.</p>}
+            {faculty && <p className="r-small">{demo ? 'Untested legacy reviewed specifications (not automatic coverage)' : 'Untested planned cases'}: {ex.planned.filter((t) => t.outcome === 'NOT_TESTED').map((t) => `${t.title} (${(TEST_REASON[t.reason] ?? humanize(t.reason)).toLowerCase()})`).join('; ') || 'none'}.</p>}
           </Section>
         )}
 

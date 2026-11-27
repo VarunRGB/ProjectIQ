@@ -3,6 +3,7 @@ import type { AgentName } from '../../api/types';
 import { CoverageMeter, GradeHeadline, LedgerBar, SectionRings } from '../../components/Ledger';
 import { Ring, toneFor, toneForRisk } from '../../components/Visuals';
 import { FormatSummary } from './FormatTab';
+import { FunctionalOverview } from './FunctionalEvidence';
 import { AgentStatusBadge, Badge, Callout, ProvenanceBadge, Tip } from '../../components/ui';
 import { AGENT_INFO, humanize } from '../../lib/labels';
 import { pct, type ViewModel } from '../../lib/viewModel';
@@ -18,6 +19,8 @@ export function attentionItems(vm: ViewModel, base: string): AttentionItem[] {
   for (const f of vm.rec.result.agent_failures) out.push({ tone: 'bad', text: `The ${AGENT_INFO[f].name} agent failed. Criteria that need its evidence stay unassessed; nothing is scored as zero.`, to: `${base}/${f === 'summarizer' ? 'summary' : f}`, action: 'See details' });
   if (vm.provenance.acknowledgmentRequired) out.push({ tone: 'bad', text: 'Some imported results are not acknowledged. Their evidence is shown for information only and cannot support marks.', to: `${base}/activity`, action: 'See provenance' });
   const ex = vm.executioner;
+  const auto=ex?.automatic;
+  if (auto && (auto.inventoryIssue || auto.status==='SECURITY_HOLD' || auto.status==='RUNTIME_INCOMPLETE' || auto.inventory?.failed || auto.inventory?.inconclusive || (auto.inventory?.workflow && auto.inventory.workflow.status!=='PASS'))) out.push({tone:'warn',text:'Automatic execution needs review. Inspect the scoped observations or runtime limitation before assigning responsibility.',to:`${base}/executioner`,action:'See automatic evidence'});
   if (ex && ex.counts.FAILED) out.push({ tone: 'bad', text: `${ex.counts.FAILED} planned test${ex.counts.FAILED > 1 ? 's' : ''} failed in a verified run. Check the expectation before attributing the failure to the student.`, to: `${base}/executioner`, action: 'See failed tests' });
   const blocked = ex?.suites.filter((s: any) => !s.vm_verified).length ?? 0;
   if (blocked) out.push({ tone: 'muted', text: `${blocked} test suite${blocked > 1 ? 's' : ''} could not run because of the execution environment. This is not a student defect.`, to: `${base}/executioner`, action: 'See why' });
@@ -34,8 +37,7 @@ function agentFacts(vm: ViewModel, n: AgentName) {
   if (card.status === 'FAILED') return <p className="small c-bad">{card.limitations[0] ?? 'The agent failed.'} {card.error_code && <code>{card.error_code}</code>}</p>;
   if (n === 'executioner' && vm.executioner) {
     const e = vm.executioner;
-    const demo = e.card.details.trusted_demo;
-    if (demo) return <div className="stack"><strong>{humanize(demo.status)}</strong><span className="small muted">Automatic trusted demo · {humanize(demo.selected_path)} · {demo.vm_start_attempts ?? 0} VM starts reported{demo.vm_attempt_count_uncertain ? ' (count uncertain)' : ''}. Functional observations are separate from reviewed grading evidence.</span></div>;
+    if (e.automatic) return <FunctionalOverview f={e.automatic} />;
     const run = (e.counts.PASSED ?? 0) + (e.counts.FAILED ?? 0);
     const rv = e.reviewed.length; const rvPass = e.reviewedCounts.PASSED ?? 0;
     return (

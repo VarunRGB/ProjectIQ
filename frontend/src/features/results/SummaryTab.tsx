@@ -1,5 +1,6 @@
 import { Badge, Callout, Empty, Tip } from '../../components/ui';
 import { RESEARCH_VERIFICATION } from '../../lib/labels';
+import { functionalSummary } from '../../lib/functionalEvidence';
 import type { ViewModel } from '../../lib/viewModel';
 
 export interface VerifiedFinding { tone: 'good' | 'bad' | 'warn' | 'info' | 'muted'; text: string; source: string }
@@ -13,9 +14,10 @@ export function verifiedFindings(vm: ViewModel): VerifiedFinding[] {
     if ((pc.PASSED ?? 0) + (pc.FAILED ?? 0) > 0) out.push({ tone: pc.FAILED ? 'warn' : 'good', text: `${pc.PASSED ?? 0} planned tests passed and ${pc.FAILED ?? 0} failed in verified VM runs.`, source: 'Executioner, verified execution' });
     for (const t of e.planned.filter((x) => x.outcome === 'FAILED')) out.push({ tone: 'bad', text: `Failed: ${t.title}.`, source: `Executioner test ${t.id}` });
     const rp = e.reviewedCounts.PASSED ?? 0;
-    if (rp) out.push({ tone: 'good', text: `${rp} reviewed scenarios passed (authentication, database and workflow checks).`, source: 'Executioner, reviewed scenarios only' });
-    if (e.mode === 'STATIC') out.push({ tone: 'muted', text: 'No behaviour was executed; functional claims in the report are unverified.', source: 'Executioner, STATIC mode' });
-    out.push({ tone: 'info', text: `${e.intelligence.features_discovered ?? 0} features and ${e.intelligence.server_endpoint_count ?? 0} endpoints were found in the source code (recognised, not tested).`, source: 'Executioner, static analysis' });
+    if (rp) out.push({ tone: 'good', text: `${rp} reviewed scenarios passed within their approved scope.`, source: 'Executioner, reviewed scenarios only' });
+    if (e.automatic) out.push({tone:'info',text:functionalSummary(e.automatic),source:'Executioner, automatic source-derived characterization'});
+    else if (e.mode === 'STATIC') out.push({ tone: 'muted', text: 'No behaviour was executed; functional claims in the report are unverified.', source: 'Executioner, STATIC mode' });
+    out.push({ tone: 'info', text: `${e.intelligence.features_discovered ?? 0} feature candidates and ${e.intelligence.server_endpoint_count ?? 0} endpoints were identified from source or documentation (recognised, not verified by this inventory).`, source: 'Executioner, static analysis' });
     const sec = e.quality?.security?.findings?.length ?? 0;
     if (sec) out.push({ tone: 'warn', text: `${sec} possible security issue${sec > 1 ? 's' : ''} flagged in the source (indicators, not confirmed vulnerabilities).`, source: 'Executioner, code quality' });
   }

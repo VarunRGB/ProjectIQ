@@ -1,4 +1,5 @@
 import { Fragment } from 'react';
+import { reviewedCrud } from '../lib/reviewedCrud';
 import type { Evidence, EvidenceDetail } from '../api/types';
 import { EVIDENCE_KIND, humanize, RESEARCH_VERIFICATION, RESEARCH_RELEVANCE } from '../lib/labels';
 import { Badge, OutcomeBadge, ProvenanceBadge, SourceLoc, Tip, More } from './ui';
@@ -30,6 +31,7 @@ export function ObservationTable({ details }: { details: any[] }) {
         const asserts: any[] = o.assertions || o.expected_assertions || [];
         const nums = Object.entries(o).filter(([k, v]) => typeof v !== 'object' && !['pointer', 'suite', 'test_id', 'id', 'result', 'status', 'method', 'path'].includes(k));
         const metrics = Object.entries(o.suite_metrics || {});
+        const crud = reviewedCrud(o);
         return (
           <div key={i} className="sub small">
             <div className="row between">
@@ -45,6 +47,7 @@ export function ObservationTable({ details }: { details: any[] }) {
                 ))}</tbody>
               </table>
             )}
+            {crud.length>0 && <><p className="small muted">Recorded operations within this reviewed scenario; these are not separate test verdicts.</p><div className="table-wrap"><table className="t"><thead><tr><th>Operation</th><th>Recorded observations</th></tr></thead><tbody>{crud.map(g=><tr key={g.label}><td><strong>{g.label}</strong></td><td>{g.metrics.map(m=><div key={m.key}>{humanize(m.key)}: {String(m.value)}</div>)}</td></tr>)}</tbody></table></div></>}
             {(nums.length > 0 || metrics.length > 0) && (
               <dl className="kv" style={{ marginTop: 8 }}>
                 {[...nums, ...metrics].map(([k, v]) => <Fragment key={k}><dt>{humanize(k)}</dt><dd>{String(v)}</dd></Fragment>)}
