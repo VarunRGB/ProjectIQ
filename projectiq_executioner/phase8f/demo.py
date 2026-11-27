@@ -16,7 +16,7 @@ from ..phase8c_final.dispatch import write
 from ..phase8d import dispatch as runtime
 from ..phase8d.planner import compile_runtime, SUPPORTED
 from ..phase8d.toolchains import load_node_catalog
-from ..phase8e.audit import audit_runtime, dispatch_read
+from ..phase8e.audit import audit_runtime, dispatch_read, read as audit_read
 from ..phase8e.campaign import assert_no_qemu
 from ..phase2.vm_worker.orchestrator import load_config
 
@@ -60,7 +60,7 @@ def run_demo(url, ref, out, *, trust_demo_source=False, vm_config, component=Non
              all_independent=False, max_vms=1, node_version='v24.22.3', node_catalog=None,
              node_tarball=None, node_sha256=None, pip_wheel=None, pip_sha256=None,
              python_version='3.12.3', allow_inferred=False, enable_optional_toolchains=False,
-             require_bounded_volume=False):
+             require_bounded_volume=False, profile=None, require_unapproved=False, expected_dependency=None):
     """Only a local operator's explicit trust opt-in can invoke this route.
 
     Existing 8D worker performs all execution; no host installation, no changed
@@ -69,6 +69,7 @@ def run_demo(url, ref, out, *, trust_demo_source=False, vm_config, component=Non
     require(trust_demo_source is True, 'EXPLICIT_DEMO_TRUST_REQUIRED')
     require(type(max_vms) is int and 1 <= max_vms <= 4, 'VM_BUDGET_INVALID')
     require(not (node_catalog and (node_tarball or node_sha256)), 'CHOOSE_NODE_ASSET_OR_CATALOG')
+    require(expected_dependency in (None,'NPM','PYTHON','NONE'),'DEMO_EXPECTED_DEPENDENCY_INVALID')
     req = validate_request({'submission_id':'PHASE8F-DEMO','repository_url':url,'ref':ref,'mode':'STATIC','max_vm_launches':0})
     vm_config = Path(vm_config).absolute()
     out = runtime.fresh(out)
@@ -84,10 +85,22 @@ def run_demo(url, ref, out, *, trust_demo_source=False, vm_config, component=Non
                              'Smoke readiness is not functional correctness; multi-component runs are independent.']}
     before = None
     temp_path = None
+    profile_path = None
+    profile_receipt = None
     try:
         before = checked_file(vm_config,100_000)
         load_config(vm_config)
         require(checked_file(vm_config,100_000)==before,'CONFIG_CHANGED')
+        from .profile import NAME, load_profile
+        explicit_assets=any(v is not None for v in (node_catalog,node_tarball,node_sha256,pip_wheel,pip_sha256))
+        require(not (profile is not None and explicit_assets),'DEMO_ASSET_PROFILE_CONFLICT')
+        default_profile=vm_config.parent/NAME
+        if profile is not None or (not explicit_assets and (default_profile.exists() or default_profile.is_symlink())):
+            profile_path=Path(profile).absolute() if profile is not None else default_profile
+            asset_options,profile_receipt=load_profile(profile_path)
+            node_tarball=asset_options['node_tarball'];node_sha256=asset_options['node_sha256']
+            pip_wheel=asset_options['pip_wheel'];pip_sha256=asset_options['pip_sha256']
+            result['asset_profile_sha256']=profile_receipt['sha256']
         assets = load_node_catalog(node_catalog) if node_catalog else {}
         result['stage']='COMPATIBILITY_PREFLIGHT'
         opts = dict(node_version=node_version,python_version=python_version,allow_inferred=allow_inferred)
@@ -101,6 +114,10 @@ def run_demo(url, ref, out, *, trust_demo_source=False, vm_config, component=Non
         require(plan['snapshot_inspection']['issues']==[],'SOURCE_SCAN_INCOMPLETE')
         rows=runtime.select_components(plan,component,all_independent)
         result['selected_components']=[{'id':r['id'],'root':r['root'],'adapter':r['adapter'],'blockers':r['blockers']} for r in rows]
+        from ..phase8c_final.dispatch import source_approved
+        result['original_exact_sha_approved']=source_approved(source,vm_config)
+        require(not require_unapproved or not result['original_exact_sha_approved'],'DEMO_SOURCE_ALREADY_APPROVED')
+        require(expected_dependency is None or (len(rows)==1 and rows[0]['dependency']['kind']==expected_dependency),'DEMO_DEPENDENCY_EXPECTATION_MISMATCH')
         require(len(rows)<=max_vms,'VM_BUDGET_EXCEEDED')
         require(all(r['status']=='REVIEWED_CANDIDATE' and r['permission'] is False and not r['blockers'] and r['adapter'] in SUPPORTED and r['dependency']['kind'] in {'NONE','NPM','PYTHON'} for r in rows),'SELECTED_COMPONENT_BLOCKED')
         require(enable_optional_toolchains or not any(r['optional_toolchain'] for r in rows),'OPTIONAL_TOOLCHAIN_OPT_IN_REQUIRED')
@@ -108,12 +125,14 @@ def run_demo(url, ref, out, *, trust_demo_source=False, vm_config, component=Non
         _check_assets(rows,assets=assets,node_version=node_version,node_tarball=node_tarball,node_sha256=node_sha256,pip_wheel=pip_wheel,pip_sha256=pip_sha256)
         result['stage']='WORKER_IDLE_PREFLIGHT'
         assert_no_qemu()
+        if profile_receipt:require(checked_file(profile_path,16_384)==profile_receipt,'DEMO_ASSET_PROFILE_CHANGED')
         result['stage']='DEMO_APPROVAL'
         with temporary_approval(vm_config,before,source) as (temp,receipt):
             temp_path=temp
             result['temporary_approval_cleanup']='PENDING'
             for row in rows:
                 require(checked_file(vm_config,100_000)==before and checked_file(temp,100_000)==receipt,'CONFIG_CHANGED')
+                if profile_receipt:require(checked_file(profile_path,16_384)==profile_receipt,'DEMO_ASSET_PROFILE_CHANGED')
                 result['stage']='REVIEWED_DISPATCH'
                 dest=out/row['id']
                 # Any interruption or missing receipt after calling dispatch makes
@@ -132,13 +151,23 @@ def run_demo(url, ref, out, *, trust_demo_source=False, vm_config, component=Non
                         'dispatch_report':row['id']+'/dispatch_result.json','dispatch_sha256':saved['result_sha256']}
                 result['components'].append(record)
                 if saved.get('error_code'):record['error_code']=saved['error_code']
+                if saved['status']!='REVIEWED_COMPONENT_SMOKE_COMPLETE':
+                    # Preserve a verified fixed guest error when the nested receipt exists.
+                    try:
+                        from ..phase8d.guest import ERRORS
+                        refs=saved.get('components',[])
+                        if len(refs)==1 and refs[0].get('id')==row['id'] and refs[0].get('report')==row['id']+'/runtime_result.json':
+                            w=audit_read(dest/row['id']/'runtime_result.json','result_sha256')
+                            if (w.get('result_sha256')==refs[0].get('result_sha256') and w.get('source')==source and w.get('component_id')==row['id'] and w.get('adapter')==row['adapter'] and w.get('status')==refs[0].get('status') and w.get('error_code') in ERRORS):
+                                record['runtime_error_code']=w['error_code']
+                    except (ValueError,OSError,TypeError,KeyError):pass
                 require(saved['status']=='REVIEWED_COMPONENT_SMOKE_COMPLETE','DEMO_RUNTIME_NOT_VERIFIED')
                 record['evidence']=audit_runtime(dest,source,row['root'],row['adapter'],require_artifacts=True)
                 assert_no_qemu()
                 require(checked_file(vm_config,100_000)==before and checked_file(temp,100_000)==receipt,'CONFIG_CHANGED')
         result.update(status='DEMO_REVIEWED_SMOKE_COMPLETE',stage='COMPLETE')
     except (Exception,KeyboardInterrupt) as exc:
-        known={'CONFIG_CHANGED','SOURCE_IDENTITY_MISMATCH','PLAN_CHANGED_OR_BLOCKED','SOURCE_SCAN_INCOMPLETE','VM_BUDGET_EXCEEDED','SELECTED_COMPONENT_BLOCKED','OPTIONAL_TOOLCHAIN_OPT_IN_REQUIRED','NODE_ASSET_MISMATCH','PIP_ASSET_MISMATCH','DEMO_APPROVAL_INVALID','DISPATCH_PLAN_OR_RECEIPT_MISMATCH','DEMO_RUNTIME_NOT_VERIFIED','COMPONENT_SELECTION_NOT_UNIQUE','CHOOSE_COMPONENT_OR_ALL','EXPLICIT_MULTI_COMPONENT_SELECTION_REQUIRED','NO_COMPONENT_SELECTED','WINDOWS_REVIEWED_WORKER_REQUIRED','QEMU_PROCESS_PRESENT_OR_UNVERIFIED'}
+        known={'CONFIG_CHANGED','SOURCE_IDENTITY_MISMATCH','PLAN_CHANGED_OR_BLOCKED','SOURCE_SCAN_INCOMPLETE','VM_BUDGET_EXCEEDED','SELECTED_COMPONENT_BLOCKED','OPTIONAL_TOOLCHAIN_OPT_IN_REQUIRED','NODE_ASSET_MISMATCH','PIP_ASSET_MISMATCH','DEMO_APPROVAL_INVALID','DISPATCH_PLAN_OR_RECEIPT_MISMATCH','DEMO_RUNTIME_NOT_VERIFIED','COMPONENT_SELECTION_NOT_UNIQUE','CHOOSE_COMPONENT_OR_ALL','EXPLICIT_MULTI_COMPONENT_SELECTION_REQUIRED','NO_COMPONENT_SELECTED','WINDOWS_REVIEWED_WORKER_REQUIRED','QEMU_PROCESS_PRESENT_OR_UNVERIFIED','DEMO_ASSET_PROFILE_INVALID','DEMO_ASSET_PROFILE_CHANGED','DEMO_ASSET_HASH_MISMATCH','DEMO_ASSET_PROFILE_CONFLICT','DEMO_SOURCE_ALREADY_APPROVED','DEMO_DEPENDENCY_EXPECTATION_MISMATCH'}
         result['error_code']=str(exc) if type(exc) is ValueError and str(exc) in known else 'DEMO_STAGE_FAILED_OR_INTERRUPTED'
     finally:
         if temp_path is not None:

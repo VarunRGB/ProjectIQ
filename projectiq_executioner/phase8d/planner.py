@@ -65,6 +65,31 @@ def node_entry(files,manifest):
     return candidates[0]
 
 
+
+def infer_node_port(body):
+    """Bounded heuristic; infer literal or uniquely declared constant ports.
+
+    Never execute source or change guest listener/identity validation. Unknown
+    dynamic expressions retain the historical PORT environment fallback.
+    """
+    # Mask comments and quoted text before matching. This is not a JS parser;
+    # template expressions and complex scope resolution are deliberately omitted.
+    token = re.compile(r"//[^\r\n]*|/\*[\s\S]*?\*/|\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`")
+    body = token.sub(lambda m: re.sub(r'[^\r\n]', ' ', m[0]), body)
+    values = set()
+    for m in re.finditer(r'\.listen\s*\(\s*(?:\{\s*port\s*:\s*)?(\d{1,5}|[A-Za-z_$][\w$]*)(?=\s*[,})])',body):
+        arg=m[1]
+        if arg.isdecimal():values.add(int(arg));continue
+        name=re.escape(arg)
+        # A single simple const declaration, preceding the listener; do not
+        # attempt to infer mutable, imported, or multiply declared variables.
+        decls=list(re.finditer(r'(?<![\w$])(?:const|let|var)\s+'+name+r'(?![\w$])',body))
+        if len(decls)!=1 or decls[0].start()>=m.start():continue
+        literal=re.match(r'const\s+'+name+r'\s*=\s*(\d{1,5})\s*(?:;|(?=\r?\n|$))',body[decls[0].start():])
+        if literal:values.add(int(literal[1]))
+    if len(values)>1 or any(not 1024<=v<=65535 for v in values):return 8765,'NODE_LISTEN_PORT_AMBIGUOUS_OR_INVALID'
+    return next(iter(values),8765),None
+
 def _node(files,paths,version,blockers):
     manifest=load_object(files['package.json']) if 'package.json' in files else {}
     if not manifest and 'package.json' in paths:raise ValueError('NODE_MANIFEST_INVALID')
@@ -222,10 +247,8 @@ def compile_runtime(root,*,source=None,node_version='v24.22.3',node_versions=Non
         # Raw source-defined command strings or secrets are not emitted.
         service_port=8765
         if kind=='NODE_HTTP' and entry in files:
-            # Only a unique, literal listen(port) or listen({port: number}) is inferred.
-            literals={int(x) for x in re.findall(r'\.listen\s*\(\s*(?:\{\s*port\s*:\s*)?(\d{1,5})(?=\s*[,})])',files[entry])}
-            if len(literals)>1 or any(not 1024<=v<=65535 for v in literals):blockers.add('NODE_LISTEN_PORT_AMBIGUOUS_OR_INVALID')
-            elif literals:service_port=literals.pop()
+            service_port,port_blocker=infer_node_port(files[entry])
+            if port_blocker:blockers.add(port_blocker)
         row={'service_port':service_port,'id':c['id'],'root':r,'ecosystem':c['ecosystem'],'framework_hints':c['framework_hints'],'adapter':kind,'entrypoint':entry,'application_symbol':var,'probe_path':probe,'dependency':dep,'toolchain':chosen_node if kind and kind.startswith('NODE_') else python_version if kind and kind.startswith('PY_') else 'GUEST_PROVISIONED','optional_toolchain':kind in OPTIONAL,'service_hints':sorted(services),'blockers':sorted(blockers),'status':'BLOCKED' if blockers or not kind else 'REVIEWED_CANDIDATE','permission':False}
         records.append(row);inputs[c['id']]=private
     relation=base['relationship_hypotheses']; composition='SINGLE_COMPONENT' if len(records)==1 else 'INDEPENDENT_COMPONENTS_ONLY_RELATIONSHIPS_UNVERIFIED'

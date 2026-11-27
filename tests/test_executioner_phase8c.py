@@ -120,9 +120,20 @@ def test_assess_directory_cli(tmp_path):
     a=json.loads((out/'admission_assessment.json').read_text());assert a['runtime_permission'] is False
     with pytest.raises(SystemExit):main(['assess','--source-dir',str(src),'--out',str(out)])
 
-def module(monkeypatch,name,**attrs):
-    m=types.ModuleType(name);m.__dict__.update(attrs);monkeypatch.setitem(sys.modules,name,m);return m
+def module(monkeypatch, name, **attrs):
+    import importlib
 
+    m = types.ModuleType(name)
+    m.__dict__.update(attrs)
+
+    parent_name, _, child_name = name.rpartition(".")
+    parent = importlib.import_module(parent_name)
+
+    monkeypatch.setitem(sys.modules, name, m)
+    monkeypatch.setattr(parent, child_name, m, raising=False)
+
+    return m
+    
 @pytest.mark.parametrize('wrong',[False,True])
 def test_pinned_acquisition(monkeypatch,tmp_path,wrong):
     static(tmp_path)

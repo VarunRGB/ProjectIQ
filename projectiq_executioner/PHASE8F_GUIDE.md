@@ -51,3 +51,51 @@ Get-Content "$admitOut\admission_result.json"
 ```
 
 Expected host result is `AUTOMATIC_EXECUTION_NOT_QUALIFIED`, even if every observable prerequisite is positive. MDN should be `CANDIDATE_ONLY` if fresh acquisition and planning match Phase 8E. Both must have `runtime_permission: false`, `automatic_untrusted_execution: false`, `vm_start_attempts: 0`. Exit 0 means diagnostic completed, not authorized. The qualification report does not expose config contents, local paths or account SIDs; it does include disk capacity and config hash. Do not upload private config, tokens, or credentials. A failed/missing observation does not mean an unsafe condition was proven, only that the prerequisite is not established. Non-elevated process token and a separate <=32 GiB volume are observations, not proof of a dedicated host worker or global hard storage bound. Config self-pinned image hash is not publisher provenance. All seven qualification blockers remain open in 8F-A by design. The CLI is an assessment path, not an execution route.
+
+## 8F-C/D — URL-only asset profile and integrated local evaluation
+
+The first live MDN smoke, ordinary exact-SHA refusal and 100 local 8F tests passed before this patch. This patch adds operator-owned asset references, not new authorization or a package downloader. Run from the normal local ProjectIQ terminal. Register the same trusted Node v24.22.3 Linux x64 tarball and pip 25.2 wheel and the **previously verified expected SHA-256 values** used during 8E:
+
+```powershell
+python -m projectiq_executioner.phase8f configure-demo-assets --vm-config vm_config.json --node-tarball $nodeTarball --node-sha256 $nodeSha256 --pip-wheel $pipWheel --pip-sha256 $pipSha256
+```
+
+The command creates `phase8f_demo_assets.local.json` beside the VM configuration. It never changes VM configuration, never overwrites an existing profile, and verifies both asset hashes. Do not commit this local file. Each demo invocation without explicit asset arguments loads the sidecar if present and rechecks it and its assets. An explicit `--profile` cannot be combined with direct asset options. Existing explicit toolchain arguments remain supported. A missing or modified asset blocks profile-backed invocations (including static demos); repair the local profile instead of relaxing validation. The profile supports the existing default Node and pip versions; use the existing explicit catalog arguments for other provisioned Node versions. No repository-controlled path or data grants authorization.
+
+To exercise both code analysis and runtime evidence in one operator invocation:
+
+```powershell
+$demoOut = "outputs\executioner\phase8f_integrated_$(Get-Date -Format yyyyMMdd_HHmmssfff)"
+python -m projectiq_executioner.phase8f demo --repo $repo --trust-demo-source --vm-config vm_config.json --out $demoOut --with-static
+```
+
+`--with-static` calls the existing STATIC orchestrator for the exact commit resolved by the demo, even if the default branch moves. It preserves separate native results and writes `integrated_result.json`, linking byte hashes to `demo/demo_result.json` and `static/executioner_result.json`. Static analysis runs without VM launches; smoke results are not promoted to functional tests or rubric credit. `DEMO_AND_STATIC_COMPLETE` means both reports were accepted with their respective limitations, not full functional or security verification. If runtime is blocked but source is available, static analysis still runs. The main multi-agent collector's STATIC contract is unchanged; the separate local `phase8f.integration.evaluate_trusted_demo` API is available for a future operator-only integration. Never expose trust as a student-controlled request field.
+
+### Remaining live acceptance (C/D)
+
+Use two operator-trusted public repository URLs, one with a valid npm lock and real dependencies, one with supported Python requirements. Choose previously unapproved exact commits. Inspect source and dependencies first. Do not add either to the manual approval list. Omit `--ref` to verify default-branch resolution. Add `--require-unapproved --expected-dependency NPM` or `--require-unapproved --expected-dependency PYTHON` to prevent misleading acceptance. These are optional test assertions, not required in normal demos. Each invocation defaults to one VM and fails closed on blockers; do not automatically retry. If an input is multi-component, explicitly select a component or use the existing independent-run option and budget (the expected-dependency test requires one selected component).
+
+Check both reports: resolved SHA, original approval false, correct dependency kind, one observed VM attempt, verified smoke, unchanged config, removed temporary approval, cleanup, and same source in static report. Capture integrated and native JSON receipts. Ordinary refusal was already established for MDN; no need to repeat that VM or all 8E runs. Production qualification remains deferred. Static planning and smoke success do not establish arbitrary untrusted execution safety.
+
+### 8F-C/D live acceptance repair
+
+The first URL-only Express and Flask runs resolved and temporarily approved their
+pinned commits, acquired packages and launched one VM each. Flask passed HTTP
+readiness; Express declared a constant port 8080 while the planner selected 8765.
+The static bridge incorrectly forwarded normalized resume fields to the STATIC
+validator. The repair preserves raw requests, recognizes simple immutable numeric
+Node listen bindings (not a complete JavaScript parser), and propagates verified
+nested guest error codes where available. Existing admission, listener identity,
+network and cleanup checks are unchanged.
+
+To recover a successful prior demo with missing static evidence without a new VM:
+
+```
+python -m projectiq_executioner.phase8f.recover_static --from-run <prior-run-dir> --out <fresh-output-dir>
+```
+
+Recovery verifies saved report relationships and dependency artifact hashes, uses
+STATIC with zero VM budget against the same pinned source, and writes a separate
+recovery_result.json with a local link and hash of the original integrated report.
+It does not overwrite old receipts, grant admission, or re-execute the application.
+New runtime evidence and full functional correctness are not inferred.
