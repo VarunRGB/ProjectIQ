@@ -1,0 +1,54 @@
+CampusConnect: A Club and Event Management Portal for University Students
+Final Mini-Project Report, Department of Computer Engineering
+
+Abstract
+CampusConnect is a web application that lets university clubs publish events and lets students register for them. The system is built with PHP 8, MySQL 8 and vanilla JavaScript. It replaces the spreadsheet and messaging-group workflow that clubs currently use, which causes duplicate registrations, lost attendance records and missed announcements. The final prototype supports account registration, login, club pages, event creation, event registration with a seat limit, and an administrator dashboard. We tested the main workflows with a written test plan and manual checks.
+
+1. Introduction
+Student clubs at our university organise more than two hundred events every semester. Most clubs announce events in messaging groups and collect registrations in shared spreadsheets. Club coordinators told us that they spend several hours per event reconciling names, removing duplicates and confirming seats. Students told us that they often miss events because announcements are buried in long chat threads. CampusConnect gives clubs one place to publish events and gives students one place to discover and register for them.
+
+2. Problem Statement
+Clubs need a reliable way to publish events, limit registrations to the venue capacity and keep an attendance record. Students need a single, searchable list of upcoming events and a confirmation that their registration was recorded. Faculty advisors need an overview of club activity for the semester report. The current process does not enforce capacity limits, does not prevent duplicate registrations and does not keep a history that can be audited.
+
+3. Objectives
+The objectives of the project are:
+(a) allow students to create an account and log in securely with hashed passwords;
+(b) allow club coordinators to create, edit and cancel events with a seat limit;
+(c) allow students to register for an event only once and only while seats are available;
+(d) give administrators a dashboard with registration counts per club;
+(e) respond to common pages within two seconds on the college network for at least 50 concurrent users.
+We did not include payment for paid events, email notifications or a mobile application in the scope of this project.
+
+4. Literature Review
+Event management systems for universities have been studied from both the usability and the data-management perspectives. Nielsen's heuristics remain a common basis for evaluating such interfaces [1]. Kumar and Singh describe a PHP and MySQL campus event system and report that a relational schema with foreign keys prevented most data-consistency problems that their earlier spreadsheet process had [2]. Rahman et al. compare role-based access control models for small web applications and recommend a simple three-role model for student systems [3]. The OWASP Top Ten lists broken access control and injection as the most common web application risks, and recommends prepared statements and server-side authorization checks [4]. Patel and Joshi studied registration workflows and show that clear confirmation messages reduce duplicate submissions [5]. Recent work on campus engagement platforms by Lee and Park found that a single event calendar increased attendance in their pilot by 18% [6]. We also reviewed the official PHP documentation on password hashing [7] and an article on responsive layout with CSS grid [8]. Our design follows the three-role model from [3] and the prepared-statement guidance from [4].
+
+5. Requirements
+Functional requirements: FR1 registration with name, email and password; FR2 login and logout with a session; FR3 club coordinators can create, edit and cancel events; FR4 students can browse and search upcoming events; FR5 students can register for an event once; FR6 registration is refused when the event is full; FR7 administrators can view registration counts per club. Non-functional requirements: passwords are stored with password_hash, all database queries use prepared statements, and pages render correctly on mobile screens.
+
+6. System Architecture and Design
+CampusConnect follows a three-layer structure. The presentation layer consists of PHP templates in the views folder and a small JavaScript file that handles search and form validation. The application layer consists of controllers in the controllers folder; each controller handles one resource such as auth, clubs or events, and calls the data layer through a shared Database class. The data layer uses MySQL with five tables: users, clubs, club_members, events and registrations. The registrations table references users and events through foreign keys, and a unique key on (user_id, event_id) prevents duplicate registrations at the database level. The events table stores a capacity column, and the registration controller checks the current count inside a transaction before inserting a row. Roles are stored in the users table as student, coordinator or admin, and every controller action checks the role in the session before it runs.
+
+7. Implementation
+The backend is written in PHP 8.1 without a framework. We wrote a small router in index.php that maps paths such as /events, /events/create and /events/register to controller methods. The Database class wraps PDO and exposes query helpers that always use prepared statements. Passwords are hashed with password_hash and verified with password_verify. The event registration flow starts a transaction, counts existing registrations for the event, compares the count with the capacity and inserts the registration only if a seat is available. The administrator dashboard runs one grouped query to count registrations per club. The frontend uses plain CSS with a grid layout and one JavaScript file for client-side search. The source code is organised in the controllers, models, views and public folders, with the database schema in database/schema.sql and sample data in database/seed.sql.
+
+8. Testing
+We prepared a test plan with 14 test cases covering the main workflows. Each test case lists the steps, the input data and the expected result. Examples include: registering a new account with valid details should create a user and redirect to the dashboard; registering with an email that already exists should be rejected with an error message; logging in with a wrong password should be rejected; an unauthenticated user who opens /events/create should be redirected to the login page; a student who registers for the same event twice should see an already-registered message and no second row should be stored; registering for a full event should be rejected and the registration count should not change; a coordinator should be able to edit an event and the change should appear on the event page. We executed these test cases manually on a local XAMPP installation and recorded the results in a table. Twelve of the fourteen cases passed. Two cases failed in our final run: the edit-event form accepted an end time earlier than the start time, and the search box did not match club names with capital letters. We did not write automated unit tests, and performance testing with 50 concurrent users was not performed.
+
+9. Results
+The prototype supports all seven functional requirements. In our manual tests, the duplicate registration and full-event checks worked as expected. A pilot with two clubs and 37 students registered for four events without any duplicate registrations. Coordinators reported that preparing the attendance list now takes a few minutes instead of an hour.
+
+10. Limitations
+The system has some limitations. The date validation on the edit-event form is incomplete. We have not executed load tests, so the response-time objective is not verified. Email notifications and password reset are outside the scope of this version. Our manual tests were run by the team, and independent verification is required before the system is used by all clubs.
+
+11. Conclusion
+CampusConnect shows that a small PHP and MySQL application can replace the spreadsheet workflow for club events. The database constraints and transaction-based capacity check address the main data-consistency problems that clubs reported. Future work includes fixing the date validation, adding automated tests, adding email notifications and measuring performance under load.
+
+References
+[1] J. Nielsen, "Enhancing the explanatory power of usability heuristics," Proc. ACM CHI Conference on Human Factors in Computing Systems, 1994, pp. 152-158.
+[2] A. Kumar and R. Singh, "Design of a web-based campus event management system using PHP and MySQL," International Journal of Computer Applications, vol. 182, no. 9, 2018.
+[3] M. Rahman, S. Ahmed and T. Islam, "A comparative study of role-based access control models for small web applications," Journal of Information Security and Applications, vol. 61, 2021.
+[4] OWASP Foundation, "OWASP Top Ten 2021," https://owasp.org/Top10/, 2021.
+[5] K. Patel and D. Joshi, "Reducing duplicate submissions in online registration forms," International Journal of Human-Computer Studies, vol. 158, 2022.
+[6] H. Lee and J. Park, "Campus engagement platforms and event attendance: a pilot study," Computers and Education Open, vol. 5, 2023.
+[7] The PHP Group, "Password Hashing," PHP Manual, https://www.php.net/manual/en/book.password.php.
+[8] R. Andrew, "A complete guide to CSS grid," CSS-Tricks, 2024.

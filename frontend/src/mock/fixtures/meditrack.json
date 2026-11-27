@@ -1,0 +1,5448 @@
+{
+ "fixture_kind": "GENERATED_BY_REAL_BACKEND_WITH_SYNTHETIC_NATIVE_OUTPUTS",
+ "scenario": "meditrack",
+ "exit_code": 2,
+ "meta": {
+  "students": [
+   "Kabir Shah",
+   "Isha Joshi"
+  ],
+  "course": "Full Stack Development Lab (CE-3102)",
+  "cohort": "TY B.Tech Computer Engineering, Div B",
+  "submitted_utc": "2026-11-20T08:15:00Z",
+  "evaluated_utc": "2026-11-25T06:31:12Z",
+  "executioner_mode_requested": "STATIC",
+  "references_uploaded": 0,
+  "verify_research": true,
+  "elapsed_seconds": 188.3
+ },
+ "result": {
+  "schema_version": "2E.1",
+  "submission": {
+   "id": "MT-2026-021",
+   "project_title": "MediTrack: Medicine Reminder and Inventory Tracker",
+   "report_name": "meditrack_report.txt",
+   "report_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+   "repository_url": "https://github.com/meditrack-group/meditrack",
+   "requested_ref": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5"
+  },
+  "collection_mode": "LIVE",
+  "agent_actions": {
+   "summarizer": "COLLECTED",
+   "integrity": "COLLECTED",
+   "research": "COLLECTED",
+   "executioner": "COLLECTED"
+  },
+  "agents": {
+   "summarizer": {
+    "agent": "summarizer",
+    "status": "COMPLETED",
+    "native_status": "SUMMARY_GENERATED",
+    "metrics": [
+     {
+      "id": "word_count",
+      "label": "Report words",
+      "value": 516,
+      "unit": "count",
+      "scope": "Whitespace-delimited extracted report text"
+     }
+    ],
+    "details": {
+     "result_kind": "SUMMARY_ONLY",
+     "summary": {
+      "summary": "MediTrack is a Flask web application that helps small clinics track medicine stock and remind patients about their doses. The objectives are to record medicines and batches with expiry dates, to show a dashboard of low stock and soon-to-expire batches, to let staff create dose schedules for patients and to show a daily reminder list. The application has three blueprints: inventory, patients and reminders.",
+      "key_points": [
+       "We used Flask with SQLAlchemy for the models and WTForms for form validation.",
+       "Creating a schedule for a patient who does not exist should be rejected.",
+       "The system has not been tested with real clinic data.",
+       "MediTrack replaces the paper register for stock and expiry tracking and gives staff a daily reminder list."
+      ]
+     },
+     "model": "grounded-extractive-L1",
+     "word_count": 516,
+     "chunks": 1,
+     "elapsed_s": 0.001,
+     "summary_display_method": "EXTRACTIVE_REPORT_CLAIMS",
+     "summary_display_policy": "L2",
+     "collection_model": "grounded-extractive-L1",
+     "collection_elapsed_s": 0.001
+    },
+    "limitations": [
+     "Summary-only overview; report claims are not independently verified and never contribute to the project grade. A missing historical summary is unavailable until separately collected."
+    ],
+    "error_code": null,
+    "ai_detection": null,
+    "evidence_check": "MATCHED",
+    "receipt_provenance": "NATIVE_RECEIPT_MATCHED"
+   },
+   "integrity": {
+    "agent": "integrity",
+    "status": "PARTIAL",
+    "native_status": "SIMILARITY_REPORT_GENERATED",
+    "metrics": [
+     {
+      "id": "reference_overlap",
+      "label": "Reference overlap",
+      "value": null,
+      "unit": "percent",
+      "scope": "Checked words; supplied references only"
+     },
+     {
+      "id": "copied_chunks",
+      "label": "Words in copied chunks",
+      "value": null,
+      "unit": "percent",
+      "scope": "Checked words"
+     },
+     {
+      "id": "references_compared",
+      "label": "References compared",
+      "value": 0,
+      "unit": "count",
+      "scope": "Supplied readable references"
+     }
+    ],
+    "details": {
+     "references": [],
+     "sentences_checked": 0,
+     "words_checked": 0,
+     "percent_by_category": {
+      "verbatim": null,
+      "near-verbatim": null,
+      "paraphrase": null,
+      "similar meaning (not confirmed)": null
+     },
+     "percent_by_reference": {},
+     "chunks": [],
+     "matches": [],
+     "backends": {
+      "embeddings": "not run",
+      "nli": "not run",
+      "secondary_nli": "not run"
+     },
+     "notes": [
+      "No readable reference documents in empty_reference_corpus.",
+      "Percentages are shares of the document's words (quoted text and the reference list excluded). They measure overlap for review, not misconduct.",
+      "Reference comparison unavailable: no usable corpus or comparison denominator."
+     ],
+     "ai_findings": [],
+     "ai_notes": [
+      "AI-percentage model not found: models/ai-text-detector-v1.01. Run: python scripts/setup_offline.py"
+     ]
+    },
+    "limitations": [
+     "Similarity is overlap with supplied references, not a plagiarism verdict.",
+     "AI indicators are advisory, not proof of authorship or grounds for automatic deductions.",
+     "No usable reference comparison denominator; overlap withheld."
+    ],
+    "error_code": null,
+    "ai_detection": {
+     "status": "NOT_AVAILABLE",
+     "estimated_percent": null,
+     "interpretation": null,
+     "confidence": null,
+     "flagged_passages": [],
+     "limitations": [
+      "AI-percentage model not found: models/ai-text-detector-v1.01. Run: python scripts/setup_offline.py"
+     ]
+    },
+    "evidence_check": "MATCHED",
+    "receipt_provenance": "NATIVE_RECEIPT_MATCHED"
+   },
+   "research": {
+    "agent": "research",
+    "status": "FAILED",
+    "native_status": null,
+    "metrics": [],
+    "details": {},
+    "limitations": [
+     "Agent result unavailable or incompatible; inspect locally."
+    ],
+    "error_code": "RuntimeError",
+    "ai_detection": null,
+    "evidence_check": "FAILED",
+    "receipt_provenance": null,
+    "required_by_rubric": true
+   },
+   "executioner": {
+    "agent": "executioner",
+    "status": "PARTIAL",
+    "native_status": "COMPLETED_WITH_LIMITATIONS",
+    "metrics": [
+     {
+      "id": "server_endpoints",
+      "label": "Server endpoint records",
+      "value": 9,
+      "unit": "count",
+      "scope": "Static server path/method records"
+     },
+     {
+      "id": "vm_suites_verified",
+      "label": "VM suites verified",
+      "value": 0,
+      "unit": "count",
+      "scope": "Native result reports verified execution and cleanup"
+     },
+     {
+      "id": "vm_suites_passed",
+      "label": "Verified suites passed",
+      "value": 0,
+      "unit": "count",
+      "scope": "Selected reviewed suites only"
+     },
+     {
+      "id": "reviewed_passes",
+      "label": "Reviewed scenarios passed",
+      "value": 0,
+      "unit": "count",
+      "scope": "Separate from whole-route coverage"
+     },
+     {
+      "id": "planned_passes",
+      "label": "Exact planned passes",
+      "value": 0,
+      "unit": "count",
+      "scope": "Original planned test specifications"
+     },
+     {
+      "id": "maintainability",
+      "label": "Maintainability indicator",
+      "value": 81,
+      "unit": "out_of_100",
+      "scope": "Provisional indicator; not a grade"
+     }
+    ],
+    "details": {
+     "source": {
+      "kind": "github",
+      "repository": "meditrack-group/meditrack",
+      "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5"
+     },
+     "mode": "STATIC",
+     "effective_mode": "STATIC",
+     "security_attestation": "NOT_ATTESTED_FOR_UNTRUSTED_STUDENTS",
+     "workflow": [
+      {
+       "stage": "source_pinning",
+       "status": "PASS",
+       "reason": null
+      },
+      {
+       "stage": "project_intelligence",
+       "status": "PASS",
+       "reason": null
+      },
+      {
+       "stage": "runtime_planning",
+       "status": "PASS",
+       "reason": null
+      },
+      {
+       "stage": "test_planning",
+       "status": "PASS",
+       "reason": "ORACLES_PARTIAL"
+      },
+      {
+       "stage": "static_quality",
+       "status": "PASS",
+       "reason": null
+      },
+      {
+       "stage": "functional_testing",
+       "status": "SKIPPED",
+       "reason": "STATIC_MODE_NO_VM"
+      },
+      {
+       "stage": "failure_diagnosis",
+       "status": "PASS",
+       "reason": null
+      }
+     ],
+     "project_intelligence": {
+      "project_name": "meditrack",
+      "architecture": "python_web_application",
+      "architecture_confidence": "HIGH",
+      "languages": {
+       "Python": 1180,
+       "HTML": 640,
+       "CSS": 120
+      },
+      "technologies": [
+       {
+        "name": "Flask",
+        "category": "web_framework",
+        "confidence": "HIGH"
+       },
+       {
+        "name": "SQLAlchemy",
+        "category": "orm",
+        "confidence": "HIGH"
+       },
+       {
+        "name": "SQLite",
+        "category": "database",
+        "confidence": "HIGH"
+       },
+       {
+        "name": "WTForms",
+        "category": "validation",
+        "confidence": "HIGH"
+       },
+       {
+        "name": "Bootstrap 5",
+        "category": "frontend",
+        "confidence": "MEDIUM"
+       },
+       {
+        "name": "Twilio SDK",
+        "category": "external_service",
+        "confidence": "LOW"
+       }
+      ],
+      "services": [
+       {
+        "name": "web",
+        "kind": "http_server",
+        "technology": "Flask",
+        "root": ".",
+        "confidence": "HIGH"
+       }
+      ],
+      "routes_discovered": 11,
+      "features_discovered": 5,
+      "features": [
+       {
+        "name": "Medicine and batch inventory",
+        "origin": "source",
+        "confidence": "HIGH"
+       },
+       {
+        "name": "Expiry dashboard",
+        "origin": "source",
+        "confidence": "HIGH"
+       },
+       {
+        "name": "Patient dose schedules",
+        "origin": "source",
+        "confidence": "HIGH"
+       },
+       {
+        "name": "Daily reminder list",
+        "origin": "source",
+        "confidence": "MEDIUM"
+       },
+       {
+        "name": "SMS reminders",
+        "origin": "readme",
+        "confidence": "LOW"
+       }
+      ],
+      "existing_tests": 0,
+      "test_artifacts": [],
+      "setup_files": [
+       "requirements.txt",
+       "run.py"
+      ],
+      "database_schema_files": [],
+      "environment_variable_names": [
+       "FLASK_SECRET_KEY"
+      ],
+      "inventory": {
+       "indexed_files": 34,
+       "file_role_counts": {
+        "source": 14,
+        "template": 12,
+        "asset": 4,
+        "config": 2,
+        "docs": 2
+       }
+      },
+      "findings": [
+       {
+        "code": "NO_AUTOMATED_TESTS",
+        "severity": "LOW",
+        "message": "No automated test files were detected in the repository.",
+        "evidence": []
+       },
+       {
+        "code": "EXTERNAL_SERVICE_SDK",
+        "severity": "INFO",
+        "message": "An SMS provider SDK is referenced; external services are not executed.",
+        "evidence": [
+         {
+          "path": "requirements.txt",
+          "line": 7
+         }
+        ]
+       }
+      ],
+      "unknowns": [],
+      "route_records": 11,
+      "server_endpoint_count": 9,
+      "client_route_records": 2,
+      "server_endpoints": [
+       {
+        "path": "/",
+        "method": "GET",
+        "kind": "decorator_route",
+        "confidence": "HIGH",
+        "client_methods": [],
+        "method_basis": "STATIC_SERVER_OBSERVATION",
+        "client_references": 0,
+        "intended_method": "GET",
+        "evidence": [
+         {
+          "path": "app/main/routes.py",
+          "line": 10
+         }
+        ]
+       },
+       {
+        "path": "/login",
+        "method": "POST",
+        "kind": "decorator_route",
+        "confidence": "HIGH",
+        "client_methods": [],
+        "method_basis": "STATIC_SERVER_OBSERVATION",
+        "client_references": 0,
+        "intended_method": "POST",
+        "evidence": [
+         {
+          "path": "app/login/routes.py",
+          "line": 16
+         }
+        ]
+       },
+       {
+        "path": "/inventory/dashboard",
+        "method": "GET",
+        "kind": "decorator_route",
+        "confidence": "HIGH",
+        "client_methods": [],
+        "method_basis": "STATIC_SERVER_OBSERVATION",
+        "client_references": 0,
+        "intended_method": "GET",
+        "evidence": [
+         {
+          "path": "app/inventory/routes.py",
+          "line": 22
+         }
+        ]
+       },
+       {
+        "path": "/inventory/add",
+        "method": "POST",
+        "kind": "decorator_route",
+        "confidence": "HIGH",
+        "client_methods": [],
+        "method_basis": "STATIC_SERVER_OBSERVATION",
+        "client_references": 0,
+        "intended_method": "POST",
+        "evidence": [
+         {
+          "path": "app/inventory/routes.py",
+          "line": 28
+         }
+        ]
+       },
+       {
+        "path": "/inventory/batch/<int:id>",
+        "method": "GET",
+        "kind": "decorator_route",
+        "confidence": "HIGH",
+        "client_methods": [],
+        "method_basis": "STATIC_SERVER_OBSERVATION",
+        "client_references": 0,
+        "intended_method": "GET",
+        "evidence": [
+         {
+          "path": "app/inventory/routes.py",
+          "line": 34
+         }
+        ]
+       },
+       {
+        "path": "/patients",
+        "method": "GET",
+        "kind": "decorator_route",
+        "confidence": "HIGH",
+        "client_methods": [],
+        "method_basis": "STATIC_SERVER_OBSERVATION",
+        "client_references": 0,
+        "intended_method": "GET",
+        "evidence": [
+         {
+          "path": "app/patients/routes.py",
+          "line": 40
+         }
+        ]
+       },
+       {
+        "path": "/patients/schedule",
+        "method": "POST",
+        "kind": "decorator_route",
+        "confidence": "HIGH",
+        "client_methods": [],
+        "method_basis": "STATIC_SERVER_OBSERVATION",
+        "client_references": 0,
+        "intended_method": "POST",
+        "evidence": [
+         {
+          "path": "app/patients/routes.py",
+          "line": 46
+         }
+        ]
+       },
+       {
+        "path": "/reminders/today",
+        "method": "GET",
+        "kind": "decorator_route",
+        "confidence": "HIGH",
+        "client_methods": [],
+        "method_basis": "STATIC_SERVER_OBSERVATION",
+        "client_references": 0,
+        "intended_method": "GET",
+        "evidence": [
+         {
+          "path": "app/reminders/routes.py",
+          "line": 52
+         }
+        ]
+       },
+       {
+        "path": "/reminders/send",
+        "method": "POST",
+        "kind": "decorator_route",
+        "confidence": "HIGH",
+        "client_methods": [],
+        "method_basis": "STATIC_SERVER_OBSERVATION",
+        "client_references": 0,
+        "intended_method": "POST",
+        "evidence": [
+         {
+          "path": "app/reminders/routes.py",
+          "line": 58
+         }
+        ]
+       }
+      ],
+      "count_scope": "UNIQUE_STATIC_SERVER_PATH_METHOD_RECORDS_NOT_VERIFIED_URLS",
+      "overview": "Static inspection suggests a python_web_application project using Flask, SQLAlchemy, SQLite, WTForms, Bootstrap 5, Twilio SDK. Identified feature candidates: Medicine and batch inventory, Expiry dashboard, Patient dose schedules, Daily reminder list, SMS reminders. These are source-derived observations, not verified user-visible behavior."
+     },
+     "runtime_plan": {
+      "adapter": "python_web_offline_v1",
+      "status": "CANDIDATE_NEEDS_VM_VERIFICATION",
+      "capability_status": "SUPPORTED_SHAPE",
+      "execution_authorized": "NOT_BY_PLANNING"
+     },
+     "test_plan": {
+      "status": "PLANNED_WITH_GAPS",
+      "summary": {
+       "total": 6,
+       "ready_for_phase4": 2,
+       "needs_oracle": 3,
+       "unsupported_by_runner": 1
+      },
+      "issues": [
+       "ORACLE_REQUIRED_FOR_STATE_CHANGING_ROUTES"
+      ],
+      "cases": [
+       {
+        "id": "T-00A1F3C2",
+        "category": "HTTP_READINESS",
+        "title": "Flask application serves GET /",
+        "status": "READY_FOR_PHASE4",
+        "target": {
+         "method": "GET",
+         "path": "/"
+        },
+        "oracle": "ADAPTER_READINESS",
+        "assertions": [
+         {
+          "kind": "status_code",
+          "operator": "equals",
+          "expected": 200
+         }
+        ]
+       },
+       {
+        "id": "T-00A1F3C9",
+        "category": "HTTP_ROUTE",
+        "title": "Inventory dashboard lists expiring batches",
+        "status": "NEEDS_ORACLE",
+        "target": {
+         "method": "GET",
+         "path": "/inventory/dashboard"
+        },
+        "oracle": null,
+        "assertions": []
+       },
+       {
+        "id": "T-00A1F3D0",
+        "category": "HTTP_ROUTE",
+        "title": "Add medicine rejects negative quantity",
+        "status": "NEEDS_ORACLE",
+        "target": {
+         "method": "POST",
+         "path": "/inventory/add"
+        },
+        "oracle": null,
+        "assertions": []
+       },
+       {
+        "id": "T-00A1F3D7",
+        "category": "HTTP_ROUTE",
+        "title": "Create schedule for unknown patient is rejected",
+        "status": "NEEDS_ORACLE",
+        "target": {
+         "method": "POST",
+         "path": "/patients/schedule"
+        },
+        "oracle": null,
+        "assertions": []
+       },
+       {
+        "id": "T-00A1F3DE",
+        "category": "HTTP_ROUTE",
+        "title": "Daily reminders page renders",
+        "status": "READY_FOR_PHASE4",
+        "target": {
+         "method": "GET",
+         "path": "/reminders/today"
+        },
+        "oracle": "REVIEWED_CATALOG",
+        "assertions": [
+         {
+          "kind": "status_code",
+          "operator": "equals",
+          "expected": 200
+         }
+        ]
+       },
+       {
+        "id": "T-00A1F3E5",
+        "category": "SMS",
+        "title": "SMS reminder delivery",
+        "status": "UNSUPPORTED_BY_RUNNER",
+        "target": {
+         "method": "POST",
+         "path": "/reminders/send"
+        },
+        "oracle": null,
+        "assertions": []
+       }
+      ],
+      "trust": "TEST_SPECIFICATIONS_NOT_EXECUTION",
+      "review_candidates": []
+     },
+     "test_case_matrix": {
+      "schema_version": "0.1",
+      "discovered_cases": [
+       {
+        "test_id": "T-00A1F3C2",
+        "title": "Flask application serves GET /",
+        "category": "HTTP_READINESS",
+        "target": {
+         "method": "GET",
+         "path": "/"
+        },
+        "planning_status": "READY_FOR_PHASE4",
+        "expected_assertions": [
+         {
+          "kind": "status_code",
+          "operator": "equals",
+          "expected": 200
+         }
+        ],
+        "outcome": "NOT_TESTED",
+        "reason": "STATIC_MODE_NO_EXECUTION",
+        "evidence": [],
+        "related_reviewed_checks": [],
+        "scope": "PHASE3_DISCOVERED_CASE"
+       },
+       {
+        "test_id": "T-00A1F3C9",
+        "title": "Inventory dashboard lists expiring batches",
+        "category": "HTTP_ROUTE",
+        "target": {
+         "method": "GET",
+         "path": "/inventory/dashboard"
+        },
+        "planning_status": "NEEDS_ORACLE",
+        "expected_assertions": [],
+        "outcome": "NOT_TESTED",
+        "reason": "REVIEWED_ORACLE_MISSING",
+        "evidence": [],
+        "related_reviewed_checks": [],
+        "scope": "PHASE3_DISCOVERED_CASE"
+       },
+       {
+        "test_id": "T-00A1F3D0",
+        "title": "Add medicine rejects negative quantity",
+        "category": "HTTP_ROUTE",
+        "target": {
+         "method": "POST",
+         "path": "/inventory/add"
+        },
+        "planning_status": "NEEDS_ORACLE",
+        "expected_assertions": [],
+        "outcome": "NOT_TESTED",
+        "reason": "REVIEWED_ORACLE_MISSING",
+        "evidence": [],
+        "related_reviewed_checks": [],
+        "scope": "PHASE3_DISCOVERED_CASE"
+       },
+       {
+        "test_id": "T-00A1F3D7",
+        "title": "Create schedule for unknown patient is rejected",
+        "category": "HTTP_ROUTE",
+        "target": {
+         "method": "POST",
+         "path": "/patients/schedule"
+        },
+        "planning_status": "NEEDS_ORACLE",
+        "expected_assertions": [],
+        "outcome": "NOT_TESTED",
+        "reason": "REVIEWED_ORACLE_MISSING",
+        "evidence": [],
+        "related_reviewed_checks": [],
+        "scope": "PHASE3_DISCOVERED_CASE"
+       },
+       {
+        "test_id": "T-00A1F3DE",
+        "title": "Daily reminders page renders",
+        "category": "HTTP_ROUTE",
+        "target": {
+         "method": "GET",
+         "path": "/reminders/today"
+        },
+        "planning_status": "READY_FOR_PHASE4",
+        "expected_assertions": [
+         {
+          "kind": "status_code",
+          "operator": "equals",
+          "expected": 200
+         }
+        ],
+        "outcome": "NOT_TESTED",
+        "reason": "STATIC_MODE_NO_EXECUTION",
+        "evidence": [],
+        "related_reviewed_checks": [],
+        "scope": "PHASE3_DISCOVERED_CASE"
+       },
+       {
+        "test_id": "T-00A1F3E5",
+        "title": "SMS reminder delivery",
+        "category": "SMS",
+        "target": {
+         "method": "POST",
+         "path": "/reminders/send"
+        },
+        "planning_status": "UNSUPPORTED_BY_RUNNER",
+        "expected_assertions": [],
+        "outcome": "NOT_TESTED",
+        "reason": "UNSUPPORTED_TEST_TARGET",
+        "evidence": [],
+        "related_reviewed_checks": [],
+        "scope": "PHASE3_DISCOVERED_CASE"
+       }
+      ],
+      "reviewed_only_checks": [],
+      "counts": {
+       "PASSED": 0,
+       "FAILED": 0,
+       "INCONCLUSIVE": 0,
+       "BLOCKED": 0,
+       "NOT_TESTED": 6
+      },
+      "reviewed_check_counts": {
+       "PASSED": 0,
+       "FAILED": 0,
+       "INCONCLUSIVE": 0,
+       "BLOCKED": 0,
+       "NOT_TESTED": 0
+      },
+      "reviewed_checks_truncated": 0,
+      "limitations": [
+       "A readiness PASS verifies only its explicit readiness assertion.",
+       "NOT_TESTED is not a failing grade; BLOCKED is not a student defect.",
+       "Reviewed checks may have approved scenario associations; only exact matching test IDs establish planned-case assertion outcomes.",
+       "Only independently VM-verified, saved observations can establish an executed test outcome.",
+       "An approved test oracle may still be incorrect; failed assertions do not establish student fault."
+      ]
+     },
+     "suites": [],
+     "code_quality": {
+      "status": "ANALYZED",
+      "summary": {
+       "indexed_files": 34,
+       "source_candidates": 14,
+       "production_files": 14,
+       "test_files": 0,
+       "production_code_lines": 1180,
+       "test_code_lines": 0,
+       "analyzed_files": 14,
+       "source_lines": 1490,
+       "blank_lines": 190,
+       "comment_lines": 120,
+       "code_lines": 1180,
+       "functions_found": 52,
+       "findings": 4,
+       "duplicate_groups": 0
+      },
+      "coverage": {
+       "supported_files": 14,
+       "unsupported_files": 0,
+       "skipped_files": 0,
+       "limited_function_files": 0,
+       "source_ratio": 1.0,
+       "function_analysis_scope": "AST_AND_HEURISTIC",
+       "function_file_ratio": 1.0,
+       "function_body_ratio": 0.91,
+       "ast_complexity_share": 1.0,
+       "duplicate_production_lines": 0,
+       "duplicate_production_ratio": 0.0
+      },
+      "quality": {
+       "status": "PROVISIONAL",
+       "score": 81,
+       "dimensions": {
+        "lint": 86,
+        "complexity": 74,
+        "duplication": 100,
+        "structure": 68
+       },
+       "basis": "HEURISTIC_NOT_A_GRADE",
+       "reason_codes": [],
+       "scoring_version": "0.3",
+       "weights_used": {
+        "lint": 0.3,
+        "complexity": 0.3,
+        "duplication": 0.2,
+        "structure": 0.2
+       },
+       "confidence": "MEDIUM"
+      },
+      "security": {
+       "status": "INDICATORS_FOUND",
+       "findings": [
+        {
+         "code": "SEC_DB_LITERAL_CONFIG",
+         "severity": "HIGH",
+         "path": "config.py",
+         "line": 6,
+         "confidence": "MEDIUM",
+         "category": "SECURITY",
+         "message": "A literal credential-like value is assigned in configuration (value not shown).",
+         "recommendation": "Move the staff password to an environment variable and rotate it if it was ever real."
+        }
+       ]
+      },
+      "findings": [
+       {
+        "code": "SEC_DB_LITERAL_CONFIG",
+        "severity": "HIGH",
+        "path": "config.py",
+        "line": 6,
+        "confidence": "MEDIUM",
+        "category": "SECURITY",
+        "message": "A literal credential-like value is assigned in configuration (value not shown).",
+        "recommendation": "Move the staff password to an environment variable and rotate it if it was ever real."
+       },
+       {
+        "code": "PY_BARE_EXCEPT",
+        "severity": "MEDIUM",
+        "path": "app/inventory/routes.py",
+        "line": 47,
+        "confidence": "HIGH",
+        "category": "LINT",
+        "message": "Bare except catches every exception, including programming errors.",
+        "recommendation": "Catch the specific database or validation exception."
+       },
+       {
+        "code": "HIGH_CYCLOMATIC",
+        "severity": "MEDIUM",
+        "path": "app/reminders/service.py",
+        "line": 12,
+        "confidence": "HIGH",
+        "category": "STRUCTURE",
+        "message": "build_due_list() has cyclomatic complexity 14.",
+        "recommendation": "Separate date filtering from formatting."
+       },
+       {
+        "code": "PY_NONE_COMPARISON",
+        "severity": "LOW",
+        "path": "app/patients/routes.py",
+        "line": 33,
+        "confidence": "HIGH",
+        "category": "LINT",
+        "message": "Comparison to None uses == instead of is.",
+        "recommendation": "Use \"is None\"."
+       }
+      ],
+      "functions": [],
+      "duplications": [],
+      "limitations": [
+       "Static findings are indicators for review, not confirmed defects."
+      ],
+      "score_is_grade": false
+     },
+     "diagnostics": {
+      "status": "PARTIAL",
+      "summary": {
+       "runs": 0,
+       "vm_verified_runs": 0
+      },
+      "events": [],
+      "diagnoses": [
+       {
+        "code": "NO_EXECUTION_EVIDENCE",
+        "category": "INSUFFICIENT_EVIDENCE",
+        "priority": "P3",
+        "audience": "REVIEWER",
+        "title": "No verified execution available",
+        "explanation": "Only planning or static data was supplied; student runtime behavior was not evaluated.",
+        "recommended_action": "Supply a valid existing reviewed execution report if available.",
+        "confidence": "HIGH",
+        "causal_status": "UNPROVEN",
+        "evidence": [
+         "phase3/test_plan.json"
+        ],
+        "test_ids": [],
+        "student_defect": "NOT_ESTABLISHED"
+       },
+       {
+        "code": "ORACLE_NOT_ESTABLISHED",
+        "category": "INSUFFICIENT_EVIDENCE",
+        "priority": "P3",
+        "audience": "REVIEWER",
+        "title": "Expected behavior not yet established",
+        "explanation": "One or more planned specifications do not yet have grounded expected outcomes.",
+        "recommended_action": "Review and approve bounded scenario expectations; do not attribute missing coverage to the student.",
+        "confidence": "HIGH",
+        "causal_status": "UNPROVEN",
+        "evidence": [
+         "phase3/test_plan.json"
+        ],
+        "test_ids": [
+         "T-00A1F3C9",
+         "T-00A1F3D0",
+         "T-00A1F3D7"
+        ],
+        "student_defect": "NOT_ESTABLISHED"
+       },
+       {
+        "code": "PHASE5_SECRET_INDICATOR",
+        "category": "POTENTIAL_SECURITY_EXPOSURE",
+        "priority": "P1",
+        "audience": "STUDENT",
+        "title": "Potential credential exposure",
+        "explanation": "Static analysis found a credential exposure indicator; actual validity is unknown.",
+        "recommended_action": "Review the reported file; rotate confirmed exposed credentials and inspect Git history.",
+        "confidence": "MEDIUM",
+        "causal_status": "UNPROVEN",
+        "evidence": [
+         "phase5/code_quality.json#/findings/0"
+        ],
+        "test_ids": [],
+        "student_defect": "NOT_ESTABLISHED"
+       }
+      ],
+      "dependency_groups": [],
+      "rerun_comparisons": [],
+      "root_cause_hypotheses": [],
+      "static_context": {},
+      "security_context": {
+       "indicators": 1
+      },
+      "limitations": [
+       "Only planning or static data was supplied; runtime behavior was not evaluated."
+      ]
+     },
+     "recommendations": [
+      {
+       "source": "PHASE6",
+       "code": "NO_EXECUTION_EVIDENCE",
+       "priority": "P3",
+       "recommendation": "Supply a valid existing reviewed execution report if available.",
+       "evidence": [
+        "phase3/test_plan.json"
+       ],
+       "causal_status": "UNPROVEN"
+      },
+      {
+       "source": "PHASE6",
+       "code": "ORACLE_NOT_ESTABLISHED",
+       "priority": "P3",
+       "recommendation": "Review and approve bounded scenario expectations; do not attribute missing coverage to the student.",
+       "evidence": [
+        "phase3/test_plan.json"
+       ],
+       "causal_status": "UNPROVEN"
+      },
+      {
+       "source": "PHASE6",
+       "code": "PHASE5_SECRET_INDICATOR",
+       "priority": "P1",
+       "recommendation": "Review the reported file; rotate confirmed exposed credentials and inspect Git history.",
+       "evidence": [
+        "phase5/code_quality.json#/findings/0"
+       ],
+       "causal_status": "UNPROVEN"
+      },
+      {
+       "source": "PHASE5",
+       "code": "SEC_DB_LITERAL_CONFIG",
+       "priority": "HIGH",
+       "recommendation": "Move the staff password to an environment variable and rotate it if it was ever real.",
+       "path": "config.py",
+       "line": 6,
+       "causal_status": "ADVISORY_ONLY"
+      },
+      {
+       "source": "PHASE5",
+       "code": "PY_BARE_EXCEPT",
+       "priority": "MEDIUM",
+       "recommendation": "Catch the specific database or validation exception.",
+       "path": "app/inventory/routes.py",
+       "line": 47,
+       "causal_status": "ADVISORY_ONLY"
+      },
+      {
+       "source": "PHASE5",
+       "code": "HIGH_CYCLOMATIC",
+       "priority": "MEDIUM",
+       "recommendation": "Separate date filtering from formatting.",
+       "path": "app/reminders/service.py",
+       "line": 12,
+       "causal_status": "ADVISORY_ONLY"
+      },
+      {
+       "source": "PHASE5",
+       "code": "PY_NONE_COMPARISON",
+       "priority": "LOW",
+       "recommendation": "Use \"is None\".",
+       "path": "app/patients/routes.py",
+       "line": 33,
+       "causal_status": "ADVISORY_ONLY"
+      }
+     ],
+     "review_requests": [],
+     "limitations": [
+      "FUNCTIONAL_BEHAVIOR_NOT_EXECUTED",
+      "FUNCTIONAL_ORACLES_STILL_REQUIRED",
+      "TEST_TARGETS_UNSUPPORTED_BY_RUNNER",
+      "DIAGNOSIS_EVIDENCE_PARTIAL"
+     ],
+     "error_codes": [],
+     "vm_attempts_scheduled": 0,
+     "vm_attempt_budget": 0
+    },
+    "limitations": [
+     "VM evidence is scoped to reviewed tests; a pass is not whole-project correctness.",
+     "No sandbox attestation is inferred by this adapter."
+    ],
+    "error_code": null,
+    "ai_detection": null,
+    "evidence_check": "MATCHED",
+    "receipt_provenance": "NATIVE_RECEIPT_MATCHED"
+   }
+  },
+  "rubric": {
+   "schema_version": "2.0",
+   "id": "software-project-unified",
+   "title": "Software project — unified faculty rubric",
+   "revision": "1",
+   "total_points": 100.0,
+   "group_weights": {
+    "problem": 15.0,
+    "report": 15.0,
+    "design": 20.0,
+    "implementation": 20.0,
+    "validation": 20.0,
+    "research": 10.0
+   },
+   "criteria": [
+    {
+     "id": "problem_scope",
+     "title": "Problem and scope",
+     "description": "Assess the problem, intended users, objectives, constraints and coherent scope.",
+     "group": "problem",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed evidence shows no coherent problem or objectives.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Problem is vague or objectives largely unclear.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Problem and main objectives understandable; important constraints or users omitted.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear problem, objectives and scope with only minor gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Precise and justified problem, user needs, measurable objectives and realistic constraints.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "REPORT"
+    },
+    {
+     "id": "report_quality",
+     "title": "Report quality and clarity",
+     "description": "Assess organization, clarity, specificity, and accurate separation of claims, plans and measured results.",
+     "group": "report",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed report is substantially incoherent or misrepresents critical results.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major organization or clarity gaps make understanding difficult.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Readable and structured, but limited specificity or evidence presentation.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear, organized, specific report with minor gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Excellent organization, precise technical communication, and transparent evidence and limitations.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "REPORT"
+    },
+    {
+     "id": "technical_design",
+     "title": "Architecture and technical design",
+     "description": "Assess design decisions, appropriate technology, interfaces/data model and explanation of trade-offs.",
+     "group": "design",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "STATIC_SOURCE"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed design is incoherent or unsuitable for the stated problem.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major unexplained design choices or missing components.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Reasonable architecture with basic component/data explanation.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Coherent design with justified choices and relevant trade-offs.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Well-justified architecture, interfaces and data model with explicit constraints and trade-offs.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "DESIGN"
+    },
+    {
+     "id": "implementation_quality",
+     "title": "Implementation and engineering quality",
+     "description": "Assess source-supported implementation, maintainability, appropriate structure and security/reliability handling; do not equate heuristic indicators to marks.",
+     "group": "implementation",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "STATIC_SOURCE"
+     ],
+     "required_evidence": [
+      "STATIC_SOURCE"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed source demonstrates substantial implementation deficiencies.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major source-supported engineering problems or incomplete design realization.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Core implementation is plausible with significant engineering gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Source-supported implementation is coherent, with minor or bounded concerns.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Source-supported implementation demonstrates strong structure and robust handling of relevant concerns.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "IMPLEMENTATION"
+    },
+    {
+     "id": "functional_validation",
+     "title": "Functional behavior and validation",
+     "description": "Assess scoped, executed functional evidence and whether testing supports requirements. Static discovery and readiness alone do not prove functionality. No runtime observations means this criterion remains unassessed. This does not measure full application coverage.",
+     "group": "validation",
+     "weight": 90.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "STATIC_SOURCE",
+      "TEST_OBSERVATION"
+     ],
+     "required_evidence": [
+      "TEST_OBSERVATION"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed functional evidence demonstrates major failures of agreed requirements.",
+       "requires_failed_observation": true
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Reviewed executed evidence verifies only narrow agreed behavior or demonstrates significant failing behavior. Limited coverage is not evidence of failure.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Some agreed behaviors verified with material gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Most agreed behavior verified, with clearly bounded limitations.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Representative agreed behaviors verified, including relevant negative cases; limitations disclosed.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "FUNCTIONAL"
+    },
+    {
+     "id": "testing_strategy",
+     "title": "Testing strategy and limitations",
+     "description": "Assess the documented validation strategy, including clear expected outcomes, negative checks and honest limitations. Do not score executed correctness or penalize missing execution here.",
+     "group": "validation",
+     "weight": 10.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed text contains no meaningful validation strategy or substantially misrepresents what was tested.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Very limited scenarios or no clear expected outcomes.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Useful scenarios and some expected outcomes, but incomplete negative cases or reproducibility details.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear representative scenarios and expected outcomes with explicit limitations and some negative checks.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Comprehensive requirements-linked strategy with concrete oracles, negative cases, reproducibility details and honest limitations.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "TEST_STRATEGY"
+    },
+    {
+     "id": "research",
+     "title": "Research and use of sources",
+     "description": "Assess the assignment-required literature or documented technical sources, their relevance and use. If the assignment does not require this, explicitly exclude.",
+     "group": "research",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "RESEARCH_RECORD"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT",
+      "RESEARCH_RECORD"
+     ],
+     "minimum_evidence": 2,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Required sources are demonstrably absent or irrelevant after review.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Minimal or poorly connected source use.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Relevant sources cited but synthesis or coverage limited.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Relevant sources integrated and limitations understood.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Well-chosen, critically synthesized sources supporting the project with transparent provenance.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "RESEARCH"
+    }
+   ]
+  },
+  "assessment": {
+   "schema_version": "2.0",
+   "evidence_sha256": "999d4c605ed56de4221d61a86326ab4893040fe0c932bc0798a1e003652c553d",
+   "rubric_sha256": "322a8a012f18b0ef62275454d732e14d8072313cf170cfe4e77b85e425c20b8e",
+   "decisions_sha256": "8dd760a52b16806373a4eb8a2fc4edd0c975d264dc9e174e484b88eb2695d948",
+   "status": "INSUFFICIENT_EVIDENCE",
+   "max_points": 100.0,
+   "proposed_points": null,
+   "reviewed_points": null,
+   "assessed_subtotal_points": 35.0,
+   "assessed_max_points": 70.0,
+   "assessed_weight_percent": 70.0,
+   "reviewed_weight_percent": 0.0,
+   "unresolved_criterion_ids": [
+    "functional_validation",
+    "testing_strategy",
+    "research"
+   ],
+   "criteria": [
+    {
+     "id": "problem_scope",
+     "group": "problem",
+     "title": "Problem and scope",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 15.0,
+     "max_points": 15.0,
+     "earned_points": 7.5,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-c87800dc1aa52b6f2e0e91da",
+      "E-e773e352daf6cd42d1afbb04",
+      "E-1fdf41bb73d9af52500ea217"
+     ],
+     "reason": "The report states the clinic problem and four objectives covering stock, expiry, schedules and reminders. Intended users and constraints such as staff accounts and data privacy are only briefly covered.",
+     "feedback": {
+      "strength": "The report states the clinic problem and four objectives covering stock, expiry, schedules and reminders.",
+      "limitation": "Intended users and constraints such as staff accounts and data privacy are only briefly covered.",
+      "improvement": "Describe the clinic staff roles and the constraints a real deployment must respect.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": [
+      {
+       "evidence_id": "E-c87800dc1aa52b6f2e0e91da",
+       "kind": "REPORT_EXCERPT",
+       "label": "2. Problem Statement | Report characters 684–903",
+       "locator": "extracted_text:684:903",
+       "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n2. Problem Statement\nClinic staff need to know the current stock of each medicine, which batches expire within 30 days and which patients have doses due today. The paper register cannot answer these questions quickly.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "2. Problem Statement",
+       "start": 684,
+       "end": 903
+      },
+      {
+       "evidence_id": "E-e773e352daf6cd42d1afbb04",
+       "kind": "REPORT_EXCERPT",
+       "label": "3. Objectives | Report characters 903–1132",
+       "locator": "extracted_text:903:1132",
+       "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n3. Objectives\nThe objectives are to record medicines and batches with expiry dates, to show a dashboard of low stock and soon-to-expire batches, to let staff create dose schedules for patients and to show a daily reminder list.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "3. Objectives",
+       "start": 903,
+       "end": 1132
+      },
+      {
+       "evidence_id": "E-1fdf41bb73d9af52500ea217",
+       "kind": "REPORT_EXCERPT",
+       "label": "1. Introduction | Report characters 399–684",
+       "locator": "extracted_text:399:684",
+       "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n1. Introduction\nSmall clinics in our area keep medicine stock in paper registers. Expired medicines are often found only during a monthly check, and patients forget follow-up doses. MediTrack moves the register to a simple web application and adds expiry warnings and dose reminders.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "1. Introduction",
+       "start": 399,
+       "end": 684
+      }
+     ]
+    },
+    {
+     "id": "report_quality",
+     "group": "report",
+     "title": "Report quality and clarity",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 15.0,
+     "max_points": 15.0,
+     "earned_points": 7.5,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-1fdf41bb73d9af52500ea217",
+      "E-4b080fb324dd917b8046352c",
+      "E-c55ec0d1fa631e6f24098651"
+     ],
+     "reason": "Sections are short and in a logical order from problem to design and testing. Design and testing sections give few specific values or results.",
+     "feedback": {
+      "strength": "Sections are short and in a logical order from problem to design and testing.",
+      "limitation": "Design and testing sections give few specific values or results.",
+      "improvement": "Add the concrete test inputs and observed results for each manual check.",
+      "observed_failure": false
+     },
+     "review_flags": [
+      "FEEDBACK_NEEDS_MORE_EVIDENCE_SPECIFIC_DETAIL"
+     ],
+     "objective_details": {},
+     "evidence_details": [
+      {
+       "evidence_id": "E-1fdf41bb73d9af52500ea217",
+       "kind": "REPORT_EXCERPT",
+       "label": "1. Introduction | Report characters 399–684",
+       "locator": "extracted_text:399:684",
+       "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n1. Introduction\nSmall clinics in our area keep medicine stock in paper registers. Expired medicines are often found only during a monthly check, and patients forget follow-up doses. MediTrack moves the register to a simple web application and adds expiry warnings and dose reminders.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "1. Introduction",
+       "start": 399,
+       "end": 684
+      },
+      {
+       "evidence_id": "E-4b080fb324dd917b8046352c",
+       "kind": "REPORT_EXCERPT",
+       "label": "8. Limitations | Report characters 2542–2757",
+       "locator": "extracted_text:2542:2757",
+       "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n8. Limitations\nLogin uses one shared staff password, so actions cannot be traced to a person. Reminders are only shown on the web page and are not sent by SMS. The system has not been tested with real clinic data.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "8. Limitations",
+       "start": 2542,
+       "end": 2757
+      },
+      {
+       "evidence_id": "E-c55ec0d1fa631e6f24098651",
+       "kind": "REPORT_EXCERPT",
+       "label": "Abstract | Report characters 89–399",
+       "locator": "extracted_text:89:399",
+       "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\nAbstract\nMediTrack is a Flask web application that helps small clinics track medicine stock and remind patients about their doses. Staff can add medicines, record stock changes and see which medicines will expire soon. Patients receive a daily reminder list. The application uses Flask, SQLite and Bootstrap.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "Abstract",
+       "start": 89,
+       "end": 399
+      }
+     ]
+    },
+    {
+     "id": "technical_design",
+     "group": "design",
+     "title": "Architecture and technical design",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 20.0,
+     "max_points": 20.0,
+     "earned_points": 10.0,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-68f25f1035956b9f444c1a60",
+      "E-4b080fb324dd917b8046352c",
+      "E-1fdf41bb73d9af52500ea217"
+     ],
+     "reason": "The report describes three blueprints and four related tables, including how a batch belongs to a medicine. Data flow for reminders and access control are not described in detail.",
+     "feedback": {
+      "strength": "The report describes three blueprints and four related tables, including how a batch belongs to a medicine.",
+      "limitation": "Data flow for reminders and access control are not described in detail.",
+      "improvement": "Add a diagram of the tables and explain how reminders are generated.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": [
+      {
+       "evidence_id": "E-68f25f1035956b9f444c1a60",
+       "kind": "REPORT_EXCERPT",
+       "label": "5. System Design | Report characters 1437–1868",
+       "locator": "extracted_text:1437:1868",
+       "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n5. System Design\nThe application has three blueprints: inventory, patients and reminders. Each blueprint has its own routes and templates. SQLite stores four tables: medicines, batches, patients and schedules. A batch belongs to a medicine, and a schedule links a patient to a medicine with a dose time. The dashboard queries batches whose expiry date is within 30 days and medicines whose total stock is below the reorder level.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "5. System Design",
+       "start": 1437,
+       "end": 1868
+      },
+      {
+       "evidence_id": "E-4b080fb324dd917b8046352c",
+       "kind": "REPORT_EXCERPT",
+       "label": "8. Limitations | Report characters 2542–2757",
+       "locator": "extracted_text:2542:2757",
+       "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n8. Limitations\nLogin uses one shared staff password, so actions cannot be traced to a person. Reminders are only shown on the web page and are not sent by SMS. The system has not been tested with real clinic data.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "8. Limitations",
+       "start": 2542,
+       "end": 2757
+      },
+      {
+       "evidence_id": "E-1fdf41bb73d9af52500ea217",
+       "kind": "REPORT_EXCERPT",
+       "label": "1. Introduction | Report characters 399–684",
+       "locator": "extracted_text:399:684",
+       "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n1. Introduction\nSmall clinics in our area keep medicine stock in paper registers. Expired medicines are often found only during a monthly check, and patients forget follow-up doses. MediTrack moves the register to a simple web application and adds expiry warnings and dose reminders.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "1. Introduction",
+       "start": 399,
+       "end": 684
+      }
+     ]
+    },
+    {
+     "id": "implementation_quality",
+     "group": "implementation",
+     "title": "Implementation and engineering quality",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 20.0,
+     "max_points": 20.0,
+     "earned_points": 10.0,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-d9be9bf69c283a95a1bf6583",
+      "E-fbf56c9998428df82f350d38",
+      "E-a5a3a59fd579b645a4ba42c1"
+     ],
+     "reason": "Static analysis covers all 14 source files and finds SQLAlchemy models and WTForms validation. SEC_DB_LITERAL_CONFIG: config.py:6 (static observation; contextual review required).",
+     "feedback": {
+      "strength": "Static analysis covers all 14 source files and finds SQLAlchemy models and WTForms validation.",
+      "limitation": "SEC_DB_LITERAL_CONFIG: config.py:6 (static observation; contextual review required).",
+      "improvement": "Move the staff password to an environment variable and rotate it if it was ever real.",
+      "observed_failure": false
+     },
+     "review_flags": [
+      "STATIC_FINDINGS_REQUIRE_CONTEXTUAL_REVIEW"
+     ],
+     "objective_details": {},
+     "evidence_details": [
+      {
+       "evidence_id": "E-d9be9bf69c283a95a1bf6583",
+       "kind": "STATIC_SOURCE",
+       "label": "SEC_DB_LITERAL_CONFIG",
+       "locator": "/code_quality/findings/0",
+       "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+       "provenance": "NATIVE_RECEIPT_MATCHED",
+       "text": "A literal credential-like value is assigned in configuration (value not shown).",
+       "limitations": [
+        "Native static observation or documented feature; not verified functional behavior."
+       ],
+       "record_type": "quality",
+       "severity": "HIGH",
+       "confidence": "MEDIUM",
+       "category": "SECURITY",
+       "recommendation": "Move the staff password to an environment variable and rotate it if it was ever real.",
+       "target": {
+        "path": "config.py"
+       },
+       "finding_instances": 1,
+       "source_locations": [
+        {
+         "path": "config.py",
+         "line": 6
+        }
+       ]
+      },
+      {
+       "evidence_id": "E-fbf56c9998428df82f350d38",
+       "kind": "REPORT_EXCERPT",
+       "label": "6. Implementation | Report characters 1868–2193",
+       "locator": "extracted_text:1868:2193",
+       "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+       "provenance": "REPORT_SNAPSHOT",
+       "text": "\n6. Implementation\nWe used Flask with SQLAlchemy for the models and WTForms for form validation. The reminders page builds the list of doses due today from the schedules table. Staff log in with a single shared password stored in the configuration file. The project includes a requirements.txt file and a run.py entry point.\n",
+       "limitations": [
+        "Text claim, not independently verified fact."
+       ],
+       "section": "6. Implementation",
+       "start": 1868,
+       "end": 2193
+      },
+      {
+       "evidence_id": "E-a5a3a59fd579b645a4ba42c1",
+       "kind": "STATIC_SOURCE",
+       "label": "Source analysis inventory",
+       "locator": "/code_quality/summary",
+       "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+       "provenance": "NATIVE_RECEIPT_MATCHED",
+       "text": "{\"analyzed_files\":14,\"findings\":4,\"functions_found\":52,\"production_code_lines\":1180,\"production_files\":14,\"source_candidates\":14}",
+       "limitations": [
+        "Source inventory is not evidence of engineering quality or successful behavior."
+       ],
+       "record_type": "source_inventory"
+      }
+     ]
+    },
+    {
+     "id": "functional_validation",
+     "group": "validation",
+     "title": "Functional behavior and validation",
+     "applicability": "REQUIRED",
+     "status": "UNASSESSED",
+     "configured_weight": 90.0,
+     "effective_weight_percent": 18.0,
+     "max_points": 18.0,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "DECISIVE_RUNTIME_EVIDENCE_NOT_ESTABLISHED; teacher review required.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "testing_strategy",
+     "group": "validation",
+     "title": "Testing strategy and limitations",
+     "applicability": "REQUIRED",
+     "status": "UNASSESSED",
+     "configured_weight": 10.0,
+     "effective_weight_percent": 2.0,
+     "max_points": 2.0,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "DOCUMENTED_TEST_SCENARIOS_NOT_ESTABLISHED; teacher review required.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "research",
+     "group": "research",
+     "title": "Research and use of sources",
+     "applicability": "REQUIRED",
+     "status": "UNASSESSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 10.0,
+     "max_points": 10.0,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "Native research evidence inconclusive or unavailable; no model judgment attempted.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    }
+   ],
+   "groups": [
+    {
+     "id": "problem",
+     "effective_weight_percent": 15.0,
+     "max_points": 15.0,
+     "assessed_max_points": 15.0,
+     "assessed_subtotal_points": 7.5,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "report",
+     "effective_weight_percent": 15.0,
+     "max_points": 15.0,
+     "assessed_max_points": 15.0,
+     "assessed_subtotal_points": 7.5,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "design",
+     "effective_weight_percent": 20.0,
+     "max_points": 20.0,
+     "assessed_max_points": 20.0,
+     "assessed_subtotal_points": 10.0,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "implementation",
+     "effective_weight_percent": 20.0,
+     "max_points": 20.0,
+     "assessed_max_points": 20.0,
+     "assessed_subtotal_points": 10.0,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "validation",
+     "effective_weight_percent": 20.0,
+     "max_points": 20.0,
+     "assessed_max_points": 0.0,
+     "assessed_subtotal_points": 0.0,
+     "assessed_weight_percent": 0.0,
+     "unresolved_criterion_ids": [
+      "functional_validation",
+      "testing_strategy"
+     ]
+    },
+    {
+     "id": "research",
+     "effective_weight_percent": 10.0,
+     "max_points": 10.0,
+     "assessed_max_points": 0.0,
+     "assessed_subtotal_points": 0.0,
+     "assessed_weight_percent": 0.0,
+     "unresolved_criterion_ids": [
+      "research"
+     ]
+    }
+   ],
+   "limitations": [
+    "Integrity estimates and legacy Summarizer grades are advisory and never contribute to marks.",
+    "Evidence IDs establish traceability, not correctness of a qualitative judgment. Teacher review is required.",
+    "Excluded weights are redistributed proportionally; unresolved weights are not redistributed.",
+    "Objective scenario success and explicitly mapped requirement evidence coverage measure distinct properties; neither proves unrestricted correctness.",
+    "Display values are rounded independently; totals use unrounded arithmetic. Teacher-reviewed is a local operator status, not authenticated institutional approval."
+   ]
+  },
+  "evidence_intelligence": {
+   "evaluation_policy": {
+    "version": "L2",
+    "suspect_spans": [],
+    "automatic_judgment": "EVIDENCE_CONSTRAINED"
+   },
+   "report_signals": {
+    "test_scenarios": [],
+    "negative_checks": [],
+    "limitations": [
+     "E-4b080fb324dd917b8046352c"
+    ],
+    "design_description": [
+     "E-68f25f1035956b9f444c1a60"
+    ]
+   },
+   "research_facts": null,
+   "source_analysis": {
+    "summary": {
+     "analyzed_files": 14,
+     "production_files": 14,
+     "production_code_lines": 1180,
+     "functions_found": 52,
+     "findings": 4,
+     "source_candidates": 14
+    },
+    "coverage": {
+     "supported_files": 14,
+     "unsupported_files": 0,
+     "skipped_files": 0,
+     "limited_function_files": 0,
+     "source_ratio": 1.0,
+     "function_analysis_scope": "AST_AND_HEURISTIC",
+     "function_file_ratio": 1.0,
+     "function_body_ratio": 0.91,
+     "ast_complexity_share": 1.0,
+     "duplicate_production_lines": 0,
+     "duplicate_production_ratio": 0.0
+    },
+    "indicator_status": "PROVISIONAL",
+    "confidence": "MEDIUM",
+    "overall_score": 81,
+    "not_grade": true
+   },
+   "research": null,
+   "integrity_advisory": {
+    "comparison_status": "NOT_AVAILABLE",
+    "reference_overlap": null,
+    "references_compared": 0,
+    "words_checked": 0,
+    "advisory_only": true
+   },
+   "runtime": {
+    "by_scope": {
+     "EXACT_PLANNED_TEST": {
+      "passed": 0,
+      "failed": 0,
+      "decisive": 0,
+      "pass_rate": null
+     },
+     "REVIEWED_SCENARIO_ONLY": {
+      "passed": 0,
+      "failed": 0,
+      "decisive": 0,
+      "pass_rate": null
+     }
+    },
+    "scenario_groups": {},
+    "ambiguous_keys": [],
+    "overlapping_keys": [],
+    "planned_counts": {
+     "PASSED": 0,
+     "FAILED": 0,
+     "INCONCLUSIVE": 0,
+     "BLOCKED": 0,
+     "NOT_TESTED": 6
+    },
+    "planned_counts_scope": "NATIVE_REPORTED_NOT_ELIGIBILITY",
+    "unavailable_suites": [],
+    "readiness_passes_eligible": 0,
+    "requirements_coverage": null,
+    "limitations": [
+     "Counts describe eligible scoped observations only; exact and reviewed scopes must not be summed as independent tests.",
+     "No agreed requirements mapping is implied. Untested does not mean failed."
+    ]
+   },
+   "runtime_observations": [],
+   "static_finding_groups": [
+    {
+     "code": "EXTERNAL_SERVICE_SDK",
+     "instances": 1,
+     "native_severities": [
+      "INFO"
+     ],
+     "evidence_ids": [
+      "E-3bd840f3db03add82c0883b0"
+     ]
+    },
+    {
+     "code": "HIGH_CYCLOMATIC",
+     "instances": 1,
+     "native_severities": [
+      "MEDIUM"
+     ],
+     "evidence_ids": [
+      "E-b711df836abffd1a5773fe6d"
+     ]
+    },
+    {
+     "code": "NO_AUTOMATED_TESTS",
+     "instances": 1,
+     "native_severities": [
+      "LOW"
+     ],
+     "evidence_ids": [
+      "E-b789e57365162560776a0b0c"
+     ]
+    },
+    {
+     "code": "PY_BARE_EXCEPT",
+     "instances": 1,
+     "native_severities": [
+      "MEDIUM"
+     ],
+     "evidence_ids": [
+      "E-89b242c6d8d8f0f9208485e3"
+     ]
+    },
+    {
+     "code": "PY_NONE_COMPARISON",
+     "instances": 1,
+     "native_severities": [
+      "LOW"
+     ],
+     "evidence_ids": [
+      "E-7abd445130152cc510d607a5"
+     ]
+    },
+    {
+     "code": "SEC_DB_LITERAL_CONFIG",
+     "instances": 1,
+     "native_severities": [
+      "HIGH"
+     ],
+     "evidence_ids": [
+      "E-d9be9bf69c283a95a1bf6583"
+     ]
+    }
+   ],
+   "limitations": [
+    "Static findings are not confirmed vulnerabilities; severity prioritizes review rather than directly deducting marks.",
+    "Report text extraction may omit figures or tables."
+   ]
+  },
+  "decision_reuse": {
+   "preserved_criterion_ids": [],
+   "dropped_decisions": {}
+  },
+  "research_required": true,
+  "evaluation_policy": "L2",
+  "criterion_review_states": {
+   "problem_scope": "PROPOSED",
+   "report_quality": "PROPOSED",
+   "technical_design": "PROPOSED",
+   "implementation_quality": "PROPOSED",
+   "functional_validation": "REVIEW_REQUIRED",
+   "testing_strategy": "REVIEW_REQUIRED",
+   "research": "REVIEW_REQUIRED"
+  },
+  "legacy_judge_executed": false,
+  "rubric_mode": "AUTOMATIC",
+  "workflow_status": "PARTIAL_ERROR",
+  "agent_failures": [
+   "research"
+  ],
+  "rubric_exit_code": 0,
+  "elapsed_seconds": 0.2542,
+  "artifacts": {
+   "evaluation": "collection/evaluation.json",
+   "assessment": "rubric/assessment.json",
+   "rubric": "rubric/rubric.json",
+   "decisions": "rubric/decisions.json",
+   "evidence": "rubric/evidence.json",
+   "intelligence": "rubric/evidence_intelligence.json",
+   "ieee_format": "collection/ieee_format.json"
+  },
+  "limitations": [
+   "Native receipts attest saved bytes only, not agent correctness or authenticity.",
+   "Private evaluation contains student text and code evidence; do not publish the output directory.",
+   "Receipt hashes verify saved bytes, not authenticity, accuracy or student authorship.",
+   "Report excerpts establish what the extracted text says, not what the software actually does. Scans, tables and figures may be missed by the report loader.",
+   "All output is private; treat displayed strings as untrusted text.",
+   "Integrity estimates and legacy Summarizer grades are advisory and never contribute to marks.",
+   "Evidence IDs establish traceability, not correctness of a qualitative judgment. Teacher review is required.",
+   "Excluded weights are redistributed proportionally; unresolved weights are not redistributed.",
+   "Objective scenario success and explicitly mapped requirement evidence coverage measure distinct properties; neither proves unrestricted correctness.",
+   "Display values are rounded independently; totals use unrounded arithmetic. Teacher-reviewed is a local operator status, not authenticated institutional approval.",
+   "Private local evaluation; no unrestricted execution or authenticated faculty approval.",
+   "Live Executioner collection is STATIC; runtime marks require eligible reviewed evidence.",
+   "Legacy judge never executed by this workflow. Imported historical summaries may have been produced by that judge."
+  ],
+  "ieee_format": {
+   "status": "COMPLETED",
+   "score": 84.4,
+   "max_score": 100,
+   "rating": "Minor text-structure issues",
+   "format_verdict": "CANNOT_VERIFY_LAYOUT",
+   "assessment_scope": "structure_only",
+   "layout_verdict": "Column layout unavailable for this format",
+   "categories": [
+    {
+     "category": "Page layout",
+     "rubric_weight": 25,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "rubric_weight": 20,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Title and authors",
+     "rubric_weight": 10,
+     "earned": 10,
+     "possible": 10,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "rubric_weight": 15,
+     "earned": 8,
+     "possible": 15,
+     "status": "needs_attention"
+    },
+    {
+     "category": "Section structure",
+     "rubric_weight": 10,
+     "earned": 10,
+     "possible": 10,
+     "status": "pass"
+    },
+    {
+     "category": "Figures and tables",
+     "rubric_weight": 10,
+     "earned": null,
+     "possible": 0,
+     "status": "not_applicable"
+    },
+    {
+     "category": "References and citations",
+     "rubric_weight": 10,
+     "earned": 10,
+     "possible": 10,
+     "status": "pass"
+    }
+   ],
+   "checks": [
+    {
+     "category": "Page layout",
+     "criterion": "A4 or US Letter page size",
+     "earned": 0,
+     "possible": 8,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Page layout",
+     "criterion": "Two-column body layout",
+     "earned": 0,
+     "possible": 14,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Page layout",
+     "criterion": "Plausible and balanced outer margins",
+     "earned": 0,
+     "possible": 3,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "criterion": "Body text near 10 pt",
+     "earned": 0,
+     "possible": 12,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Typography",
+     "criterion": "Serif/Times-like body font",
+     "earned": 0,
+     "possible": 8,
+     "detail": "Plain text has no page geometry, columns, margins, or font formatting.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "Title and authors",
+     "criterion": "Title text on first line",
+     "earned": 6,
+     "possible": 6,
+     "detail": "Potential title: MediTrack: Medicine Reminder and Inventory Tracker for Small Clinics",
+     "suggestion": "Place the research-paper title at the start of the document.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Title and authors",
+     "criterion": "Author / affiliation text",
+     "earned": 4,
+     "possible": 4,
+     "detail": "Text found between the title and abstract.",
+     "suggestion": "Add author names and affiliations below the title.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "criterion": "Abstract label",
+     "earned": 8,
+     "possible": 8,
+     "detail": "Abstract label found.",
+     "suggestion": "Include an Abstract paragraph following the chosen IEEE template.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Abstract and keywords",
+     "criterion": "Index Terms / Keywords label",
+     "earned": 0,
+     "possible": 7,
+     "detail": "Index Terms/Keywords label not found.",
+     "suggestion": "Include an 'Index Terms—' line beneath the abstract.",
+     "page": null,
+     "applicable": true,
+     "status": "fail"
+    },
+    {
+     "category": "Section structure",
+     "criterion": "Numbered main sections",
+     "earned": 6,
+     "possible": 6,
+     "detail": "9 numbered main section(s) detected.",
+     "suggestion": "Use headings such as 'I. INTRODUCTION', 'II. METHODS', 'III. RESULTS'.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Section structure",
+     "criterion": "Introduction section",
+     "earned": 4,
+     "possible": 4,
+     "detail": "Introduction section found.",
+     "suggestion": "Add an Introduction section using a consistent section-heading style.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "Figures and tables",
+     "criterion": "Figure and table captions",
+     "earned": 0,
+     "possible": 10,
+     "detail": "No figure/table mentions detected; category excluded.",
+     "suggestion": "",
+     "page": null,
+     "applicable": false,
+     "status": "not_applicable"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "References heading",
+     "earned": 4,
+     "possible": 4,
+     "detail": "References heading found.",
+     "suggestion": "Add a References section at the end of the paper.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "Numbered bibliography entries",
+     "earned": 4,
+     "possible": 4,
+     "detail": "3 numbered reference entry/entries found.",
+     "suggestion": "Use IEEE-style numbered reference entries such as [1] and [2].",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    },
+    {
+     "category": "References and citations",
+     "criterion": "Bracketed in-text citations",
+     "earned": 2,
+     "possible": 2,
+     "detail": "1 line(s) contain bracketed citations before the reference list.",
+     "suggestion": "Cite your sources in the main text using [1], [2], etc.",
+     "page": null,
+     "applicable": true,
+     "status": "pass"
+    }
+   ],
+   "notes": [
+    "This is a TEXT STRUCTURE score, not an IEEE layout/format-compliance score. Plain text does not store page dimensions, columns, margins, or fonts.",
+    "Export a formatted DOCX or PDF for a fuller formatting assessment.",
+    "For submission, validate the specific conference/journal template and run official PDF compliance checks separately."
+   ],
+   "disclaimer": "This is a teaching/demo formatting score, not an official IEEE score, publication decision or replacement for a venue's template and IEEE PDF Checker."
+  }
+ },
+ "evidence": {
+  "schema_version": "2.0",
+  "evaluation_sha256": "514d100c6a422b1bf3416bbcf97bfa3194b0b0170cbccfbdbcb98ba4700ef09b",
+  "submission_id": "MT-2026-021",
+  "report_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+  "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+  "report_extraction": "COMPLETE",
+  "repository_commit": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+  "agent_checks": {
+   "summarizer": "MATCHED",
+   "integrity": "MATCHED",
+   "research": "FAILED",
+   "executioner": "MATCHED"
+  },
+  "items": [
+   {
+    "id": "E-c6aff7f9786d8e739303a198",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "Front matter | Report characters 0–89",
+    "text": "MediTrack: Medicine Reminder and Inventory Tracker for Small Clinics\nMini-Project Report\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:0:89",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 0,
+     "end": 89,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "Front matter"
+    }
+   },
+   {
+    "id": "E-c55ec0d1fa631e6f24098651",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "Abstract | Report characters 89–399",
+    "text": "\nAbstract\nMediTrack is a Flask web application that helps small clinics track medicine stock and remind patients about their doses. Staff can add medicines, record stock changes and see which medicines will expire soon. Patients receive a daily reminder list. The application uses Flask, SQLite and Bootstrap.\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:89:399",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 89,
+     "end": 399,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "Abstract"
+    }
+   },
+   {
+    "id": "E-1fdf41bb73d9af52500ea217",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "1. Introduction | Report characters 399–684",
+    "text": "\n1. Introduction\nSmall clinics in our area keep medicine stock in paper registers. Expired medicines are often found only during a monthly check, and patients forget follow-up doses. MediTrack moves the register to a simple web application and adds expiry warnings and dose reminders.\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:399:684",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 399,
+     "end": 684,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "1. Introduction"
+    }
+   },
+   {
+    "id": "E-c87800dc1aa52b6f2e0e91da",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "2. Problem Statement | Report characters 684–903",
+    "text": "\n2. Problem Statement\nClinic staff need to know the current stock of each medicine, which batches expire within 30 days and which patients have doses due today. The paper register cannot answer these questions quickly.\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:684:903",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 684,
+     "end": 903,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "2. Problem Statement"
+    }
+   },
+   {
+    "id": "E-e773e352daf6cd42d1afbb04",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "3. Objectives | Report characters 903–1132",
+    "text": "\n3. Objectives\nThe objectives are to record medicines and batches with expiry dates, to show a dashboard of low stock and soon-to-expire batches, to let staff create dose schedules for patients and to show a daily reminder list.\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:903:1132",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 903,
+     "end": 1132,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "3. Objectives"
+    }
+   },
+   {
+    "id": "E-81cbb6c37da3af6c44505865",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "4. Literature Review | Report characters 1132–1437",
+    "text": "\n4. Literature Review\nMedication adherence is a well-known problem in outpatient care, and reminder systems have been shown to improve adherence [1]. Inventory management in small pharmacies benefits from first-expiry-first-out tracking [2]. We used the Flask documentation for application structure [3].\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:1132:1437",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 1132,
+     "end": 1437,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "4. Literature Review"
+    }
+   },
+   {
+    "id": "E-68f25f1035956b9f444c1a60",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "5. System Design | Report characters 1437–1868",
+    "text": "\n5. System Design\nThe application has three blueprints: inventory, patients and reminders. Each blueprint has its own routes and templates. SQLite stores four tables: medicines, batches, patients and schedules. A batch belongs to a medicine, and a schedule links a patient to a medicine with a dose time. The dashboard queries batches whose expiry date is within 30 days and medicines whose total stock is below the reorder level.\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:1437:1868",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 1437,
+     "end": 1868,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "5. System Design"
+    }
+   },
+   {
+    "id": "E-fbf56c9998428df82f350d38",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "6. Implementation | Report characters 1868–2193",
+    "text": "\n6. Implementation\nWe used Flask with SQLAlchemy for the models and WTForms for form validation. The reminders page builds the list of doses due today from the schedules table. Staff log in with a single shared password stored in the configuration file. The project includes a requirements.txt file and a run.py entry point.\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:1868:2193",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 1868,
+     "end": 2193,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "6. Implementation"
+    }
+   },
+   {
+    "id": "E-4fa06a1051deb1c1edccafb8",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "7. Testing | Report characters 2193–2542",
+    "text": "\n7. Testing\nWe tested the main pages manually. Adding a medicine with a negative quantity should show a validation error. Creating a schedule for a patient who does not exist should be rejected. The dashboard should list a batch that expires in ten days. All of these checks passed when we ran them on our laptops. We did not write automated tests.\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:2193:2542",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 2193,
+     "end": 2542,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "7. Testing"
+    }
+   },
+   {
+    "id": "E-4b080fb324dd917b8046352c",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "8. Limitations | Report characters 2542–2757",
+    "text": "\n8. Limitations\nLogin uses one shared staff password, so actions cannot be traced to a person. Reminders are only shown on the web page and are not sent by SMS. The system has not been tested with real clinic data.\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:2542:2757",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 2542,
+     "end": 2757,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "8. Limitations"
+    }
+   },
+   {
+    "id": "E-de237dbaa1086f40b310aab3",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "9. Conclusion | Report characters 2757–2988",
+    "text": "\n9. Conclusion\nMediTrack replaces the paper register for stock and expiry tracking and gives staff a daily reminder list. Future work includes individual staff accounts, SMS reminders and import from the clinic's billing software.\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:2757:2988",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 2757,
+     "end": 2988,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "9. Conclusion"
+    }
+   },
+   {
+    "id": "E-db3a089634e3fb1443c1cd0c",
+    "agent": "report",
+    "kind": "REPORT_EXCERPT",
+    "label": "References | Report characters 2988–3311",
+    "text": "\nReferences\n[1] L. Osterberg and T. Blaschke, \"Adherence to medication,\" New England Journal of Medicine, vol. 353, no. 5, pp. 487-497, 2005.\n[2] S. Gupta, \"Inventory practices in small retail pharmacies,\" Journal of Pharmacy Practice, 2019.\n[3] Pallets Projects, \"Flask Documentation,\" https://flask.palletsprojects.com/.\n",
+    "artifact_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+    "locator": "extracted_text:2988:3311",
+    "provenance": "REPORT_SNAPSHOT",
+    "eligible_for_review": true,
+    "limitations": [
+     "Text claim, not independently verified fact."
+    ],
+    "data": {
+     "start": 2988,
+     "end": 3311,
+     "extracted_text_sha256": "c2c7d4f5e3b747723afcdb88b310f2b661a3464a253193256fbd407442b034fa",
+     "section": "References"
+    }
+   },
+   {
+    "id": "E-f1618b3ec248bd5cfb77699c",
+    "agent": "summarizer",
+    "kind": "REPORT_SUMMARY",
+    "label": "Generated summary",
+    "text": "MediTrack is a Flask web application that helps small clinics track medicine stock and remind patients about their doses. The objectives are to record medicines and batches with expiry dates, to show a dashboard of low stock and soon-to-expire batches, to let staff create dose schedules for patients and to show a daily reminder list. The application has three blueprints: inventory, patients and reminders.",
+    "artifact_sha256": "08363a3335a413bdac5f8ae6997884eb1df9c1b42797560ebd86f029edd8594c",
+    "locator": "/summary/summary",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Model-generated paraphrase; not a grading evidence source."
+    ],
+    "data": {}
+   },
+   {
+    "id": "E-2b69dfaa13b781dd47a1b7f3",
+    "agent": "summarizer",
+    "kind": "REPORT_SUMMARY",
+    "label": "Generated key point",
+    "text": "We used Flask with SQLAlchemy for the models and WTForms for form validation.",
+    "artifact_sha256": "08363a3335a413bdac5f8ae6997884eb1df9c1b42797560ebd86f029edd8594c",
+    "locator": "/summary/key_points/0",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Model-generated claim; check the report."
+    ],
+    "data": {}
+   },
+   {
+    "id": "E-154eec987d7564d0f624ff34",
+    "agent": "summarizer",
+    "kind": "REPORT_SUMMARY",
+    "label": "Generated key point",
+    "text": "Creating a schedule for a patient who does not exist should be rejected.",
+    "artifact_sha256": "08363a3335a413bdac5f8ae6997884eb1df9c1b42797560ebd86f029edd8594c",
+    "locator": "/summary/key_points/1",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Model-generated claim; check the report."
+    ],
+    "data": {}
+   },
+   {
+    "id": "E-2e5796be6a8c4519d107c16e",
+    "agent": "summarizer",
+    "kind": "REPORT_SUMMARY",
+    "label": "Generated key point",
+    "text": "The system has not been tested with real clinic data.",
+    "artifact_sha256": "08363a3335a413bdac5f8ae6997884eb1df9c1b42797560ebd86f029edd8594c",
+    "locator": "/summary/key_points/2",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Model-generated claim; check the report."
+    ],
+    "data": {}
+   },
+   {
+    "id": "E-e937cfb0f79cce5f7793ef04",
+    "agent": "summarizer",
+    "kind": "REPORT_SUMMARY",
+    "label": "Generated key point",
+    "text": "MediTrack replaces the paper register for stock and expiry tracking and gives staff a daily reminder list.",
+    "artifact_sha256": "08363a3335a413bdac5f8ae6997884eb1df9c1b42797560ebd86f029edd8594c",
+    "locator": "/summary/key_points/3",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Model-generated claim; check the report."
+    ],
+    "data": {}
+   },
+   {
+    "id": "E-1e8714fa1545af4388e5bb16",
+    "agent": "integrity",
+    "kind": "INTEGRITY_ADVISORY",
+    "label": "Integrity coverage",
+    "text": "Reference overlap and AI indicators require human interpretation. No automatic deductions.",
+    "artifact_sha256": "be766db8061275e8e12e57ea7f5748f436fb39c525c04ad9149d38534a84dfea",
+    "locator": "/",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "No authorship or misconduct conclusion."
+    ],
+    "data": {
+     "comparison_available": false
+    }
+   },
+   {
+    "id": "E-18bd28069ac8199fc386a7c5",
+    "agent": "integrity",
+    "kind": "INTEGRITY_ADVISORY",
+    "label": "Native AI heuristic",
+    "text": "AI-percentage model not found: models/ai-text-detector-v1.01. Run: python scripts/setup_offline.py",
+    "artifact_sha256": "be766db8061275e8e12e57ea7f5748f436fb39c525c04ad9149d38534a84dfea",
+    "locator": "/ai_notes/0",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Advisory, not an AI percentage or proof."
+    ],
+    "data": {}
+   },
+   {
+    "id": "E-a5a3a59fd579b645a4ba42c1",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "Source analysis inventory",
+    "text": "{\"analyzed_files\":14,\"findings\":4,\"functions_found\":52,\"production_code_lines\":1180,\"production_files\":14,\"source_candidates\":14}",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/code_quality/summary",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Source inventory is not evidence of engineering quality or successful behavior."
+    ],
+    "data": {
+     "record_type": "source_inventory",
+     "analyzed_files": 14,
+     "production_files": 14,
+     "production_code_lines": 1180,
+     "functions_found": 52,
+     "findings": 4,
+     "source_candidates": 14,
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5"
+    }
+   },
+   {
+    "id": "E-3c9b30208e162fbb988b6933",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "Medicine and batch inventory",
+    "text": "Medicine and batch inventory",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/features/0",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [],
+     "method": "",
+     "origin": "source",
+     "record_type": "features",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {},
+     "description": ""
+    }
+   },
+   {
+    "id": "E-f68c2c5e4e3c5c791cb7d0aa",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "Expiry dashboard",
+    "text": "Expiry dashboard",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/features/1",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [],
+     "method": "",
+     "origin": "source",
+     "record_type": "features",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {},
+     "description": ""
+    }
+   },
+   {
+    "id": "E-e3468663b92e9183107ab294",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "Patient dose schedules",
+    "text": "Patient dose schedules",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/features/2",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [],
+     "method": "",
+     "origin": "source",
+     "record_type": "features",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {},
+     "description": ""
+    }
+   },
+   {
+    "id": "E-2398ce065d6e86620ac81724",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "Daily reminder list",
+    "text": "Daily reminder list",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/features/3",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [],
+     "method": "",
+     "origin": "source",
+     "record_type": "features",
+     "code": "",
+     "severity": "",
+     "confidence": "MEDIUM",
+     "category": "",
+     "recommendation": "",
+     "target": {},
+     "description": ""
+    }
+   },
+   {
+    "id": "E-2129d87868eef7250076a1cc",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "SMS reminders",
+    "text": "SMS reminders",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/features/4",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [],
+     "method": "",
+     "origin": "readme",
+     "record_type": "features",
+     "code": "",
+     "severity": "",
+     "confidence": "LOW",
+     "category": "",
+     "recommendation": "",
+     "target": {},
+     "description": ""
+    }
+   },
+   {
+    "id": "E-8b8339e709ad6b49d1fe050f",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "/",
+    "text": "/",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/server_endpoints/0",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/main/routes.py",
+       "line": 10
+      }
+     ],
+     "method": "GET",
+     "origin": "",
+     "record_type": "endpoints",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {
+      "method": "GET",
+      "path": "/",
+      "kind": "decorator_route"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-f5d5c792e5cd27857f3e567d",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "/login",
+    "text": "/login",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/server_endpoints/1",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/login/routes.py",
+       "line": 16
+      }
+     ],
+     "method": "POST",
+     "origin": "",
+     "record_type": "endpoints",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {
+      "method": "POST",
+      "path": "/login",
+      "kind": "decorator_route"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-613a6904940a03b5ac026533",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "/inventory/dashboard",
+    "text": "/inventory/dashboard",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/server_endpoints/2",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/inventory/routes.py",
+       "line": 22
+      }
+     ],
+     "method": "GET",
+     "origin": "",
+     "record_type": "endpoints",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {
+      "method": "GET",
+      "path": "/inventory/dashboard",
+      "kind": "decorator_route"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-a67d476ccabcae9df776cbf5",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "/inventory/add",
+    "text": "/inventory/add",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/server_endpoints/3",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/inventory/routes.py",
+       "line": 28
+      }
+     ],
+     "method": "POST",
+     "origin": "",
+     "record_type": "endpoints",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {
+      "method": "POST",
+      "path": "/inventory/add",
+      "kind": "decorator_route"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-a018318f83f24e281f6e5783",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "/inventory/batch/<int:id>",
+    "text": "/inventory/batch/<int:id>",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/server_endpoints/4",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/inventory/routes.py",
+       "line": 34
+      }
+     ],
+     "method": "GET",
+     "origin": "",
+     "record_type": "endpoints",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {
+      "method": "GET",
+      "path": "/inventory/batch/<int:id>",
+      "kind": "decorator_route"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-90682f2fb6444347db6527a8",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "/patients",
+    "text": "/patients",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/server_endpoints/5",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/patients/routes.py",
+       "line": 40
+      }
+     ],
+     "method": "GET",
+     "origin": "",
+     "record_type": "endpoints",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {
+      "method": "GET",
+      "path": "/patients",
+      "kind": "decorator_route"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-99a1dea8ea5460e53ef9f835",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "/patients/schedule",
+    "text": "/patients/schedule",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/server_endpoints/6",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/patients/routes.py",
+       "line": 46
+      }
+     ],
+     "method": "POST",
+     "origin": "",
+     "record_type": "endpoints",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {
+      "method": "POST",
+      "path": "/patients/schedule",
+      "kind": "decorator_route"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-fa4561db47d3fcbb361d2e77",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "/reminders/today",
+    "text": "/reminders/today",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/server_endpoints/7",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/reminders/routes.py",
+       "line": 52
+      }
+     ],
+     "method": "GET",
+     "origin": "",
+     "record_type": "endpoints",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {
+      "method": "GET",
+      "path": "/reminders/today",
+      "kind": "decorator_route"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-d0c0ce0ac25af31446925549",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "/reminders/send",
+    "text": "/reminders/send",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/server_endpoints/8",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/reminders/routes.py",
+       "line": 58
+      }
+     ],
+     "method": "POST",
+     "origin": "",
+     "record_type": "endpoints",
+     "code": "",
+     "severity": "",
+     "confidence": "HIGH",
+     "category": "",
+     "recommendation": "",
+     "target": {
+      "method": "POST",
+      "path": "/reminders/send",
+      "kind": "decorator_route"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-b789e57365162560776a0b0c",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "NO_AUTOMATED_TESTS",
+    "text": "No automated test files were detected in the repository.",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/findings/0",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [],
+     "method": "",
+     "origin": "",
+     "record_type": "findings",
+     "code": "NO_AUTOMATED_TESTS",
+     "severity": "LOW",
+     "confidence": "",
+     "category": "",
+     "recommendation": "",
+     "target": {},
+     "description": ""
+    }
+   },
+   {
+    "id": "E-3bd840f3db03add82c0883b0",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "EXTERNAL_SERVICE_SDK",
+    "text": "An SMS provider SDK is referenced; external services are not executed.",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/project_intelligence/findings/1",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "requirements.txt",
+       "line": 7
+      }
+     ],
+     "method": "",
+     "origin": "",
+     "record_type": "findings",
+     "code": "EXTERNAL_SERVICE_SDK",
+     "severity": "INFO",
+     "confidence": "",
+     "category": "",
+     "recommendation": "",
+     "target": {},
+     "description": ""
+    }
+   },
+   {
+    "id": "E-d9be9bf69c283a95a1bf6583",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "SEC_DB_LITERAL_CONFIG",
+    "text": "A literal credential-like value is assigned in configuration (value not shown).",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/code_quality/findings/0",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "config.py",
+       "line": 6
+      }
+     ],
+     "method": "",
+     "origin": "",
+     "record_type": "quality",
+     "code": "SEC_DB_LITERAL_CONFIG",
+     "severity": "HIGH",
+     "confidence": "MEDIUM",
+     "category": "SECURITY",
+     "recommendation": "Move the staff password to an environment variable and rotate it if it was ever real.",
+     "target": {
+      "path": "config.py"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-89b242c6d8d8f0f9208485e3",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "PY_BARE_EXCEPT",
+    "text": "Bare except catches every exception, including programming errors.",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/code_quality/findings/1",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/inventory/routes.py",
+       "line": 47
+      }
+     ],
+     "method": "",
+     "origin": "",
+     "record_type": "quality",
+     "code": "PY_BARE_EXCEPT",
+     "severity": "MEDIUM",
+     "confidence": "HIGH",
+     "category": "LINT",
+     "recommendation": "Catch the specific database or validation exception.",
+     "target": {
+      "path": "app/inventory/routes.py"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-b711df836abffd1a5773fe6d",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "HIGH_CYCLOMATIC",
+    "text": "build_due_list() has cyclomatic complexity 14.",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/code_quality/findings/2",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/reminders/service.py",
+       "line": 12
+      }
+     ],
+     "method": "",
+     "origin": "",
+     "record_type": "quality",
+     "code": "HIGH_CYCLOMATIC",
+     "severity": "MEDIUM",
+     "confidence": "HIGH",
+     "category": "STRUCTURE",
+     "recommendation": "Separate date filtering from formatting.",
+     "target": {
+      "path": "app/reminders/service.py"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-7abd445130152cc510d607a5",
+    "agent": "executioner",
+    "kind": "STATIC_SOURCE",
+    "label": "PY_NONE_COMPARISON",
+    "text": "Comparison to None uses == instead of is.",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/code_quality/findings/3",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": true,
+    "limitations": [
+     "Native static observation or documented feature; not verified functional behavior."
+    ],
+    "data": {
+     "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+     "source_locations": [
+      {
+       "path": "app/patients/routes.py",
+       "line": 33
+      }
+     ],
+     "method": "",
+     "origin": "",
+     "record_type": "quality",
+     "code": "PY_NONE_COMPARISON",
+     "severity": "LOW",
+     "confidence": "HIGH",
+     "category": "LINT",
+     "recommendation": "Use \"is None\".",
+     "target": {
+      "path": "app/patients/routes.py"
+     },
+     "description": ""
+    }
+   },
+   {
+    "id": "E-4076a8159bb83b6084f04d88",
+    "agent": "executioner",
+    "kind": "TEST_PLAN",
+    "label": "Flask application serves GET /",
+    "text": "NOT_TESTED — STATIC_MODE_NO_EXECUTION",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/test_case_matrix/discovered_cases/0",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Unexecuted, inconclusive or not independently matched to a verified observation; no marks."
+    ],
+    "data": {
+     "test_id": "T-00A1F3C2",
+     "reported_outcome": "NOT_TESTED",
+     "category": "HTTP_READINESS"
+    }
+   },
+   {
+    "id": "E-cdb5cb776ec816024d2ea8a6",
+    "agent": "executioner",
+    "kind": "TEST_PLAN",
+    "label": "Inventory dashboard lists expiring batches",
+    "text": "NOT_TESTED — REVIEWED_ORACLE_MISSING",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/test_case_matrix/discovered_cases/1",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Unexecuted, inconclusive or not independently matched to a verified observation; no marks."
+    ],
+    "data": {
+     "test_id": "T-00A1F3C9",
+     "reported_outcome": "NOT_TESTED",
+     "category": "HTTP_ROUTE"
+    }
+   },
+   {
+    "id": "E-989b78650d6556551715f31c",
+    "agent": "executioner",
+    "kind": "TEST_PLAN",
+    "label": "Add medicine rejects negative quantity",
+    "text": "NOT_TESTED — REVIEWED_ORACLE_MISSING",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/test_case_matrix/discovered_cases/2",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Unexecuted, inconclusive or not independently matched to a verified observation; no marks."
+    ],
+    "data": {
+     "test_id": "T-00A1F3D0",
+     "reported_outcome": "NOT_TESTED",
+     "category": "HTTP_ROUTE"
+    }
+   },
+   {
+    "id": "E-a22c4335f903600970d1ecc2",
+    "agent": "executioner",
+    "kind": "TEST_PLAN",
+    "label": "Create schedule for unknown patient is rejected",
+    "text": "NOT_TESTED — REVIEWED_ORACLE_MISSING",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/test_case_matrix/discovered_cases/3",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Unexecuted, inconclusive or not independently matched to a verified observation; no marks."
+    ],
+    "data": {
+     "test_id": "T-00A1F3D7",
+     "reported_outcome": "NOT_TESTED",
+     "category": "HTTP_ROUTE"
+    }
+   },
+   {
+    "id": "E-482bd91484150c690586bfe9",
+    "agent": "executioner",
+    "kind": "TEST_PLAN",
+    "label": "Daily reminders page renders",
+    "text": "NOT_TESTED — STATIC_MODE_NO_EXECUTION",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/test_case_matrix/discovered_cases/4",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Unexecuted, inconclusive or not independently matched to a verified observation; no marks."
+    ],
+    "data": {
+     "test_id": "T-00A1F3DE",
+     "reported_outcome": "NOT_TESTED",
+     "category": "HTTP_ROUTE"
+    }
+   },
+   {
+    "id": "E-0b7b5a93de030b370960dc88",
+    "agent": "executioner",
+    "kind": "TEST_PLAN",
+    "label": "SMS reminder delivery",
+    "text": "NOT_TESTED — UNSUPPORTED_TEST_TARGET",
+    "artifact_sha256": "6d872b281fd25ec32ad00c45c53153433310bc8d429d6fe0057ef8804eafcd74",
+    "locator": "/test_case_matrix/discovered_cases/5",
+    "provenance": "NATIVE_RECEIPT_MATCHED",
+    "eligible_for_review": false,
+    "limitations": [
+     "Unexecuted, inconclusive or not independently matched to a verified observation; no marks."
+    ],
+    "data": {
+     "test_id": "T-00A1F3E5",
+     "reported_outcome": "NOT_TESTED",
+     "category": "SMS"
+    }
+   }
+  ],
+  "observations": {
+   "evaluation_policy": {
+    "version": "L2",
+    "suspect_spans": [],
+    "automatic_judgment": "EVIDENCE_CONSTRAINED"
+   },
+   "summarizer": {
+    "summary_only": true,
+    "legacy_quote_checks": [],
+    "summary": {
+     "summary": "MediTrack is a Flask web application that helps small clinics track medicine stock and remind patients about their doses. The objectives are to record medicines and batches with expiry dates, to show a dashboard of low stock and soon-to-expire batches, to let staff create dose schedules for patients and to show a daily reminder list. The application has three blueprints: inventory, patients and reminders.",
+     "key_points": [
+      "We used Flask with SQLAlchemy for the models and WTForms for form validation.",
+      "Creating a schedule for a patient who does not exist should be rejected.",
+      "The system has not been tested with real clinic data.",
+      "MediTrack replaces the paper register for stock and expiry tracking and gives staff a daily reminder list."
+     ]
+    },
+    "grounded_summary": {
+     "summary": "MediTrack is a Flask web application that helps small clinics track medicine stock and remind patients about their doses. The objectives are to record medicines and batches with expiry dates, to show a dashboard of low stock and soon-to-expire batches, to let staff create dose schedules for patients and to show a daily reminder list. The application has three blueprints: inventory, patients and reminders.",
+     "key_points": [
+      "We used Flask with SQLAlchemy for the models and WTForms for form validation.",
+      "Creating a schedule for a patient who does not exist should be rejected.",
+      "The system has not been tested with real clinic data.",
+      "MediTrack replaces the paper register for stock and expiry tracking and gives staff a daily reminder list."
+     ]
+    },
+    "summary_display_method": "EXTRACTIVE_REPORT_CLAIMS"
+   },
+   "integrity": {
+    "comparison_status": "NOT_AVAILABLE",
+    "reference_overlap": null,
+    "copied_chunks": null,
+    "category_percentages": {
+     "verbatim": null,
+     "near-verbatim": null,
+     "paraphrase": null,
+     "similar meaning (not confirmed)": null
+    },
+    "words_checked": 0,
+    "references_compared": 0,
+    "embedding_status": "NOT_APPLICABLE_NO_REFERENCE_CORPUS",
+    "ai_detection": {
+     "status": "NOT_AVAILABLE",
+     "estimated_percent": null,
+     "interpretation": null,
+     "confidence": null,
+     "flagged_passages": [],
+     "limitations": [
+      "AI-percentage model not found: models/ai-text-detector-v1.01. Run: python scripts/setup_offline.py"
+     ]
+    },
+    "advisory_only": true
+   },
+   "executioner": {
+    "commit_sha": "9a7d3e21c4b5f6a8091b2c3d4e5f60718293a4b5",
+    "effective_mode": "STATIC",
+    "server_endpoints": 9,
+    "features_discovered": 5,
+    "planned_counts": {
+     "PASSED": 0,
+     "FAILED": 0,
+     "INCONCLUSIVE": 0,
+     "BLOCKED": 0,
+     "NOT_TESTED": 6
+    },
+    "maintainability": 81,
+    "security_attestation": "NOT_ATTESTED_FOR_UNTRUSTED_STUDENTS",
+    "reviewed_check_counts": {
+     "PASSED": 0,
+     "FAILED": 0,
+     "INCONCLUSIVE": 0,
+     "BLOCKED": 0,
+     "NOT_TESTED": 0
+    },
+    "source_analysis": {
+     "summary": {
+      "analyzed_files": 14,
+      "production_files": 14,
+      "production_code_lines": 1180,
+      "functions_found": 52,
+      "findings": 4,
+      "source_candidates": 14
+     },
+     "coverage": {
+      "supported_files": 14,
+      "unsupported_files": 0,
+      "skipped_files": 0,
+      "limited_function_files": 0,
+      "source_ratio": 1.0,
+      "function_analysis_scope": "AST_AND_HEURISTIC",
+      "function_file_ratio": 1.0,
+      "function_body_ratio": 0.91,
+      "ast_complexity_share": 1.0,
+      "duplicate_production_lines": 0,
+      "duplicate_production_ratio": 0.0
+     },
+     "indicator_status": "PROVISIONAL",
+     "confidence": "MEDIUM",
+     "overall_score": 81,
+     "not_grade": true
+    },
+    "unavailable_suites": [],
+    "planned_counts_scope": "NATIVE_REPORTED_NOT_ELIGIBILITY"
+   }
+  },
+  "limitations": [
+   "Receipt hashes verify saved bytes, not authenticity, accuracy or student authorship.",
+   "Report excerpts establish what the extracted text says, not what the software actually does. Scans, tables and figures may be missed by the report loader.",
+   "All output is private; treat displayed strings as untrusted text."
+  ]
+ },
+ "decisions": {
+  "schema_version": "2.0",
+  "evidence_sha256": "999d4c605ed56de4221d61a86326ab4893040fe0c932bc0798a1e003652c553d",
+  "rubric_sha256": "322a8a012f18b0ef62275454d732e14d8072313cf170cfe4e77b85e425c20b8e",
+  "decisions": [
+   {
+    "criterion_id": "problem_scope",
+    "action": "SCORE",
+    "source": "MODEL",
+    "level_id": "adequate",
+    "evidence_ids": [
+     "E-c87800dc1aa52b6f2e0e91da",
+     "E-e773e352daf6cd42d1afbb04",
+     "E-1fdf41bb73d9af52500ea217"
+    ],
+    "rationale": "The report states the clinic problem and four objectives covering stock, expiry, schedules and reminders. Intended users and constraints such as staff accounts and data privacy are only briefly covered.",
+    "feedback": {
+     "strength": "The report states the clinic problem and four objectives covering stock, expiry, schedules and reminders.",
+     "limitation": "Intended users and constraints such as staff accounts and data privacy are only briefly covered.",
+     "improvement": "Describe the clinic staff roles and the constraints a real deployment must respect.",
+     "observed_failure": false
+    }
+   },
+   {
+    "criterion_id": "report_quality",
+    "action": "SCORE",
+    "source": "MODEL",
+    "level_id": "adequate",
+    "evidence_ids": [
+     "E-1fdf41bb73d9af52500ea217",
+     "E-4b080fb324dd917b8046352c",
+     "E-c55ec0d1fa631e6f24098651"
+    ],
+    "rationale": "Sections are short and in a logical order from problem to design and testing. Design and testing sections give few specific values or results.",
+    "feedback": {
+     "strength": "Sections are short and in a logical order from problem to design and testing.",
+     "limitation": "Design and testing sections give few specific values or results.",
+     "improvement": "Add the concrete test inputs and observed results for each manual check.",
+     "observed_failure": false
+    }
+   },
+   {
+    "criterion_id": "technical_design",
+    "action": "SCORE",
+    "source": "MODEL",
+    "level_id": "adequate",
+    "evidence_ids": [
+     "E-68f25f1035956b9f444c1a60",
+     "E-4b080fb324dd917b8046352c",
+     "E-1fdf41bb73d9af52500ea217"
+    ],
+    "rationale": "The report describes three blueprints and four related tables, including how a batch belongs to a medicine. Data flow for reminders and access control are not described in detail.",
+    "feedback": {
+     "strength": "The report describes three blueprints and four related tables, including how a batch belongs to a medicine.",
+     "limitation": "Data flow for reminders and access control are not described in detail.",
+     "improvement": "Add a diagram of the tables and explain how reminders are generated.",
+     "observed_failure": false
+    }
+   },
+   {
+    "criterion_id": "implementation_quality",
+    "action": "SCORE",
+    "source": "MODEL",
+    "level_id": "adequate",
+    "evidence_ids": [
+     "E-d9be9bf69c283a95a1bf6583",
+     "E-fbf56c9998428df82f350d38",
+     "E-a5a3a59fd579b645a4ba42c1"
+    ],
+    "rationale": "Static analysis covers all 14 source files and finds SQLAlchemy models and WTForms validation. A credential-like literal in config.py and a bare except in the inventory routes were flagged.",
+    "feedback": {
+     "strength": "Static analysis covers all 14 source files and finds SQLAlchemy models and WTForms validation.",
+     "limitation": "A credential-like literal in config.py and a bare except in the inventory routes were flagged.",
+     "improvement": "Move the staff password to an environment variable and catch specific exceptions.",
+     "observed_failure": false
+    }
+   },
+   {
+    "criterion_id": "functional_validation",
+    "action": "DEFER",
+    "source": "MODEL",
+    "level_id": null,
+    "evidence_ids": [],
+    "rationale": "DECISIVE_RUNTIME_EVIDENCE_NOT_ESTABLISHED; teacher review required.",
+    "feedback": null
+   },
+   {
+    "criterion_id": "testing_strategy",
+    "action": "DEFER",
+    "source": "MODEL",
+    "level_id": null,
+    "evidence_ids": [],
+    "rationale": "DOCUMENTED_TEST_SCENARIOS_NOT_ESTABLISHED; teacher review required.",
+    "feedback": null
+   },
+   {
+    "criterion_id": "research",
+    "action": "DEFER",
+    "source": "MODEL",
+    "level_id": null,
+    "evidence_ids": [],
+    "rationale": "Native research evidence inconclusive or unavailable; no model judgment attempted.",
+    "feedback": null
+   }
+  ]
+ },
+ "report_text": "MediTrack: Medicine Reminder and Inventory Tracker for Small Clinics\nMini-Project Report\n\nAbstract\nMediTrack is a Flask web application that helps small clinics track medicine stock and remind patients about their doses. Staff can add medicines, record stock changes and see which medicines will expire soon. Patients receive a daily reminder list. The application uses Flask, SQLite and Bootstrap.\n\n1. Introduction\nSmall clinics in our area keep medicine stock in paper registers. Expired medicines are often found only during a monthly check, and patients forget follow-up doses. MediTrack moves the register to a simple web application and adds expiry warnings and dose reminders.\n\n2. Problem Statement\nClinic staff need to know the current stock of each medicine, which batches expire within 30 days and which patients have doses due today. The paper register cannot answer these questions quickly.\n\n3. Objectives\nThe objectives are to record medicines and batches with expiry dates, to show a dashboard of low stock and soon-to-expire batches, to let staff create dose schedules for patients and to show a daily reminder list.\n\n4. Literature Review\nMedication adherence is a well-known problem in outpatient care, and reminder systems have been shown to improve adherence [1]. Inventory management in small pharmacies benefits from first-expiry-first-out tracking [2]. We used the Flask documentation for application structure [3].\n\n5. System Design\nThe application has three blueprints: inventory, patients and reminders. Each blueprint has its own routes and templates. SQLite stores four tables: medicines, batches, patients and schedules. A batch belongs to a medicine, and a schedule links a patient to a medicine with a dose time. The dashboard queries batches whose expiry date is within 30 days and medicines whose total stock is below the reorder level.\n\n6. Implementation\nWe used Flask with SQLAlchemy for the models and WTForms for form validation. The reminders page builds the list of doses due today from the schedules table. Staff log in with a single shared password stored in the configuration file. The project includes a requirements.txt file and a run.py entry point.\n\n7. Testing\nWe tested the main pages manually. Adding a medicine with a negative quantity should show a validation error. Creating a schedule for a patient who does not exist should be rejected. The dashboard should list a batch that expires in ten days. All of these checks passed when we ran them on our laptops. We did not write automated tests.\n\n8. Limitations\nLogin uses one shared staff password, so actions cannot be traced to a person. Reminders are only shown on the web page and are not sent by SMS. The system has not been tested with real clinic data.\n\n9. Conclusion\nMediTrack replaces the paper register for stock and expiry tracking and gives staff a daily reminder list. Future work includes individual staff accounts, SMS reminders and import from the clinic's billing software.\n\nReferences\n[1] L. Osterberg and T. Blaschke, \"Adherence to medication,\" New England Journal of Medicine, vol. 353, no. 5, pp. 487-497, 2005.\n[2] S. Gupta, \"Inventory practices in small retail pharmacies,\" Journal of Pharmacy Practice, 2019.\n[3] Pallets Projects, \"Flask Documentation,\" https://flask.palletsprojects.com/.\n",
+ "proposal_diagnostics": {
+  "schema_version": "2.0",
+  "mode": "PROPOSE_ALL",
+  "batches": [
+   {
+    "schema_version": "1.0",
+    "mode": "PROPOSE",
+    "prompt_characters": 6390,
+    "candidate_alias_map": {
+     "E1": "E-c87800dc1aa52b6f2e0e91da",
+     "E2": "E-e773e352daf6cd42d1afbb04",
+     "E3": "E-1fdf41bb73d9af52500ea217",
+     "E4": "E-4b080fb324dd917b8046352c",
+     "E5": "E-c55ec0d1fa631e6f24098651",
+     "E6": "E-de237dbaa1086f40b310aab3",
+     "E7": "E-68f25f1035956b9f444c1a60",
+     "E8": "E-4fa06a1051deb1c1edccafb8",
+     "E9": "E-81cbb6c37da3af6c44505865"
+    },
+    "request": {
+     "criteria": [
+      {
+       "criterion_alias": "C1",
+       "criterion_id": "problem_scope",
+       "description": "Problem and scope: Assess the problem, intended users, objectives, constraints and coherent scope.",
+       "levels": {
+        "L1": "Insufficient: Reviewed evidence shows no coherent problem or objectives.",
+        "L2": "Developing: Problem is vague or objectives largely unclear.",
+        "L3": "Adequate: Problem and main objectives understandable; important constraints or users omitted.",
+        "L4": "Strong: Clear problem, objectives and scope with only minor gaps.",
+        "L5": "Excellent: Precise and justified problem, user needs, measurable objectives and realistic constraints."
+       },
+       "minimum_evidence": 1,
+       "required_evidence": [
+        "REPORT_EXCERPT"
+       ],
+       "candidate_evidence_ids": [
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "E5"
+       ],
+       "feedback_required": true,
+       "evidence_slots": {
+        "REPORT_EXCERPT": [
+         "E1",
+         "E2",
+         "E3",
+         "E4",
+         "E5"
+        ]
+       },
+       "verified_report_signals": {
+        "test_scenarios": [],
+        "negative_checks": [],
+        "limitations": [
+         "E4"
+        ],
+        "design_description": []
+       }
+      },
+      {
+       "criterion_alias": "C2",
+       "criterion_id": "report_quality",
+       "description": "Report quality and clarity: Assess organization, clarity, specificity, and accurate separation of claims, plans and measured results.",
+       "levels": {
+        "L1": "Insufficient: Reviewed report is substantially incoherent or misrepresents critical results.",
+        "L2": "Developing: Major organization or clarity gaps make understanding difficult.",
+        "L3": "Adequate: Readable and structured, but limited specificity or evidence presentation.",
+        "L4": "Strong: Clear, organized, specific report with minor gaps.",
+        "L5": "Excellent: Excellent organization, precise technical communication, and transparent evidence and limitations."
+       },
+       "minimum_evidence": 1,
+       "required_evidence": [
+        "REPORT_EXCERPT"
+       ],
+       "candidate_evidence_ids": [
+        "E3",
+        "E4",
+        "E5",
+        "E1",
+        "E6"
+       ],
+       "feedback_required": true,
+       "evidence_slots": {
+        "REPORT_EXCERPT": [
+         "E3",
+         "E4",
+         "E5",
+         "E1",
+         "E6"
+        ]
+       },
+       "verified_report_signals": {
+        "test_scenarios": [],
+        "negative_checks": [],
+        "limitations": [
+         "E4"
+        ],
+        "design_description": []
+       }
+      },
+      {
+       "criterion_alias": "C3",
+       "criterion_id": "technical_design",
+       "description": "Architecture and technical design: Assess design decisions, appropriate technology, interfaces/data model and explanation of trade-offs.",
+       "levels": {
+        "L1": "Insufficient: Reviewed design is incoherent or unsuitable for the stated problem.",
+        "L2": "Developing: Major unexplained design choices or missing components.",
+        "L3": "Adequate: Reasonable architecture with basic component/data explanation.",
+        "L4": "Strong: Coherent design with justified choices and relevant trade-offs.",
+        "L5": "Excellent: Well-justified architecture, interfaces and data model with explicit constraints and trade-offs."
+       },
+       "minimum_evidence": 1,
+       "required_evidence": [
+        "REPORT_EXCERPT"
+       ],
+       "candidate_evidence_ids": [
+        "E7",
+        "E4",
+        "E3",
+        "E8",
+        "E9"
+       ],
+       "feedback_required": true,
+       "evidence_slots": {
+        "REPORT_EXCERPT": [
+         "E7",
+         "E4",
+         "E3",
+         "E8",
+         "E9"
+        ]
+       },
+       "verified_report_signals": {
+        "test_scenarios": [],
+        "negative_checks": [],
+        "limitations": [
+         "E4"
+        ],
+        "design_description": [
+         "E7"
+        ]
+       }
+      }
+     ],
+     "evidence_by_id": {
+      "E1": {
+       "kind": "REPORT_EXCERPT",
+       "label": "2. Problem Statement | Report characters 684–903",
+       "text": "\n2. Problem Statement\nClinic staff need to know the current stock of each medicine, which batches expire within 30 days and which patients have doses due today. The paper register cannot answer these questions quickly.\n"
+      },
+      "E2": {
+       "kind": "REPORT_EXCERPT",
+       "label": "3. Objectives | Report characters 903–1132",
+       "text": "\n3. Objectives\nThe objectives are to record medicines and batches with expiry dates, to show a dashboard of low stock and soon-to-expire batches, to let staff create dose schedules for patients and to show a daily reminder list.\n"
+      },
+      "E3": {
+       "kind": "REPORT_EXCERPT",
+       "label": "1. Introduction | Report characters 399–684",
+       "text": "\n1. Introduction\nSmall clinics in our area keep medicine stock in paper registers. Expired medicines are often found only during a monthly check, and patients forget follow-up doses. MediTrack moves the register to a simple web application and adds expiry warnings and dose reminders.\n"
+      },
+      "E4": {
+       "kind": "REPORT_EXCERPT",
+       "label": "8. Limitations | Report characters 2542–2757",
+       "text": "\n8. Limitations\nLogin uses one shared staff password, so actions cannot be traced to a person. Reminders are only shown on the web page and are not sent by SMS. The system has not been tested with real clinic data.\n"
+      },
+      "E5": {
+       "kind": "REPORT_EXCERPT",
+       "label": "Abstract | Report characters 89–399",
+       "text": "\nAbstract\nMediTrack is a Flask web application that helps small clinics track medicine stock and remind patients about their doses. Staff can add medicines, record stock changes and see which medicines will expire soon. Patients receive a daily reminder list. The application uses Flask, SQLite and Bootstrap.\n"
+      },
+      "E6": {
+       "kind": "REPORT_EXCERPT",
+       "label": "9. Conclusion | Report characters 2757–2988",
+       "text": "\n9. Conclusion\nMediTrack replaces the paper register for stock and expiry tracking and gives staff a daily reminder list. Future work includes individual staff accounts, SMS reminders and import from the clinic's billing software.\n"
+      },
+      "E7": {
+       "kind": "REPORT_EXCERPT",
+       "label": "5. System Design | Report characters 1437–1868",
+       "text": "\n5. System Design\nThe application has three blueprints: inventory, patients and reminders. Each blueprint has its own routes and templates. SQLite stores four tables: medicines, batches, patients and schedules. A batch belongs to a medicine, and a schedule links a patient to a medicine with a dose time. The dashboard queries batches whose expiry date is within 30 days and medicines whose total stock is below the reorder level.\n"
+      },
+      "E8": {
+       "kind": "REPORT_EXCERPT",
+       "label": "7. Testing | Report characters 2193–2542",
+       "text": "\n7. Testing\nWe tested the main pages manually. Adding a medicine with a negative quantity should show a validation error. Creating a schedule for a patient who does not exist should be rejected. The dashboard should list a batch that expires in ten days. All of these checks passed when we ran them on our laptops. We did not write automated tests.\n"
+      },
+      "E9": {
+       "kind": "REPORT_EXCERPT",
+       "label": "4. Literature Review | Report characters 1132–1437",
+       "text": "\n4. Literature Review\nMedication adherence is a well-known problem in outpatient care, and reminder systems have been shown to improve adherence [1]. Inventory management in small pharmacies benefits from first-expiry-first-out tracking [2]. We used the Flask documentation for application structure [3].\n"
+      }
+     }
+    },
+    "criteria": {
+     "problem_scope": {
+      "code": "PROPOSAL_ACCEPTED",
+      "eligible_count": 12,
+      "candidate_aliases": [
+       "E1",
+       "E2",
+       "E3",
+       "E4",
+       "E5"
+      ]
+     },
+     "report_quality": {
+      "code": "PROPOSAL_ACCEPTED",
+      "eligible_count": 12,
+      "candidate_aliases": [
+       "E3",
+       "E4",
+       "E5",
+       "E1",
+       "E6"
+      ]
+     },
+     "technical_design": {
+      "code": "PROPOSAL_ACCEPTED",
+      "eligible_count": 33,
+      "candidate_aliases": [
+       "E7",
+       "E4",
+       "E3",
+       "E8",
+       "E9"
+      ]
+     }
+    },
+    "model_response": {
+     "C1": {
+      "choice": "L3",
+      "evidence": {
+       "REPORT_EXCERPT": "E1"
+      },
+      "additional_evidence_ids": [
+       "E2",
+       "E3"
+      ],
+      "feedback": {
+       "strength": "The report states the clinic problem and four objectives covering stock, expiry, schedules and reminders.",
+       "limitation": "Intended users and constraints such as staff accounts and data privacy are only briefly covered.",
+       "improvement": "Describe the clinic staff roles and the constraints a real deployment must respect.",
+       "observed_failure": false
+      }
+     },
+     "C2": {
+      "choice": "L3",
+      "evidence": {
+       "REPORT_EXCERPT": "E3"
+      },
+      "additional_evidence_ids": [
+       "E4",
+       "E5"
+      ],
+      "feedback": {
+       "strength": "Sections are short and in a logical order from problem to design and testing.",
+       "limitation": "Design and testing sections give few specific values or results.",
+       "improvement": "Add the concrete test inputs and observed results for each manual check.",
+       "observed_failure": false
+      }
+     },
+     "C3": {
+      "choice": "L3",
+      "evidence": {
+       "REPORT_EXCERPT": "E7"
+      },
+      "additional_evidence_ids": [
+       "E4",
+       "E3"
+      ],
+      "feedback": {
+       "strength": "The report describes three blueprints and four related tables, including how a batch belongs to a medicine.",
+       "limitation": "Data flow for reminders and access control are not described in detail.",
+       "improvement": "Add a diagram of the tables and explain how reminders are generated.",
+       "observed_failure": false
+      }
+     }
+    },
+    "unexpected_criterion_ids": [],
+    "level_alias_map": {
+     "C1": {
+      "L1": "insufficient",
+      "L2": "developing",
+      "L3": "adequate",
+      "L4": "strong",
+      "L5": "excellent"
+     },
+     "C2": {
+      "L1": "insufficient",
+      "L2": "developing",
+      "L3": "adequate",
+      "L4": "strong",
+      "L5": "excellent"
+     },
+     "C3": {
+      "L1": "insufficient",
+      "L2": "developing",
+      "L3": "adequate",
+      "L4": "strong",
+      "L5": "excellent"
+     }
+    },
+    "response_schema": {
+     "$defs": {
+      "EvidenceSlots_C1": {
+       "additionalProperties": false,
+       "properties": {
+        "REPORT_EXCERPT": {
+         "enum": [
+          "E1",
+          "E2",
+          "E3",
+          "E4",
+          "E5"
+         ],
+         "title": "Report Excerpt",
+         "type": "string"
+        }
+       },
+       "required": [
+        "REPORT_EXCERPT"
+       ],
+       "title": "EvidenceSlots_C1",
+       "type": "object"
+      },
+      "EvidenceSlots_C2": {
+       "additionalProperties": false,
+       "properties": {
+        "REPORT_EXCERPT": {
+         "enum": [
+          "E3",
+          "E4",
+          "E5",
+          "E1",
+          "E6"
+         ],
+         "title": "Report Excerpt",
+         "type": "string"
+        }
+       },
+       "required": [
+        "REPORT_EXCERPT"
+       ],
+       "title": "EvidenceSlots_C2",
+       "type": "object"
+      },
+      "EvidenceSlots_C3": {
+       "additionalProperties": false,
+       "properties": {
+        "REPORT_EXCERPT": {
+         "enum": [
+          "E7",
+          "E4",
+          "E3",
+          "E8",
+          "E9"
+         ],
+         "title": "Report Excerpt",
+         "type": "string"
+        }
+       },
+       "required": [
+        "REPORT_EXCERPT"
+       ],
+       "title": "EvidenceSlots_C3",
+       "type": "object"
+      },
+      "Feedback": {
+       "additionalProperties": false,
+       "properties": {
+        "strength": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Strength",
+         "type": "string"
+        },
+        "limitation": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Limitation",
+         "type": "string"
+        },
+        "improvement": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Improvement",
+         "type": "string"
+        },
+        "observed_failure": {
+         "title": "Observed Failure",
+         "type": "boolean"
+        }
+       },
+       "required": [
+        "strength",
+        "limitation",
+        "improvement",
+        "observed_failure"
+       ],
+       "title": "Feedback",
+       "type": "object"
+      },
+      "Proposal_C1": {
+       "additionalProperties": false,
+       "properties": {
+        "choice": {
+         "enum": [
+          "L1",
+          "L2",
+          "L3",
+          "L4",
+          "L5",
+          "D"
+         ],
+         "title": "Choice",
+         "type": "string"
+        },
+        "evidence": {
+         "$ref": "#/$defs/EvidenceSlots_C1"
+        },
+        "additional_evidence_ids": {
+         "items": {
+          "enum": [
+           "E1",
+           "E2",
+           "E3",
+           "E4",
+           "E5"
+          ],
+          "type": "string"
+         },
+         "maxItems": 3,
+         "title": "Additional Evidence Ids",
+         "type": "array"
+        },
+        "feedback": {
+         "$ref": "#/$defs/Feedback"
+        }
+       },
+       "required": [
+        "choice",
+        "evidence",
+        "additional_evidence_ids",
+        "feedback"
+       ],
+       "title": "Proposal_C1",
+       "type": "object"
+      },
+      "Proposal_C2": {
+       "additionalProperties": false,
+       "properties": {
+        "choice": {
+         "enum": [
+          "L1",
+          "L2",
+          "L3",
+          "L4",
+          "L5",
+          "D"
+         ],
+         "title": "Choice",
+         "type": "string"
+        },
+        "evidence": {
+         "$ref": "#/$defs/EvidenceSlots_C2"
+        },
+        "additional_evidence_ids": {
+         "items": {
+          "enum": [
+           "E3",
+           "E4",
+           "E5",
+           "E1",
+           "E6"
+          ],
+          "type": "string"
+         },
+         "maxItems": 3,
+         "title": "Additional Evidence Ids",
+         "type": "array"
+        },
+        "feedback": {
+         "$ref": "#/$defs/Feedback"
+        }
+       },
+       "required": [
+        "choice",
+        "evidence",
+        "additional_evidence_ids",
+        "feedback"
+       ],
+       "title": "Proposal_C2",
+       "type": "object"
+      },
+      "Proposal_C3": {
+       "additionalProperties": false,
+       "properties": {
+        "choice": {
+         "enum": [
+          "L1",
+          "L2",
+          "L3",
+          "L4",
+          "L5",
+          "D"
+         ],
+         "title": "Choice",
+         "type": "string"
+        },
+        "evidence": {
+         "$ref": "#/$defs/EvidenceSlots_C3"
+        },
+        "additional_evidence_ids": {
+         "items": {
+          "enum": [
+           "E7",
+           "E4",
+           "E3",
+           "E8",
+           "E9"
+          ],
+          "type": "string"
+         },
+         "maxItems": 3,
+         "title": "Additional Evidence Ids",
+         "type": "array"
+        },
+        "feedback": {
+         "$ref": "#/$defs/Feedback"
+        }
+       },
+       "required": [
+        "choice",
+        "evidence",
+        "additional_evidence_ids",
+        "feedback"
+       ],
+       "title": "Proposal_C3",
+       "type": "object"
+      }
+     },
+     "additionalProperties": false,
+     "properties": {
+      "C1": {
+       "$ref": "#/$defs/Proposal_C1"
+      },
+      "C2": {
+       "$ref": "#/$defs/Proposal_C2"
+      },
+      "C3": {
+       "$ref": "#/$defs/Proposal_C3"
+      }
+     },
+     "required": [
+      "C1",
+      "C2",
+      "C3"
+     ],
+     "title": "ConstrainedRubricProposals",
+     "type": "object"
+    },
+    "decoded_response": {
+     "decisions": [
+      {
+       "criterion_id": "problem_scope",
+       "action": "SCORE",
+       "level_id": "adequate",
+       "evidence_ids": [
+        "E1",
+        "E2",
+        "E3"
+       ],
+       "rationale": "The report states the clinic problem and four objectives covering stock, expiry, schedules and reminders. Intended users and constraints such as staff accounts and data privacy are only briefly covered.",
+       "feedback": {
+        "strength": "The report states the clinic problem and four objectives covering stock, expiry, schedules and reminders.",
+        "limitation": "Intended users and constraints such as staff accounts and data privacy are only briefly covered.",
+        "improvement": "Describe the clinic staff roles and the constraints a real deployment must respect.",
+        "observed_failure": false
+       }
+      },
+      {
+       "criterion_id": "report_quality",
+       "action": "SCORE",
+       "level_id": "adequate",
+       "evidence_ids": [
+        "E3",
+        "E4",
+        "E5"
+       ],
+       "rationale": "Sections are short and in a logical order from problem to design and testing. Design and testing sections give few specific values or results.",
+       "feedback": {
+        "strength": "Sections are short and in a logical order from problem to design and testing.",
+        "limitation": "Design and testing sections give few specific values or results.",
+        "improvement": "Add the concrete test inputs and observed results for each manual check.",
+        "observed_failure": false
+       }
+      },
+      {
+       "criterion_id": "technical_design",
+       "action": "SCORE",
+       "level_id": "adequate",
+       "evidence_ids": [
+        "E7",
+        "E4",
+        "E3"
+       ],
+       "rationale": "The report describes three blueprints and four related tables, including how a batch belongs to a medicine. Data flow for reminders and access control are not described in detail.",
+       "feedback": {
+        "strength": "The report describes three blueprints and four related tables, including how a batch belongs to a medicine.",
+        "limitation": "Data flow for reminders and access control are not described in detail.",
+        "improvement": "Add a diagram of the tables and explain how reminders are generated.",
+        "observed_failure": false
+       }
+      }
+     ]
+    },
+    "recovery_attempts": []
+   },
+   {
+    "schema_version": "1.0",
+    "mode": "PROPOSE",
+    "prompt_characters": 4219,
+    "candidate_alias_map": {
+     "E1": "E-d9be9bf69c283a95a1bf6583",
+     "E2": "E-fbf56c9998428df82f350d38",
+     "E3": "E-a5a3a59fd579b645a4ba42c1",
+     "E4": "E-89b242c6d8d8f0f9208485e3",
+     "E5": "E-b711df836abffd1a5773fe6d",
+     "E6": "E-4b080fb324dd917b8046352c",
+     "E7": "E-4fa06a1051deb1c1edccafb8"
+    },
+    "request": {
+     "criteria": [
+      {
+       "criterion_alias": "C1",
+       "criterion_id": "implementation_quality",
+       "description": "Implementation and engineering quality: Assess source-supported implementation, maintainability, appropriate structure and security/reliability handling; do not equate heuristic indicators to marks.",
+       "levels": {
+        "L1": "Insufficient: Reviewed source demonstrates substantial implementation deficiencies.",
+        "L2": "Developing: Major source-supported engineering problems or incomplete design realization.",
+        "L3": "Adequate: Core implementation is plausible with significant engineering gaps.",
+        "L4": "Strong: Source-supported implementation is coherent, with minor or bounded concerns.",
+        "L5": "Excellent: Source-supported implementation demonstrates strong structure and robust handling of relevant concerns."
+       },
+       "minimum_evidence": 1,
+       "required_evidence": [
+        "STATIC_SOURCE"
+       ],
+       "candidate_evidence_ids": [
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "E5",
+        "E6",
+        "E7"
+       ],
+       "feedback_required": true,
+       "evidence_slots": {
+        "STATIC_SOURCE": [
+         "E1",
+         "E3",
+         "E4",
+         "E5"
+        ]
+       },
+       "verified_report_signals": {
+        "test_scenarios": [],
+        "negative_checks": [],
+        "limitations": [
+         "E6"
+        ],
+        "design_description": []
+       }
+      }
+     ],
+     "evidence_by_id": {
+      "E1": {
+       "kind": "STATIC_SOURCE",
+       "label": "SEC_DB_LITERAL_CONFIG",
+       "text": "A literal credential-like value is assigned in configuration (value not shown).",
+       "limitations": [
+        "Native static observation or documented feature; not verified functional behavior."
+       ],
+       "record_type": "quality",
+       "severity": "HIGH",
+       "confidence": "MEDIUM",
+       "category": "SECURITY",
+       "recommendation": "Move the staff password to an environment variable and rotate it if it was ever real.",
+       "target": {
+        "path": "config.py"
+       },
+       "finding_instances": 1,
+       "source_locations": [
+        {
+         "path": "config.py",
+         "line": 6
+        }
+       ]
+      },
+      "E2": {
+       "kind": "REPORT_EXCERPT",
+       "label": "6. Implementation | Report characters 1868–2193",
+       "text": "\n6. Implementation\nWe used Flask with SQLAlchemy for the models and WTForms for form validation. The reminders page builds the list of doses due today from the schedules table. Staff log in with a single shared password stored in the configuration file. The project includes a requirements.txt file and a run.py entry point.\n"
+      },
+      "E3": {
+       "kind": "STATIC_SOURCE",
+       "label": "Source analysis inventory",
+       "text": "{\"analyzed_files\":14,\"findings\":4,\"functions_found\":52,\"production_code_lines\":1180,\"production_files\":14,\"source_candidates\":14}",
+       "limitations": [
+        "Source inventory is not evidence of engineering quality or successful behavior."
+       ],
+       "record_type": "source_inventory"
+      },
+      "E4": {
+       "kind": "STATIC_SOURCE",
+       "label": "PY_BARE_EXCEPT",
+       "text": "Bare except catches every exception, including programming errors.",
+       "limitations": [
+        "Native static observation or documented feature; not verified functional behavior."
+       ],
+       "record_type": "quality",
+       "severity": "MEDIUM",
+       "confidence": "HIGH",
+       "category": "LINT",
+       "recommendation": "Catch the specific database or validation exception.",
+       "target": {
+        "path": "app/inventory/routes.py"
+       },
+       "finding_instances": 1,
+       "source_locations": [
+        {
+         "path": "app/inventory/routes.py",
+         "line": 47
+        }
+       ]
+      },
+      "E5": {
+       "kind": "STATIC_SOURCE",
+       "label": "HIGH_CYCLOMATIC",
+       "text": "build_due_list() has cyclomatic complexity 14.",
+       "limitations": [
+        "Native static observation or documented feature; not verified functional behavior."
+       ],
+       "record_type": "quality",
+       "severity": "MEDIUM",
+       "confidence": "HIGH",
+       "category": "STRUCTURE",
+       "recommendation": "Separate date filtering from formatting.",
+       "target": {
+        "path": "app/reminders/service.py"
+       },
+       "finding_instances": 1,
+       "source_locations": [
+        {
+         "path": "app/reminders/service.py",
+         "line": 12
+        }
+       ]
+      },
+      "E6": {
+       "kind": "REPORT_EXCERPT",
+       "label": "8. Limitations | Report characters 2542–2757",
+       "text": "\n8. Limitations\nLogin uses one shared staff password, so actions cannot be traced to a person. Reminders are only shown on the web page and are not sent by SMS. The system has not been tested with real clinic data.\n"
+      },
+      "E7": {
+       "kind": "REPORT_EXCERPT",
+       "label": "7. Testing | Report characters 2193–2542",
+       "text": "\n7. Testing\nWe tested the main pages manually. Adding a medicine with a negative quantity should show a validation error. Creating a schedule for a patient who does not exist should be rejected. The dashboard should list a batch that expires in ten days. All of these checks passed when we ran them on our laptops. We did not write automated tests.\n"
+      }
+     }
+    },
+    "criteria": {
+     "implementation_quality": {
+      "code": "PROPOSAL_ACCEPTED",
+      "eligible_count": 18,
+      "candidate_aliases": [
+       "E1",
+       "E2",
+       "E3",
+       "E4",
+       "E5",
+       "E6",
+       "E7"
+      ]
+     },
+     "functional_validation": {
+      "code": "DECISIVE_RUNTIME_EVIDENCE_NOT_ESTABLISHED",
+      "eligible_count": 0
+     },
+     "testing_strategy": {
+      "code": "DOCUMENTED_TEST_SCENARIOS_NOT_ESTABLISHED",
+      "eligible_count": 0
+     }
+    },
+    "model_response": {
+     "C1": {
+      "choice": "L3",
+      "evidence": {
+       "STATIC_SOURCE": "E1"
+      },
+      "additional_evidence_ids": [
+       "E2",
+       "E3"
+      ],
+      "feedback": {
+       "strength": "Static analysis covers all 14 source files and finds SQLAlchemy models and WTForms validation.",
+       "limitation": "A credential-like literal in config.py and a bare except in the inventory routes were flagged.",
+       "improvement": "Move the staff password to an environment variable and catch specific exceptions.",
+       "observed_failure": false
+      }
+     }
+    },
+    "unexpected_criterion_ids": [],
+    "level_alias_map": {
+     "C1": {
+      "L1": "insufficient",
+      "L2": "developing",
+      "L3": "adequate",
+      "L4": "strong",
+      "L5": "excellent"
+     }
+    },
+    "response_schema": {
+     "$defs": {
+      "EvidenceSlots_C1": {
+       "additionalProperties": false,
+       "properties": {
+        "STATIC_SOURCE": {
+         "enum": [
+          "E1",
+          "E3",
+          "E4",
+          "E5"
+         ],
+         "title": "Static Source",
+         "type": "string"
+        }
+       },
+       "required": [
+        "STATIC_SOURCE"
+       ],
+       "title": "EvidenceSlots_C1",
+       "type": "object"
+      },
+      "Feedback": {
+       "additionalProperties": false,
+       "properties": {
+        "strength": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Strength",
+         "type": "string"
+        },
+        "limitation": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Limitation",
+         "type": "string"
+        },
+        "improvement": {
+         "maxLength": 220,
+         "minLength": 1,
+         "title": "Improvement",
+         "type": "string"
+        },
+        "observed_failure": {
+         "title": "Observed Failure",
+         "type": "boolean"
+        }
+       },
+       "required": [
+        "strength",
+        "limitation",
+        "improvement",
+        "observed_failure"
+       ],
+       "title": "Feedback",
+       "type": "object"
+      },
+      "Proposal_C1": {
+       "additionalProperties": false,
+       "properties": {
+        "choice": {
+         "enum": [
+          "L1",
+          "L2",
+          "L3",
+          "L4",
+          "L5",
+          "D"
+         ],
+         "title": "Choice",
+         "type": "string"
+        },
+        "evidence": {
+         "$ref": "#/$defs/EvidenceSlots_C1"
+        },
+        "additional_evidence_ids": {
+         "items": {
+          "enum": [
+           "E1",
+           "E2",
+           "E3",
+           "E4",
+           "E5",
+           "E6",
+           "E7"
+          ],
+          "type": "string"
+         },
+         "maxItems": 3,
+         "title": "Additional Evidence Ids",
+         "type": "array"
+        },
+        "feedback": {
+         "$ref": "#/$defs/Feedback"
+        }
+       },
+       "required": [
+        "choice",
+        "evidence",
+        "additional_evidence_ids",
+        "feedback"
+       ],
+       "title": "Proposal_C1",
+       "type": "object"
+      }
+     },
+     "additionalProperties": false,
+     "properties": {
+      "C1": {
+       "$ref": "#/$defs/Proposal_C1"
+      }
+     },
+     "required": [
+      "C1"
+     ],
+     "title": "ConstrainedRubricProposals",
+     "type": "object"
+    },
+    "decoded_response": {
+     "decisions": [
+      {
+       "criterion_id": "implementation_quality",
+       "action": "SCORE",
+       "level_id": "adequate",
+       "evidence_ids": [
+        "E1",
+        "E2",
+        "E3"
+       ],
+       "rationale": "Static analysis covers all 14 source files and finds SQLAlchemy models and WTForms validation. A credential-like literal in config.py and a bare except in the inventory routes were flagged.",
+       "feedback": {
+        "strength": "Static analysis covers all 14 source files and finds SQLAlchemy models and WTForms validation.",
+        "limitation": "A credential-like literal in config.py and a bare except in the inventory routes were flagged.",
+        "improvement": "Move the staff password to an environment variable and catch specific exceptions.",
+        "observed_failure": false
+       }
+      }
+     ]
+    },
+    "recovery_attempts": []
+   },
+   {
+    "schema_version": "1.0",
+    "mode": "PROPOSE",
+    "prompt_characters": 0,
+    "candidate_alias_map": {},
+    "request": {
+     "criteria": [],
+     "evidence_by_id": {}
+    },
+    "criteria": {
+     "research": {
+      "code": "RESEARCH_NATIVE_EVIDENCE_UNAVAILABLE",
+      "eligible_count": 0
+     }
+    },
+    "model_response": null,
+    "unexpected_criterion_ids": [],
+    "level_alias_map": {},
+    "response_schema": null,
+    "recovery_attempts": []
+   }
+  ],
+  "planned_batches": [
+   [
+    "problem_scope",
+    "report_quality",
+    "technical_design"
+   ],
+   [
+    "implementation_quality",
+    "functional_validation",
+    "testing_strategy"
+   ],
+   [
+    "research"
+   ]
+  ]
+ },
+ "reweight_check": {
+  "rubric": {
+   "schema_version": "2.0",
+   "id": "software-project-unified",
+   "title": "Software project — unified faculty rubric",
+   "revision": "1",
+   "total_points": 80.0,
+   "group_weights": {
+    "problem": 15.0,
+    "report": 15.0,
+    "design": 40.0,
+    "implementation": 40.0,
+    "validation": 20.0,
+    "research": 10.0
+   },
+   "criteria": [
+    {
+     "id": "problem_scope",
+     "title": "Problem and scope",
+     "description": "Assess the problem, intended users, objectives, constraints and coherent scope.",
+     "group": "problem",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed evidence shows no coherent problem or objectives.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Problem is vague or objectives largely unclear.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Problem and main objectives understandable; important constraints or users omitted.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear problem, objectives and scope with only minor gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Precise and justified problem, user needs, measurable objectives and realistic constraints.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "REPORT"
+    },
+    {
+     "id": "report_quality",
+     "title": "Report quality and clarity",
+     "description": "Assess organization, clarity, specificity, and accurate separation of claims, plans and measured results.",
+     "group": "report",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed report is substantially incoherent or misrepresents critical results.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major organization or clarity gaps make understanding difficult.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Readable and structured, but limited specificity or evidence presentation.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear, organized, specific report with minor gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Excellent organization, precise technical communication, and transparent evidence and limitations.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "REPORT"
+    },
+    {
+     "id": "technical_design",
+     "title": "Architecture and technical design",
+     "description": "Assess design decisions, appropriate technology, interfaces/data model and explanation of trade-offs.",
+     "group": "design",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "STATIC_SOURCE"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed design is incoherent or unsuitable for the stated problem.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major unexplained design choices or missing components.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Reasonable architecture with basic component/data explanation.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Coherent design with justified choices and relevant trade-offs.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Well-justified architecture, interfaces and data model with explicit constraints and trade-offs.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "DESIGN"
+    },
+    {
+     "id": "implementation_quality",
+     "title": "Implementation and engineering quality",
+     "description": "Assess source-supported implementation, maintainability, appropriate structure and security/reliability handling; do not equate heuristic indicators to marks.",
+     "group": "implementation",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "STATIC_SOURCE"
+     ],
+     "required_evidence": [
+      "STATIC_SOURCE"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed source demonstrates substantial implementation deficiencies.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Major source-supported engineering problems or incomplete design realization.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Core implementation is plausible with significant engineering gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Source-supported implementation is coherent, with minor or bounded concerns.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Source-supported implementation demonstrates strong structure and robust handling of relevant concerns.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "IMPLEMENTATION"
+    },
+    {
+     "id": "functional_validation",
+     "title": "Functional behavior and validation",
+     "description": "Assess scoped, executed functional evidence and whether testing supports requirements. Static discovery and readiness alone do not prove functionality. No runtime observations means this criterion remains unassessed. This does not measure full application coverage.",
+     "group": "validation",
+     "weight": 90.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "STATIC_SOURCE",
+      "TEST_OBSERVATION"
+     ],
+     "required_evidence": [
+      "TEST_OBSERVATION"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed functional evidence demonstrates major failures of agreed requirements.",
+       "requires_failed_observation": true
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Reviewed executed evidence verifies only narrow agreed behavior or demonstrates significant failing behavior. Limited coverage is not evidence of failure.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Some agreed behaviors verified with material gaps.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Most agreed behavior verified, with clearly bounded limitations.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Representative agreed behaviors verified, including relevant negative cases; limitations disclosed.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "FUNCTIONAL"
+    },
+    {
+     "id": "testing_strategy",
+     "title": "Testing strategy and limitations",
+     "description": "Assess the documented validation strategy, including clear expected outcomes, negative checks and honest limitations. Do not score executed correctness or penalize missing execution here.",
+     "group": "validation",
+     "weight": 10.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT"
+     ],
+     "minimum_evidence": 1,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Reviewed text contains no meaningful validation strategy or substantially misrepresents what was tested.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Very limited scenarios or no clear expected outcomes.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Useful scenarios and some expected outcomes, but incomplete negative cases or reproducibility details.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Clear representative scenarios and expected outcomes with explicit limitations and some negative checks.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Comprehensive requirements-linked strategy with concrete oracles, negative cases, reproducibility details and honest limitations.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "TEST_STRATEGY"
+    },
+    {
+     "id": "research",
+     "title": "Research and use of sources",
+     "description": "Assess the assignment-required literature or documented technical sources, their relevance and use. If the assignment does not require this, explicitly exclude.",
+     "group": "research",
+     "weight": 100.0,
+     "applicability": "REQUIRED",
+     "method": "JUDGMENT",
+     "allowed_evidence": [
+      "REPORT_EXCERPT",
+      "RESEARCH_RECORD"
+     ],
+     "required_evidence": [
+      "REPORT_EXCERPT",
+      "RESEARCH_RECORD"
+     ],
+     "minimum_evidence": 2,
+     "levels": [
+      {
+       "id": "insufficient",
+       "label": "Insufficient",
+       "fraction": 0.0,
+       "descriptor": "Required sources are demonstrably absent or irrelevant after review.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "developing",
+       "label": "Developing",
+       "fraction": 0.25,
+       "descriptor": "Minimal or poorly connected source use.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "adequate",
+       "label": "Adequate",
+       "fraction": 0.5,
+       "descriptor": "Relevant sources cited but synthesis or coverage limited.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "strong",
+       "label": "Strong",
+       "fraction": 0.75,
+       "descriptor": "Relevant sources integrated and limitations understood.",
+       "requires_failed_observation": false
+      },
+      {
+       "id": "excellent",
+       "label": "Excellent",
+       "fraction": 1.0,
+       "descriptor": "Well-chosen, critically synthesized sources supporting the project with transparent provenance.",
+       "requires_failed_observation": false
+      }
+     ],
+     "test_ids": [],
+     "requirement_map": {},
+     "feedback_required": true,
+     "focus": "RESEARCH"
+    }
+   ]
+  },
+  "assessment": {
+   "schema_version": "2.0",
+   "evidence_sha256": "999d4c605ed56de4221d61a86326ab4893040fe0c932bc0798a1e003652c553d",
+   "rubric_sha256": "3619ec074d315c4b4fba3ec87c1baa75742f7b312266d5c52089bd58b0deaadd",
+   "decisions_sha256": "28fab5383fe10a953258dbab4a1727760a737592b4a8ad5cb321508cd188ab0d",
+   "status": "INSUFFICIENT_EVIDENCE",
+   "max_points": 80.0,
+   "proposed_points": null,
+   "reviewed_points": null,
+   "assessed_subtotal_points": 31.43,
+   "assessed_max_points": 62.86,
+   "assessed_weight_percent": 78.57,
+   "reviewed_weight_percent": 0.0,
+   "unresolved_criterion_ids": [
+    "functional_validation",
+    "testing_strategy",
+    "research"
+   ],
+   "criteria": [
+    {
+     "id": "problem_scope",
+     "group": "problem",
+     "title": "Problem and scope",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 10.71,
+     "max_points": 8.57,
+     "earned_points": 4.29,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-c87800dc1aa52b6f2e0e91da",
+      "E-e773e352daf6cd42d1afbb04",
+      "E-1fdf41bb73d9af52500ea217"
+     ],
+     "reason": "The report states the clinic problem and four objectives covering stock, expiry, schedules and reminders. Intended users and constraints such as staff accounts and data privacy are only briefly covered.",
+     "feedback": {
+      "strength": "The report states the clinic problem and four objectives covering stock, expiry, schedules and reminders.",
+      "limitation": "Intended users and constraints such as staff accounts and data privacy are only briefly covered.",
+      "improvement": "Describe the clinic staff roles and the constraints a real deployment must respect.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "report_quality",
+     "group": "report",
+     "title": "Report quality and clarity",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 10.71,
+     "max_points": 8.57,
+     "earned_points": 4.29,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-1fdf41bb73d9af52500ea217",
+      "E-4b080fb324dd917b8046352c",
+      "E-c55ec0d1fa631e6f24098651"
+     ],
+     "reason": "Sections are short and in a logical order from problem to design and testing. Design and testing sections give few specific values or results.",
+     "feedback": {
+      "strength": "Sections are short and in a logical order from problem to design and testing.",
+      "limitation": "Design and testing sections give few specific values or results.",
+      "improvement": "Add the concrete test inputs and observed results for each manual check.",
+      "observed_failure": false
+     },
+     "review_flags": [
+      "FEEDBACK_NEEDS_MORE_EVIDENCE_SPECIFIC_DETAIL"
+     ],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "technical_design",
+     "group": "design",
+     "title": "Architecture and technical design",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 28.57,
+     "max_points": 22.86,
+     "earned_points": 11.43,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-68f25f1035956b9f444c1a60",
+      "E-4b080fb324dd917b8046352c",
+      "E-1fdf41bb73d9af52500ea217"
+     ],
+     "reason": "The report describes three blueprints and four related tables, including how a batch belongs to a medicine. Data flow for reminders and access control are not described in detail.",
+     "feedback": {
+      "strength": "The report describes three blueprints and four related tables, including how a batch belongs to a medicine.",
+      "limitation": "Data flow for reminders and access control are not described in detail.",
+      "improvement": "Add a diagram of the tables and explain how reminders are generated.",
+      "observed_failure": false
+     },
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "implementation_quality",
+     "group": "implementation",
+     "title": "Implementation and engineering quality",
+     "applicability": "REQUIRED",
+     "status": "PROPOSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 28.57,
+     "max_points": 22.86,
+     "earned_points": 11.43,
+     "fraction": 0.5,
+     "level_id": "adequate",
+     "evidence_ids": [
+      "E-d9be9bf69c283a95a1bf6583",
+      "E-fbf56c9998428df82f350d38",
+      "E-a5a3a59fd579b645a4ba42c1"
+     ],
+     "reason": "Static analysis covers all 14 source files and finds SQLAlchemy models and WTForms validation. SEC_DB_LITERAL_CONFIG: config.py:6 (static observation; contextual review required).",
+     "feedback": {
+      "strength": "Static analysis covers all 14 source files and finds SQLAlchemy models and WTForms validation.",
+      "limitation": "SEC_DB_LITERAL_CONFIG: config.py:6 (static observation; contextual review required).",
+      "improvement": "Move the staff password to an environment variable and rotate it if it was ever real.",
+      "observed_failure": false
+     },
+     "review_flags": [
+      "STATIC_FINDINGS_REQUIRE_CONTEXTUAL_REVIEW"
+     ],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "functional_validation",
+     "group": "validation",
+     "title": "Functional behavior and validation",
+     "applicability": "REQUIRED",
+     "status": "UNASSESSED",
+     "configured_weight": 90.0,
+     "effective_weight_percent": 12.86,
+     "max_points": 10.29,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "DECISIVE_RUNTIME_EVIDENCE_NOT_ESTABLISHED; teacher review required.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "testing_strategy",
+     "group": "validation",
+     "title": "Testing strategy and limitations",
+     "applicability": "REQUIRED",
+     "status": "UNASSESSED",
+     "configured_weight": 10.0,
+     "effective_weight_percent": 1.43,
+     "max_points": 1.14,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "DOCUMENTED_TEST_SCENARIOS_NOT_ESTABLISHED; teacher review required.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    },
+    {
+     "id": "research",
+     "group": "research",
+     "title": "Research and use of sources",
+     "applicability": "REQUIRED",
+     "status": "UNASSESSED",
+     "configured_weight": 100.0,
+     "effective_weight_percent": 7.14,
+     "max_points": 5.71,
+     "earned_points": null,
+     "fraction": null,
+     "level_id": null,
+     "evidence_ids": [],
+     "reason": "Native research evidence inconclusive or unavailable; no model judgment attempted.",
+     "feedback": null,
+     "review_flags": [],
+     "objective_details": {},
+     "evidence_details": []
+    }
+   ],
+   "groups": [
+    {
+     "id": "problem",
+     "effective_weight_percent": 10.71,
+     "max_points": 8.57,
+     "assessed_max_points": 8.57,
+     "assessed_subtotal_points": 4.29,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "report",
+     "effective_weight_percent": 10.71,
+     "max_points": 8.57,
+     "assessed_max_points": 8.57,
+     "assessed_subtotal_points": 4.29,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "design",
+     "effective_weight_percent": 28.57,
+     "max_points": 22.86,
+     "assessed_max_points": 22.86,
+     "assessed_subtotal_points": 11.43,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "implementation",
+     "effective_weight_percent": 28.57,
+     "max_points": 22.86,
+     "assessed_max_points": 22.86,
+     "assessed_subtotal_points": 11.43,
+     "assessed_weight_percent": 100.0,
+     "unresolved_criterion_ids": []
+    },
+    {
+     "id": "validation",
+     "effective_weight_percent": 14.29,
+     "max_points": 11.43,
+     "assessed_max_points": 0.0,
+     "assessed_subtotal_points": 0.0,
+     "assessed_weight_percent": 0.0,
+     "unresolved_criterion_ids": [
+      "functional_validation",
+      "testing_strategy"
+     ]
+    },
+    {
+     "id": "research",
+     "effective_weight_percent": 7.14,
+     "max_points": 5.71,
+     "assessed_max_points": 0.0,
+     "assessed_subtotal_points": 0.0,
+     "assessed_weight_percent": 0.0,
+     "unresolved_criterion_ids": [
+      "research"
+     ]
+    }
+   ],
+   "limitations": [
+    "Integrity estimates and legacy Summarizer grades are advisory and never contribute to marks.",
+    "Evidence IDs establish traceability, not correctness of a qualitative judgment. Teacher review is required.",
+    "Excluded weights are redistributed proportionally; unresolved weights are not redistributed.",
+    "Objective scenario success and explicitly mapped requirement evidence coverage measure distinct properties; neither proves unrestricted correctness.",
+    "Display values are rounded independently; totals use unrounded arithmetic. Teacher-reviewed is a local operator status, not authenticated institutional approval."
+   ]
+  }
+ }
+}
