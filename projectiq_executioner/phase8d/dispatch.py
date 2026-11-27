@@ -42,12 +42,14 @@ def plan_local(root,out,**options):
     base,plan,_=compile_runtime(root,**options);out=fresh(out);write(out/'execution_plan.json',base);write(out/'runtime_plan.json',plan);return plan
 
 
-def dispatch(url,ref,out,*,run_reviewed=False,legacy_reviewed=False,fetch=False,reuse_npm_bundle=None,reuse_python_dir=None,vm_config=None,node_tarball=None,node_sha256=None,node_version='v24.22.3',node_catalog=None,pip_wheel=None,pip_sha256=None,python_version='3.12.3',allow_inferred=False,component=None,all_independent=False,max_vms=1,enable_optional_toolchains=False,require_bounded_volume=False,static_report=False,functional_plan=None):
+def dispatch(url,ref,out,*,run_reviewed=False,legacy_reviewed=False,fetch=False,reuse_npm_bundle=None,reuse_python_dir=None,vm_config=None,node_tarball=None,node_sha256=None,node_version='v24.22.3',node_catalog=None,pip_wheel=None,pip_sha256=None,python_version='3.12.3',allow_inferred=False,component=None,all_independent=False,max_vms=1,enable_optional_toolchains=False,require_bounded_volume=False,static_report=False,functional_plan=None,adaptive=False,confirm_disposable_state=False):
     from ..orchestration.adapters import pinned_checkout
     from ..orchestration.contracts import validate_request,source_matches_url
     req=validate_request({'submission_id':'PHASE8D','repository_url':url,'ref':ref,'mode':'STATIC','max_vm_launches':0})
     require(type(max_vms) is int and 1<=max_vms<=4,'VM_BUDGET_INVALID');require(not run_reviewed or vm_config is not None,'REVIEWED_CONFIG_REQUIRED')
     require(not legacy_reviewed or run_reviewed and not any((fetch,reuse_npm_bundle,reuse_python_dir,component,all_independent,require_bounded_volume,enable_optional_toolchains,static_report)) and max_vms==1,'LEGACY_ROUTE_REQUIRES_EXISTING_ASSETS_AND_ONE_VM')
+    require(type(adaptive) is bool and (not adaptive or functional_plan is not None),'ADAPTIVE_REQUIRES_FUNCTIONAL_PLAN')
+    require(not adaptive or confirm_disposable_state is True,'EXPLICIT_DISPOSABLE_STATE_CONFIRMATION_REQUIRED')
     require(functional_plan is None or (run_reviewed and not legacy_reviewed and not all_independent and max_vms==1),'FUNCTIONAL_SINGLE_REVIEWED_COMPONENT_REQUIRED')
     require(not (node_catalog and (node_tarball or node_sha256)),'CHOOSE_NODE_ASSET_OR_CATALOG')
     assets=load_node_catalog(node_catalog) if node_catalog else {}
@@ -70,7 +72,8 @@ def dispatch(url,ref,out,*,run_reviewed=False,legacy_reviewed=False,fetch=False,
                     if functional_plan is not None:
                         from ..phase9b.execution import rederive_suite
                         require(len(rows)==1,'FUNCTIONAL_SINGLE_REVIEWED_COMPONENT_REQUIRED')
-                        suite=rederive_suite(functional_plan,source,root,plan,rows[0],out)
+                        suite=rederive_suite(functional_plan,source,root,plan,rows[0],out,**({'adaptive':True} if adaptive else {}))
+                        if adaptive:result['adaptive_contract_sha256']=digest(suite['workflow'])
                     # Reject before source transfer, package acquisition or any launch.
                     if any(r['adapter'].startswith('NODE_') for r in rows):
                         if not assets:
@@ -122,7 +125,7 @@ def dispatch(url,ref,out,*,run_reviewed=False,legacy_reviewed=False,fetch=False,
                 result.update(status='REVIEWED_FUNCTIONAL_EVIDENCE_COMPLETE',stage='COMPLETE')
             else:result.update(status='REVIEWED_COMPONENT_SMOKE_COMPLETE',stage='COMPLETE')
     except (Exception,KeyboardInterrupt) as exc:
-        known={'SOURCE_IDENTITY_MISMATCH','SOURCE_CHANGED','EXISTING_OPERATOR_APPROVAL_REQUIRED','CONFIG_CHANGED','COMPONENT_SELECTION_NOT_UNIQUE','CHOOSE_COMPONENT_OR_ALL','EXPLICIT_MULTI_COMPONENT_SELECTION_REQUIRED','NO_COMPONENT_SELECTED','VM_BUDGET_EXCEEDED','SELECTED_COMPONENT_BLOCKED','OPTIONAL_TOOLCHAIN_OPT_IN_REQUIRED','NODE_ASSET_MISMATCH','PIP_ASSET_MISMATCH','EXPLICIT_FETCH_OR_REUSE_REQUIRED','SOURCE_LINKED','SOURCE_MEMBER_LIMIT','SOURCE_TOTAL_LIMIT','SOURCE_ARCHIVE_LIMIT','STATIC_ORCHESTRATION_UNVERIFIED','COMPONENT_RUNTIME_UNVERIFIED','LEGACY_READINESS_UNVERIFIED','PYTHON_LOCK_MISMATCH','PYTHON_LOCK_REQUIREMENT_MISMATCH','PYTHON_WHEELHOUSE_MEMBER_MISMATCH','PYTHON_WHEELHOUSE_HASH_MISMATCH','PYTHON_WHEELHOUSE_CHANGED','NPM_BUNDLE_MEMBER_SET_MISMATCH','NPM_BUNDLE_MANIFEST_MISMATCH','NPM_BUNDLE_INTEGRITY_MISMATCH','REGISTRY_ACQUISITION_FAILED','HOST_TOOLCHAIN_UNVERIFIED','MANAGED_ROOT_ACL_UNVERIFIED','FUNCTIONAL_PLAN_REDERIVATION_MISMATCH','FUNCTIONAL_CONTRACT_INVALID','FUNCTIONAL_COMPONENT_MISMATCH'}|SAFE_ERRORS
+        known={'SOURCE_IDENTITY_MISMATCH','SOURCE_CHANGED','EXISTING_OPERATOR_APPROVAL_REQUIRED','CONFIG_CHANGED','COMPONENT_SELECTION_NOT_UNIQUE','CHOOSE_COMPONENT_OR_ALL','EXPLICIT_MULTI_COMPONENT_SELECTION_REQUIRED','NO_COMPONENT_SELECTED','VM_BUDGET_EXCEEDED','SELECTED_COMPONENT_BLOCKED','OPTIONAL_TOOLCHAIN_OPT_IN_REQUIRED','NODE_ASSET_MISMATCH','PIP_ASSET_MISMATCH','EXPLICIT_FETCH_OR_REUSE_REQUIRED','SOURCE_LINKED','SOURCE_MEMBER_LIMIT','SOURCE_TOTAL_LIMIT','SOURCE_ARCHIVE_LIMIT','STATIC_ORCHESTRATION_UNVERIFIED','COMPONENT_RUNTIME_UNVERIFIED','LEGACY_READINESS_UNVERIFIED','PYTHON_LOCK_MISMATCH','PYTHON_LOCK_REQUIREMENT_MISMATCH','PYTHON_WHEELHOUSE_MEMBER_MISMATCH','PYTHON_WHEELHOUSE_HASH_MISMATCH','PYTHON_WHEELHOUSE_CHANGED','NPM_BUNDLE_MEMBER_SET_MISMATCH','NPM_BUNDLE_MANIFEST_MISMATCH','NPM_BUNDLE_INTEGRITY_MISMATCH','REGISTRY_ACQUISITION_FAILED','HOST_TOOLCHAIN_UNVERIFIED','MANAGED_ROOT_ACL_UNVERIFIED','FUNCTIONAL_PLAN_REDERIVATION_MISMATCH','FUNCTIONAL_CONTRACT_INVALID','FUNCTIONAL_COMPONENT_MISMATCH','ADAPTIVE_SOURCE_PROFILE_UNSUPPORTED','ADAPTIVE_CONTRACT_INVALID','ADAPTIVE_ADAPTER_UNSUPPORTED'}|SAFE_ERRORS
         result['error_code']=str(exc) if type(exc) is ValueError and str(exc) in known else 'STAGE_FAILED_OR_INTERRUPTED'
     finally:
         # Never expose a submitted source archive as a report artifact.

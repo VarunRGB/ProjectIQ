@@ -18,7 +18,7 @@ def validate_receipt(guest,req):
     if any(guest.get(k)!=req[k] for k in ('source','component_id','adapter','snapshot_sha256','plan_sha256','dependency_kind')):return False
     if guest.get('dependency_sha256')!=req.get('bundle_sha256') or guest.get('host_gateway_denied') is not True or guest.get('workspace_mib')!=1536 or type(guest.get('functional_tests_executed')) is not int:return False
     if 'functional_suite' in req:
-        if req['adapter'] not in {'NODE_HTTP','PY_FLASK','PY_ASGI','STATIC_HTTP'}:return False
+        if req['adapter'] not in {'NODE_HTTP','PY_FLASK','PY_ASGI','STATIC_HTTP'} or ('workflow' in req['functional_suite'] and req['adapter']!='NODE_HTTP'):return False
         from ..phase9b.http_runner import validate_results
         try:
             functional=validate_results(guest.get('functional'),req['functional_suite'])
@@ -42,7 +42,12 @@ def trusted_guest_payload(functional=False):
     extra=''
     if functional:
         code=(Path(__file__).resolve().parents[1]/'phase9b/http_runner.py').read_text('utf-8')
-        extra="_piq_functional={'__name__':'piq_trusted_functional'}\nexec(compile("+repr(code)+",'piq_trusted_functional','exec'),_piq_functional)\n"
+        base=Path(__file__).resolve().parents[1]
+        phase4=(base/'phase4/guest_workflow.py').read_text('utf-8')
+        adaptive=(base/'phase9b/adaptive_runner.py').read_text('utf-8')
+        extra="_piq_phase4={'__name__':'piq_trusted_phase4'}\nexec(compile("+repr(phase4)+",'piq_trusted_phase4','exec'),_piq_phase4)\n"
+        extra+="_piq_adaptive={'__name__':'piq_trusted_adaptive','_phase4_select':_piq_phase4['_select']}\nexec(compile("+repr(adaptive)+",'piq_trusted_adaptive','exec'),_piq_adaptive)\n"
+        extra+="_piq_functional={'__name__':'piq_trusted_functional','_piq_adaptive':_piq_adaptive}\nexec(compile("+repr(code)+",'piq_trusted_functional','exec'),_piq_functional)\n"
     return (extra+"_piq_version={'__name__':'piq_trusted_versions'}\nexec(compile("+repr(ver)+",'piq_trusted_versions','exec'),_piq_version)\n"+"_piq_verify={'__name__':'piq_trusted_python_verify'}\nexec(compile("+repr(py)+",'piq_trusted_python_verify','exec'),_piq_verify)\n"+g+"\nraise SystemExit(main(_piq_verify['assemble'],_piq_version['node_constraint']))\n").encode('utf-8')
 
 
@@ -63,6 +68,7 @@ def execute_reviewed(*,source,plan,component,snapshot,vm_config,expected_config,
     if functional_suite is not None:
         from ..phase9b.http_runner import validate_suite
         require(kind in {'NODE_HTTP','PY_FLASK','PY_ASGI','STATIC_HTTP'},'FUNCTIONAL_ADAPTER_UNSUPPORTED')
+        require('workflow' not in functional_suite or kind=='NODE_HTTP','ADAPTIVE_ADAPTER_UNSUPPORTED')
         req['functional_suite']=validate_suite(functional_suite)
     if kind.startswith('NODE_'):
         version=component['toolchain'];require(node_tarball is not None and Path(node_tarball).name==f'node-{version}-linux-x64.tar.xz','NODE_ASSET_REQUIRED')

@@ -37,8 +37,16 @@ def strict_json(raw):
     return json.loads(raw,object_pairs_hook=pairs,parse_constant=bad)
 
 
+def adaptive_module():
+    mod=globals().get('_piq_adaptive')
+    if mod is not None:return mod
+    from . import adaptive_runner
+    return vars(adaptive_runner)
+
+
 def validate_suite(suite):
-    require(type(suite) is dict and set(suite)=={'compiled_sha256','tests'})
+    require(type(suite) is dict and set(suite) in ({'compiled_sha256','tests'},{'compiled_sha256','tests','workflow'}))
+    if 'workflow' in suite:adaptive_module()['validate_workflow'](suite['workflow'])
     require(isinstance(suite['compiled_sha256'],str) and HEX.fullmatch(suite['compiled_sha256']))
     tests=suite['tests'];require(type(tests) is list and 1<=len(tests)<=MAX_TESTS)
     ids=set();paths=set()
@@ -104,25 +112,39 @@ def verdict(rows):
     return 'PASS'
 
 
-def execute_one(test,port):
-    """Linux main-thread wall deadline covers connect, headers, body and parsing."""
-    row={'case_id':test['case_id'],'status':'INCONCLUSIVE','request_attempted':True,'http_status':None,'assertions':[],'error_code':None}
-    con=None;previous=signal.signal(signal.SIGALRM,alarm)
+def bounded_exchange(method,path,port,body,observer):
+    """Shared deadline and response-size bounds for independent and adaptive tests.
+    Only trusted, already validated caller contracts may supply mutation requests.
+    """
+    code=None;con=None;previous=signal.signal(signal.SIGALRM,alarm)
     try:
         signal.setitimer(signal.ITIMER_REAL,TIMEOUT)
         con=http.client.HTTPConnection('127.0.0.1',port,timeout=TIMEOUT)
-        con.request('GET',test['path'],headers={'Connection':'close','Accept-Encoding':'identity','User-Agent':'ProjectIQ-9BB'})
-        r=con.getresponse();row['http_status']=r.status
-        if r.getheader('Content-Encoding','identity').strip().lower()!='identity':row['error_code']='UNSUPPORTED_CONTENT_ENCODING';return row
-        body=r.read(MAX_BYTES+1)
-        if len(body)>MAX_BYTES:row['error_code']='RESPONSE_TOO_LARGE';return row
-        if r.length is not None and r.length!=0:row['error_code']='HTTP_TRANSPORT_ERROR';return row
-        row['assertions']=outcomes(test,r.status,body);row['status']=verdict(row['assertions']);return row
-    except (Deadline,TimeoutError):row['error_code']='REQUEST_TIMEOUT';return row
-    except (OSError,http.client.HTTPException,ValueError):row['error_code']='HTTP_TRANSPORT_ERROR';return row
+        headers={'Connection':'close','Accept-Encoding':'identity','User-Agent':'ProjectIQ-9BB'}
+        if body is not None:headers['Content-Type']='application/x-www-form-urlencoded'
+        con.request(method,path,body=body,headers=headers)
+        r=con.getresponse();code=r.status
+        if r.getheader('Content-Encoding','identity').strip().lower()!='identity':return code,None,'UNSUPPORTED_CONTENT_ENCODING'
+        raw=r.read(MAX_BYTES+1)
+        if len(raw)>MAX_BYTES:return code,None,'RESPONSE_TOO_LARGE'
+        if r.length is not None and r.length!=0:return code,None,'HTTP_TRANSPORT_ERROR'
+        try:return code,observer(code,raw,[v for k,v in r.getheaders() if k.lower()=='location']),None
+        except UnicodeError:return code,None,'BODY_DECODE_ERROR'
+        except (ValueError,RecursionError,TypeError,AssertionError):return code,None,'RECORD_OBSERVATION_UNAVAILABLE'
+    except (Deadline,TimeoutError):return code,None,'REQUEST_TIMEOUT'
+    except (OSError,http.client.HTTPException,ValueError):return code,None,'HTTP_TRANSPORT_ERROR'
     finally:
         signal.setitimer(signal.ITIMER_REAL,0);signal.signal(signal.SIGALRM,previous)
         if con is not None:con.close()
+
+
+def execute_one(test,port):
+    code,observed,error=bounded_exchange('GET',test['path'],port,None,lambda status,raw,_:outcomes(test,status,raw))
+    # Preserve the original independent-test receipt vocabulary.
+    if error=='RECORD_OBSERVATION_UNAVAILABLE':error='HTTP_TRANSPORT_ERROR'
+    row={'case_id':test['case_id'],'status':'INCONCLUSIVE','request_attempted':True,'http_status':code,'assertions':[],'error_code':error}
+    if error is None:row['assertions']=observed;row['status']=verdict(observed)
+    return row
 
 
 def execute_suite(suite,port,available):
@@ -131,13 +153,18 @@ def execute_suite(suite,port,available):
     for t in suite['tests']:
         if not available():rows.append({'case_id':t['case_id'],'status':'NOT_RUN','request_attempted':False,'http_status':None,'assertions':[],'error_code':'APPLICATION_NOT_AVAILABLE'})
         else:rows.append(execute_one(t,port))
-    return {'compiled_sha256':suite['compiled_sha256'],'cases':rows}
+    result={'compiled_sha256':suite['compiled_sha256'],'cases':rows}
+    if 'workflow' in suite:
+        result['workflow']=adaptive_module()['execute'](suite['workflow'],port,available,bounded_exchange)
+    return result
 
 
 def validate_results(value,suite):
     """Narrow guest receipt; verify exact identities, shape and status consistency."""
     validate_suite(suite)
-    require(type(value) is dict and set(value)=={'compiled_sha256','cases'} and value['compiled_sha256']==suite['compiled_sha256'])
+    fields={'compiled_sha256','cases'} | ({'workflow'} if 'workflow' in suite else set())
+    require(type(value) is dict and set(value)==fields and value['compiled_sha256']==suite['compiled_sha256'])
+    if 'workflow' in suite:adaptive_module()['validate_report'](value['workflow'],suite['workflow'])
     rows=value['cases'];require(type(rows) is list and len(rows)==len(suite['tests']))
     for row,t in zip(rows,suite['tests']):
         require(type(row) is dict and set(row)=={'case_id','status','request_attempted','http_status','assertions','error_code'} and row['case_id']==t['case_id'])
